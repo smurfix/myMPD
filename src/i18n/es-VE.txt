@@ -30,9 +30,6 @@ Ajustes
 About
 Acerca de
 
-Add to home screen
-Agregar a pantalla de inicio
-
 Local playback
 Reproducción local
 
@@ -231,12 +228,6 @@ http://url.to/stream.mp3
 Invalid URI
 URL Inválida
 
-Please choose playlist
-Seleccione lista de reproducción
-
-Create Playlist
-Crear lista de reproducción
-
 Invalid filename
 Nombre de archivo inválido
 
@@ -267,10 +258,10 @@ Eliminar lista de reproducción
 Delete
 Eliminar
 
-Dislike song
+Hate song
 No me gusta esta canción
 
-Like song
+Love song
 Me gusta esta canción
 
 MPD stickers are disabled
@@ -465,12 +456,6 @@ Conexión
 Protocol version
 Versión de protocolo
 
-Libmpdclient version
-Versión Libmpdclient
-
-Libmympdclient version
-Versión Libmympdclient
-
 Action
 Acción
 
@@ -522,9 +507,6 @@ Detalles de canción
 Close
 Cerrar
 
-Searching...
-Buscando...
-
 Previous song
 Canción anterior
 
@@ -546,38 +528,26 @@ Volumen +
 Open settings
 Abrir configuraciones
 
-Open song details
-Abrir detalles de canción
-
-Open local player
-Abrir reproductor local
-
-Goto playback
+Show playback
 Ir a lista de reproducción
 
-Goto queue
+Show queue
 Ir a cola de reproducción
 
-Goto last played
+Show last played
 Ir a última reproducción
 
-Goto browse database
+Show browse database
 Ir a explorar base de datos
 
-Goto browse playlists
+Show browse playlists
 Ir a explorar listas de reproducción
 
-Goto browse filesystem
+Show browse filesystem
 Ir a explorar sistema de archivos
 
-Goto search
+Show search
 Ir a buscar
-
-Open main menu
-Abrir menú principal
-
-Open volume menu
-Abrir menú de volumen
 
 Open about
 Abrir acerca de 
@@ -591,7 +561,7 @@ myMPD instalado como aplicación
 MPD disconnected
 MPD desconectado
 
-Websocket connection failed
+Websocket connection closed
 Error en la conexión con el Websocket
 
 Connected to myMPD
@@ -614,9 +584,6 @@ Volumen
 
 Empty list
 Lista vacía
-
-Added stream %{streamUri} to queue
-Agregar Fuente %{streamUri} a la cola de reproducción
 
 Append to queue
 Añadir a la cola de reproducción
@@ -669,14 +636,8 @@ Canciones agregadas a la cola de reproducción
 Add random
 Agregar aleatorio
 
-New playlist
-Nueva lista de reproducción
-
 never
 nunca
-
-Added %{uri} to playlist %{playlist}
-%{uri} agregado a lista de reproducción %{playlist}
 
 Successfully added random songs to queue
 Agregadas canciones aleatorias a la cola de reproducción exitosamente
@@ -726,35 +687,8 @@ Min
 Seconds
 Seg
 
-Added all songs
-Agregadas todas las canciones
-
-%{name} added to queue
-%{name} agregado a la cola de reproducción
-
-%{name} added to queue position %{to}
-%{name} agregado a la cola de reproducción en la posición %{to}
-
-Queue replaced with %{name}
-Cola de reproducción reemplazada con %{name}
-
-Focus table
-Centrar en tabla
-
-Append item to queue
-Agregar elemento a la cola de reproducción
-
-Replace queue with item
-Reemplazar cola de reproducción con esto
-
 Type
 Tipo
-
-Remove item from queue
-Eliminar elemento de la cola de reproducción
-
-Append item to playlist
-Agregar elemento a lista de reproducción
 
 Fingerprint
 Huella
@@ -767,9 +701,6 @@ myMPD CA
 
 IP-Address
 Dirección IP
-
-Mongoose version
-Versión Mongoose
 
 Webserver
 Servidor Web
@@ -854,12 +785,6 @@ Por defecto
 
 Appearance
 Apariencia
-
-Unknown artist
-Artista desconocido
-
-Unknown album
-Álbum desconocido
 
 JavaScript error
 Error de JavaScript
@@ -1058,9 +983,6 @@ Fallo al agregar Temporizador
 
 Browse directories
 Explorar directorios
-
-Sorry, your MPD version is too old
-Su versión de MPD es muy vieja
 
 Mounts
 Montar

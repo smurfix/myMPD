@@ -19,6 +19,7 @@ The `workdir` option is useful if you want to run more then one instance of myMP
 | -u, --user `<username>`| username to drop privileges to (default: `mympd`) |
 | -s, --syslog | enable syslog logging (facility: daemon) |
 | -w, --workdir `<path>` | working directory (default: `/var/lib/mympd`) |
+| -a, --cachedir `<path>` | cache directory (default: `/var/cache/mympd`) |
 | -p, --pin | sets a pin for myMPD settings |
 {: .table .table-sm }
 
@@ -37,7 +38,7 @@ After first startup all environment variables are ignored and the files in the d
 | http_port | number | MYMPD_HTTP_PORT | 80 | Port to listen on. Redirects to `ssl_port` if `ssl` is set to `true` |
 | loglevel | number | MYMPD_LOGLEVEL | 5 | [Logging]({{ site.baseurl }}/configuration/logging) - this environment variable is always used |
 | lualibs | string | MYMPD_LUALIBS | all | [Scripting]({{ site.baseurl }}/references/scripting) |
-| scriptacl | string | MYMPD_SCRIPTACL | +127.0.0.1 | ACL to access the myMPD script backend: [ACL]({{ site.baseurl }}/configuration/acl), allows only local connections in the default configuration |
+| scriptacl | string | MYMPD_SCRIPTACL | +127.0.0.1 | ACL to access the myMPD script backend: [ACL]({{ site.baseurl }}/configuration/acl), allows only local connections in the default configuration. The acl above must also grant access. |
 | ssl | boolean | MYMPD_SSL | true | `true` = enables https, `false` = disables https |
 | ssl_port | number | MYMPD_SSL_PORT | 443 | Port to listen to https traffic |
 | ssl_san | string | MYMPD_SSL_SAN | | Additional SAN for certificate creation |

@@ -30,9 +30,6 @@ Asetukset
 About
 Tietoja
 
-Add to home screen
-Lisää aloitus näkymään
-
 Local playback
 Paikallinen toisto
 
@@ -231,12 +228,6 @@ http://url.to/stream.mp3
 Invalid URI
 Epäkelpo URI
 
-Please choose playlist
-Valitse soittolista
-
-Create Playlist
-Luo soittolista
-
 Invalid filename
 Väärä tiedostonimi
 
@@ -267,10 +258,10 @@ Poista soittolista
 Delete
 Poista
 
-Dislike song
+Hate song
 Dissaa kappaletta
 
-Like song
+Love song
 Tykkää kappaleesta
 
 MPD stickers are disabled
@@ -465,12 +456,6 @@ Yhteys
 Protocol version
 Protokolla Versio
 
-Libmpdclient version
-Libmpdclient Versio
-
-Libmympdclient version
-Libmympdclient Versio
-
 Action
 Toiminto
 
@@ -522,9 +507,6 @@ Kappaleen tiedot
 Close
 Sulje
 
-Searching...
-Etsitään...
-
 Previous song
 Edellinen kappale
 
@@ -546,38 +528,26 @@ Isommalle
 Open settings
 Avaa asetukset
 
-Open song details
-Avaa kappaleen tiedot
-
-Open local player
-Avaa paikallinen soitin
-
-Goto playback
+Show playback
 Siirry toistoon
 
-Goto queue
+Show queue
 Siirry jonoon
 
-Goto last played
+Show last played
 Siirry viimeksi soitettuun
 
-Goto browse database
+Show browse database
 Siirry tietokannan selaamiseen
 
-Goto browse playlists
+Show browse playlists
 Siirry soittolistojen selaukseen
 
-Goto browse filesystem
+Show browse filesystem
 Siirry tiedostojärjelmän selaukseen
 
-Goto search
+Show search
 Siirry hakuun
-
-Open main menu
-Avaa päävalikko
-
-Open volume menu
-Avaa äänenvoimakkuus valikko
 
 Open about
 Avaa tiedot
@@ -591,7 +561,7 @@ myMPD asennettu sovelluksena
 MPD disconnected
 MPD yhteys katkaistu
 
-Websocket connection failed
+Websocket connection closed
 Websocket yhteys epäonnistui
 
 Connected to myMPD
@@ -614,9 +584,6 @@ Volume
 
 Empty list
 Tyhjä lista
-
-Added stream %{streamUri} to queue
-Streami %{streamUri} lisätty jonoon
 
 Append to queue
 Lisää jonoon
@@ -669,14 +636,8 @@ Kappaleet lisätty jonoon
 Add random
 Lisää satunnainen
 
-New playlist
-Uusi soittolista
-
 never
 Ei koskaan
-
-Added %{uri} to playlist %{playlist}
-%{uri} lisätty soittolistaan %{playlist}
 
 Successfully added random songs to queue
 Satunnaisten kappaleiden lisääminen jonoon onnistui
@@ -729,35 +690,8 @@ Min
 Seconds
 Sekuntia
 
-Added all songs
-Kaikki kappaleet lisätty
-
-%{name} added to queue
-%{name} lisätty jonoon
-
-%{name} added to queue position %{to}
-%{name} lisätty jonossa kohtaan %{to}
-
-Queue replaced with %{name}
-Jono korvattu %{name}:lla
-
-Focus table
-Tarkenna taulu
-
-Append item to queue
-Lisää kohde jonoon
-
-Replace queue with item
-Korvaa jono kohteella
-
 Type
 Tyyppi
-
-Remove item from queue
-Poista jonosta
-
-Append item to playlist
-Lisää kohde soittolistaan
 
 Fingerprint
 Sormenjälki
@@ -770,9 +704,6 @@ myMPD Sertifikaatti
 
 IP-Address
 IP-osoite
-
-Mongoose version
-Mongoose Versio
 
 Webserver
 Webserver
@@ -857,12 +788,6 @@ Vakio
 
 Appearance
 Ulkoasu
-
-Unknown artist
-Tuntematon artisti
-
-Unknown album
-Tuntematon albumi
 
 JavaScript error
 JavaScript virhe
@@ -1061,9 +986,6 @@ Ajastimen lisäys epäonnistui
 
 Browse directories
 Selaa kansioita
-
-Sorry, your MPD version is too old
-Liian vanha MPD versio
 
 Mounts
 Liitokset

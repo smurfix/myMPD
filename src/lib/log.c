@@ -13,16 +13,16 @@
 #include <stdio.h>
 #include <string.h>
 
-int loglevel;
+_Atomic int loglevel;
 bool log_to_syslog;
 bool log_on_tty;
 
 static const char *loglevel_names[] = {
-  "EMERG", "ALERT", "CRITICAL", "ERROR", "WARN", "NOTICE", "INFO", "DEBUG"
+    "EMERG", "ALERT", "CRITICAL", "ERROR", "WARN", "NOTICE", "INFO", "DEBUG"
 };
 
 static const char *loglevel_colors[] = {
-  "\033[0;31m", "\033[0;31m", "\033[0;31m", "\033[0;31m", "\033[0;33m", "", "", "\033[0;34m"
+    "\033[0;31m", "\033[0;31m", "\033[0;31m", "\033[0;31m", "\033[0;33m", "", "", "\033[0;34m"
 };
 
 void set_loglevel(int level) {
@@ -47,7 +47,7 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
     if (level > loglevel) {
         return;
     }
-    
+
     if (log_to_syslog == true) {
         va_list args;
         va_start(args, fmt);
@@ -58,12 +58,12 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
         va_end(args);
         return;
     }
-    
+
     sds logline = sdsempty();
     if (log_on_tty == true) {
         logline = sdscat(logline, loglevel_colors[level]);
     }
-    
+
     if (log_on_tty == true) {
         time_t now = time(NULL);
         struct tm timeinfo;
@@ -72,9 +72,12 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
         }
     }
     logline = sdscatprintf(logline, "%-8s %-10s", loglevel_names[level], thread_logname);
-    if (loglevel == 7) {
+    #ifdef DEBUG
         logline = sdscatprintf(logline, "%s:%d: ", file, line);
-    }
+    #else
+        (void)file;
+        (void)line;
+    #endif
 
     va_list args;
     va_start(args, fmt);
@@ -91,16 +94,9 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
     if (log_on_tty == true) {
         logline = sdscat(logline, "\033[0m");
     }
-    
-    if (level > 1) {
-        //info, verbose and debug to stdout
-        fputs(logline, stdout);
-        fflush(stdout);
-    }
-    else {
-        //error and warning to stderr
-        fputs(logline, stderr);
-        fflush(stderr);
-    }
+
+    fputs(logline, stdout);
+    fflush(stdout);
+
     FREE_SDS(logline);
 }

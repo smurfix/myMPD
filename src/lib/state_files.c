@@ -19,7 +19,7 @@
 
 sds camel_to_snake(sds text) {
     sds buffer = sdsempty();
-    for (size_t i = 0;  i < sdslen(text); i++) {
+    for (size_t i = 0; i < sdslen(text); i++) {
         if (isupper(text[i]) > 0) {
             buffer = sdscatprintf(buffer, "_%c", tolower((unsigned char)text[i]));
         }
@@ -37,7 +37,7 @@ sds state_file_rw_string_sds(const char *workdir, const char *dir, const char *n
 }
 
 sds state_file_rw_string(const char *workdir, const char *dir, const char *name, const char *def_value, validate_callback vcb, bool warn) {
-    sds result = sdsempty();  
+    sds result = sdsempty();
     sds cfg_file = sdscatfmt(sdsempty(), "%s/%s/%s", workdir, dir, name);
     errno = 0;
     FILE *fp = fopen(cfg_file, OPEN_FLAGS_READ);
@@ -62,8 +62,10 @@ sds state_file_rw_string(const char *workdir, const char *dir, const char *name,
     if (n == 0) {
         //sucessfully read the value
         if (vcb != NULL && vcb(result) == false) {
-            //validation failed
+            //validation failed, return default
             sdsclear(result);
+            result = sdscat(result, def_value);
+            return result;
         }
         else {
             //got valid result
@@ -71,8 +73,12 @@ sds state_file_rw_string(const char *workdir, const char *dir, const char *name,
             return result;
         }
     }
-    //blank value or too long line, return default value
-    result = sdscat(result, def_value);
+    if (n == -2) {
+        //too long line, return default
+        sdsclear(result);
+        result = sdscat(result, def_value);
+    }
+    MYMPD_LOG_DEBUG("State %s: %s", name, result);
     return result;
 }
 

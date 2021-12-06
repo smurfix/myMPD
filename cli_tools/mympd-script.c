@@ -4,10 +4,10 @@
  https://github.com/jcorporation/mympd
 */
 
-#define _GNU_SOURCE
+#include "mympd_config_defs.h"
 
-#include "../dist/src/mongoose/mongoose.h"
-#include "../dist/src/sds/sds.h"
+#include "../dist/mongoose/mongoose.h"
+#include "../dist/sds/sds.h"
 #include "../src/lib/http_client.h"
 #include "../src/lib/sds_extras.h"
 #include "log.h"
@@ -17,7 +17,7 @@ static void print_usage(char **argv) {
                     "myMPD script utility\n"
                     "If scriptname is -, the script is read from stdin.\n"
                     "<URL>: e.g. https://localhost\n"
-                    "For further details look at https://github.com/jcorporation/myMPD/wiki/Scripting\n\n",
+                    "For further details look at https://jcorporation.github.io/myMPD/scripting/\n\n",
             argv[0]);
 }
 
@@ -100,6 +100,6 @@ int main(int argc, char **argv) {
     sdsfree(response.body);
     sdsfree(uri);
     sdsfree(post_data);
-    
+
     return response.rc;
 }

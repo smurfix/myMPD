@@ -4,19 +4,19 @@
 
 pkgname=mympd
 _pkgname=myMPD
-pkgver=8.1.6
+pkgver=8.2.0
 pkgrel=1
 pkgdesc="A standalone and mobile friendly web-based MPD client."
 arch=('i686' 'x86_64' 'armv6h' 'armv7h' 'aarch64')
 url="https://jcorporation.github.io/myMPD/"
 license=('GPL3')
-depends=('pcre' 'openssl' 'libid3tag' 'flac' 'lua')
+depends=('pcre2' 'openssl' 'libid3tag' 'flac' 'lua')
 makedepends=('cmake' 'perl')
 optdepends=()
 provides=()
 conflicts=()
 replaces=()
-backup=('etc/webapps/mympd/mympd.conf')
+backup=()
 install=archlinux.install
 source=("mympd_${pkgver}.orig.tar.gz")
 sha256sums=('SKIP')

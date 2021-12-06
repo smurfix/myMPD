@@ -7,11 +7,11 @@
 #ifndef MYMPD_EMBEDDED_LUALIBS_C
 #define MYMPD_EMBEDDED_LUALIBS_C
 
-#define INCBIN_PREFIX 
+#define INCBIN_PREFIX
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE
 
 #include "mympd_config_defs.h"
-#include "../../dist/src/incbin/incbin.h"
+#include "../../dist/incbin/incbin.h"
 
 INCBIN(json_lua, "../contrib/lualibs/json.lua");
 INCBIN(mympd_lua, "../contrib/lualibs/mympd.lua");

@@ -62,9 +62,14 @@ then
   fi
 fi
 
+if [ -z "${EXTRA_CMAKE_OPTIONS+x}" ]
+then
+  export EXTRA_CMAKE_OPTIONS=""
+fi
+
 #colorful warnings and errors
 echo_error() {
-  printf "\e[0;31ERROR: "
+  printf "\e[0;31mERROR: "
   #shellcheck disable=SC2068
   echo $@
   printf "\e[m"
@@ -79,21 +84,25 @@ echo_warn() {
 
 #clang tidy options
 CLANG_TIDY_CHECKS="*"
+CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-id-dependent-backward-branch"
+CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-unroll-loops"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-struct-pack-align,-clang-analyzer-optin.performance.Padding"
+CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-easily-swappable-parameters"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-macro-parentheses"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-reserved-identifier,-cert-dcl37-c,-cert-dcl51-cpp"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-signal-handler,-cert-sig30-c"
+CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-clang-diagnostic-invalid-command-line-argument"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-concurrency-mt-unsafe"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-cppcoreguidelines*"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-hicpp-*"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-llvm-header-guard"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-llvm-include-order"
+CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-llvmlibc-restrict-system-libc-headers"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-misc-misplaced-const"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-avoid-const-params-in-decls"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-function-cognitive-complexity,-google-readability-function-size,-readability-function-size"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-magic-numbers"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-non-const-parameter"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-llvmlibc-restrict-system-libc-headers"
 
 #save startpath
 STARTPATH=$(pwd)
@@ -103,6 +112,7 @@ umask 0022
 
 #get myMPD version
 VERSION=$(grep CPACK_PACKAGE_VERSION_ CMakeLists.txt | cut -d\" -f2 | tr '\n' '.' | sed 's/\.$//')
+COPYRIGHT="myMPD ${VERSION} | (c) 2018-2021 Juergen Mang <mail@jcgames.de> | SPDX-License-Identifier: GPL-2.0-or-later | https://github.com/jcorporation/mympd"
 
 #check for command
 check_cmd() {
@@ -145,8 +155,8 @@ setversion() {
   echo "Setting version to ${VERSION} and date to ${DATE_F2}"
 
   for F in htdocs/sw.js contrib/packaging/alpine/APKBUILD contrib/packaging/arch/PKGBUILD \
-  		   contrib/packaging/rpm/mympd.spec contrib/packaging/debian/changelog \
-  		   contrib/packaging/openwrt/Makefile contrib/man/mympd.1 contrib/man/mympd-script.1
+  		contrib/packaging/rpm/mympd.spec contrib/packaging/debian/changelog \
+  		contrib/packaging/openwrt/Makefile contrib/man/mympd.1 contrib/man/mympd-script.1
   do
   	echo "$F"
   	sed -e "s/__VERSION__/${VERSION}/g" -e "s/__DATE_F1__/$DATE_F1/g" -e "s/__DATE_F2__/$DATE_F2/g" \
@@ -154,8 +164,11 @@ setversion() {
   done
 
   #gentoo ebuild must be moved only
-  [ -f "contrib/packaging/gentoo/media-sound/mympd/mympd-${VERSION}.ebuild" ] || \
-  	mv -f contrib/packaging/gentoo/media-sound/mympd/mympd-*.ebuild "contrib/packaging/gentoo/media-sound/mympd/mympd-${VERSION}.ebuild"
+  if [ ! -f "contrib/packaging/gentoo/media-sound/mympd/mympd-${VERSION}.ebuild" ]
+  then
+  	mv -f contrib/packaging/gentoo/media-sound/mympd/mympd-*.ebuild \
+      "contrib/packaging/gentoo/media-sound/mympd/mympd-${VERSION}.ebuild"
+  fi
 
   echo "const myMPDversion = '${VERSION}';" > htdocs/js/version.js
   printf "%s" "${VERSION}" > docs/_includes/version
@@ -166,7 +179,7 @@ minify() {
   SRC="$2"
   DST="$3"
 
-  #We remove only line-breaks, comments and truncate spaces of lines
+  #We remove only line-breaks, comments, blank lines and trim whitespaces
   echo "Minifying $SRC"
   if [ "$TYPE" = "html" ]
   then
@@ -180,7 +193,7 @@ minify() {
   elif [ "$TYPE" = "js" ]
   then
     #shellcheck disable=SC2016
-    if ! perl -pe 's/^\s*//gm; s/^\/\/.+$//g; s/^logDebug\(.*$//g; s/\s*$//gm;' "$SRC" > "${DST}.tmp"
+    if ! perl -pe 's/^\s*//gm; s/^\/\/.+$//g; s/^logDebug\(.*$//g; s/\/\*debug\*\/.*$//g; s/\s*$//gm;' "$SRC" > "${DST}.tmp"
     then
       rm -f "${DST}.tmp"
       echo_error "Error minifying $SRC"
@@ -224,7 +237,7 @@ createassets() {
 
   #Create translation phrases file
   createi18n "../../$MYMPD_BUILDDIR/htdocs/js/i18n.min.js" ""
-  
+
   echo "Minifying javascript"
   JSSRCFILES=""
   #shellcheck disable=SC2013
@@ -246,10 +259,11 @@ createassets() {
   cat $JSSRCFILES | grep -v "\"use strict\";" > "$MYMPD_BUILDDIR/htdocs/js/mympd.js"
   minify js htdocs/sw.js "$MYMPD_BUILDDIR/htdocs/sw.min.js"
   minify js "$MYMPD_BUILDDIR/htdocs/js/mympd.js" "$MYMPD_BUILDDIR/htdocs/js/mympd.min.js"
-  
+
   echo "Combining and compressing javascript"
-  echo "//myMPD ${VERSION} | (c) 2018-2021 Juergen Mang <mail@jcgames.de> | SPDX-License-Identifier: GPL-2.0-or-later | https://github.com/jcorporation/mympd" > "$MYMPD_BUILDDIR/htdocs/js/copyright.min.js"
-  JSFILES="dist/htdocs/js/*.min.js $MYMPD_BUILDDIR/htdocs/js/*.min.js"
+  echo "//${COPYRIGHT}" > "$MYMPD_BUILDDIR/htdocs/js/copyright.min.js"
+  JSFILES="dist/bootstrap-native/bootstrap-native.min.js dist/long-press-event/long-press-event.min.js"
+  JSFILES="$JSFILES $MYMPD_BUILDDIR/htdocs/js/*.min.js"
   for F in $JSFILES
   do
     if tail -1 "$F" | perl -npe 'exit 1 if m/\n/; exit 0'
@@ -263,25 +277,25 @@ createassets() {
   #shellcheck disable=SC2002
   cat $JSFILES >> "$MYMPD_BUILDDIR/htdocs/js/combined.js"
   $GZIP "$MYMPD_BUILDDIR/htdocs/js/combined.js"
-  
+
   #serviceworker
   $GZIPCAT "$MYMPD_BUILDDIR/htdocs/sw.min.js" > "$MYMPD_BUILDDIR/htdocs/sw.js.gz"
- 
+
   echo "Minifying stylesheets"
   for F in htdocs/css/*.css
   do
-	[ "$F" = "htdocs/css/bootstrap.css" ] && continue;
+	  [ "$F" = "htdocs/css/bootstrap.css" ] && continue;
     DST=$(basename "$F" .css)
     minify css "$F" "$MYMPD_BUILDDIR/htdocs/css/${DST}.min.css"
   done
-  
+
   echo "Combining and compressing stylesheets"
-  echo "/* myMPD ${VERSION} | (c) 2018-2021 Juergen Mang <mail@jcgames.de> | SPDX-License-Identifier: GPL-2.0-or-later | https://github.com/jcorporation/mympd */" > "$MYMPD_BUILDDIR/htdocs/css/copyright.min.css"
-  CSSFILES="dist/htdocs/css/*.min.css $MYMPD_BUILDDIR/htdocs/css/*.min.css"
+  echo "/* ${COPYRIGHT} */" > "$MYMPD_BUILDDIR/htdocs/css/copyright.min.css"
+  CSSFILES="dist/bootstrap/compiled/custom.css $MYMPD_BUILDDIR/htdocs/css/*.min.css"
   #shellcheck disable=SC2086
   cat $CSSFILES > "$MYMPD_BUILDDIR/htdocs/css/combined.css"
   $GZIP "$MYMPD_BUILDDIR/htdocs/css/combined.css"
-  
+
   echo "Minifying and compressing html"
   minify html htdocs/index.html "$MYMPD_BUILDDIR/htdocs/index.html"
   $GZIPCAT "$MYMPD_BUILDDIR/htdocs/index.html" > "$MYMPD_BUILDDIR/htdocs/index.html.gz"
@@ -308,10 +322,12 @@ buildrelease() {
   rm -vf CMakeFiles/mympd.dir/src/web_server/web_server_utility.c.o
   #set INSTALL_PREFIX and build myMPD
   export INSTALL_PREFIX="${MYMPD_INSTALL_PREFIX:-/usr}"
+  #shellcheck disable=SC2086
   cmake -DCMAKE_INSTALL_PREFIX:PATH="$INSTALL_PREFIX" -DCMAKE_BUILD_TYPE=RELEASE \
   	-DENABLE_SSL="$ENABLE_SSL" -DENABLE_LIBID3TAG="$ENABLE_LIBID3TAG" \
   	-DENABLE_FLAC="$ENABLE_FLAC" -DENABLE_LUA="$ENABLE_LUA" \
-    -DEMBEDDED_ASSETS="$EMBEDDED_ASSETS" -DENABLE_LIBASAN="$ENABLE_LIBASAN" ..
+    -DEMBEDDED_ASSETS="$EMBEDDED_ASSETS" -DENABLE_LIBASAN="$ENABLE_LIBASAN" \
+    $EXTRA_CMAKE_OPTIONS ..
   make
 }
 
@@ -351,7 +367,7 @@ addmympduser() {
 
 installrelease() {
   echo "Installing myMPD"
-  cd release || exit 1  
+  cd release || exit 1
   [ -z "${DESTDIR+x}" ] && DESTDIR=""
   make install DESTDIR="$DESTDIR"
   addmympduser
@@ -367,10 +383,10 @@ builddebug() {
   if [ "$EMBEDDED_ASSETS" = "OFF" ]
   then
     echo "Copy dist assets"
-    cp "$PWD/dist/htdocs/css/bootstrap.css" "$PWD/htdocs/css/bootstrap.css"
-    cp "$PWD/dist/htdocs/js/bootstrap-native.js" "$PWD/htdocs/js/bootstrap-native.js"
-    cp "$PWD/dist/htdocs/js/long-press-event.js" "$PWD/htdocs/js/long-press-event.js"
-    cp "$PWD/dist/htdocs/assets/MaterialIcons-Regular.woff2" "$PWD/htdocs/assets/MaterialIcons-Regular.woff2"
+    cp "$PWD/dist/bootstrap/compiled/custom.css" "$PWD/htdocs/css/bootstrap.css"
+    cp "$PWD/dist/bootstrap-native/bootstrap-native.js" "$PWD/htdocs/js/bootstrap-native.js"
+    cp "$PWD/dist/long-press-event/long-press-event.js" "$PWD/htdocs/js/long-press-event.js"
+    cp "$PWD/dist/material-icons/MaterialIcons-Regular.woff2" "$PWD/htdocs/assets/MaterialIcons-Regular.woff2"
     cp "$PWD/debug/htdocs/js/i18n.js" "$PWD/htdocs/js/i18n.js"
   else
     MYMPD_BUILDDIR="debug"
@@ -379,20 +395,23 @@ builddebug() {
 
   echo "Compiling myMPD"
   cd debug || exit 1
+  #shellcheck disable=SC2086
   cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_BUILD_TYPE=DEBUG \
   	-DENABLE_SSL="$ENABLE_SSL" -DENABLE_LIBID3TAG="$ENABLE_LIBID3TAG" \
     -DENABLE_FLAC="$ENABLE_FLAC" -DENABLE_LUA="$ENABLE_LUA" \
     -DEMBEDDED_ASSETS="$EMBEDDED_ASSETS" -DENABLE_LIBASAN="$ENABLE_LIBASAN" \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $EXTRA_CMAKE_OPTIONS ..
   make VERBOSE=1
   echo "Linking compilation database"
-  sed -e 's/\\t/ /g' -e 's/-Wformat-truncation//g' -e 's/-Wformat-overflow=2//g' -e 's/-fsanitize=bounds-strict//g' -e 's/-static-libasan//g' compile_commands.json > ../src/compile_commands.json
+  sed -e 's/\\t/ /g' -e 's/-Wformat-truncation//g' -e 's/-Wformat-overflow=2//g' -e 's/-fsanitize=bounds-strict//g' \
+    -e 's/-static-libasan//g' compile_commands.json > ../src/compile_commands.json
 }
 
 buildtest() {
   install -d test/build
   cd test/build || exit 1
-  cmake ..
+  #shellcheck disable=SC2086
+  cmake $EXTRA_CMAKE_OPTIONS ..
   make VERBOSE=1
   ./test
 }
@@ -405,7 +424,7 @@ cleanup() {
   rm -rf debug
   rm -rf package
   rm -rf test/build
-  
+
   #htdocs
   rm -f htdocs/js/bootstrap-native.js
   rm -f htdocs/js/long-press-event.js
@@ -425,15 +444,17 @@ cleanuposc() {
 }
 
 check_docs() {
-  grep 'X(MYMPD' src/lib/api.h | cut -d\( -f2 | cut -d\) -f1 | while IFS= read -r METHOD
+  grep -v '//' src/lib/api.h | grep 'X(MYMPD' | cut -d\( -f2 | cut -d\) -f1 | \
+  while IFS= read -r METHOD
   do
-    grep -q "$METHOD" htdocs/js/apidoc.js || echo_warn "API $F not documented"
+    grep -q "$METHOD" htdocs/js/apidoc.js || echo_warn "API $METHOD not documented"
   done
   O=$(md5sum htdocs/js/apidoc.js | awk '{print $1}')
   C=$(md5sum docs/assets/apidoc.js | awk '{print $1}')
   if [ "$O" != "$C" ]
   then
   	echo_warn "apidoc.js in docs differs"
+    cp htdocs/js/apidoc.js docs/assets/apidoc.js
   fi
 }
 
@@ -445,8 +466,9 @@ check_includes() {
       echo_warn "First include is not mympd_config_defs.h: $FILE"
     fi
     SRCDIR=$(dirname "$FILE")
-    
-    grep "#include \"" "$FILE" | grep -v "mympd_config_defs.h" | cut -d\" -f2 | while IFS= read -r INCLUDE
+
+    grep "#include \"" "$FILE" | grep -v "mympd_config_defs.h" | cut -d\" -f2 | \
+    while IFS= read -r INCLUDE
     do
       if ! realpath "$SRCDIR/$INCLUDE" > /dev/null 2>&1
       then
@@ -467,7 +489,7 @@ check_file() {
   else
     echo_warn "cppcheck not found"
   fi
-  
+
   if check_cmd flawfinder
   then
     echo "Running flawfinder"
@@ -484,18 +506,16 @@ check_file() {
     echo "run: ./build.sh debug"
     exit 1
   fi
-  
+
   if check_cmd clang-tidy
   then
     echo "Running clang-tidy, output goes to clang-tidy.out"
     rm -f clang-tidy.out
-    cd src || exit 1
-    clang-tidy \
-    	--checks="$CLANG_TIDY_CHECKS" \
-    	--header-filter=".*" "$FILE" >> ../clang-tidy.out 2>/dev/null
-    grep -v -E "(memset|memcpy|\^)" ../clang-tidy.out
+    clang-tidy --checks="$CLANG_TIDY_CHECKS" \
+    	"$FILE" > ../clang-tidy.out 2>/dev/null
+    grep -v -E "(/usr/include/|memset|memcpy|\^)" ../clang-tidy.out
   else
-    echo_warn "clang-tidy not found"  
+    echo_warn "clang-tidy not found"
   fi
 }
 
@@ -517,7 +537,7 @@ check() {
   else
     echo_warn "cppcheck not found"
   fi
-  
+
   if check_cmd flawfinder
   then
     echo "Running flawfinder"
@@ -536,18 +556,17 @@ check() {
     echo "run: ./build.sh debug"
     exit 1
   fi
-  
+
   if check_cmd clang-tidy
   then
     echo "Running clang-tidy, output goes to clang-tidy.out"
     rm -f clang-tidy.out
     cd src || exit 1
     find ./ -name '*.c' -exec clang-tidy \
-    	--checks="$CLANG_TIDY_CHECKS" \
-    	--header-filter=".*" {}  \; >> ../clang-tidy.out 2>/dev/null
-    grep -v -E "(memset|memcpy|\^)" ../clang-tidy.out
+    	--checks="$CLANG_TIDY_CHECKS" {} \; >> ../clang-tidy.out 2>/dev/null
+    grep -v -E "(/usr/include/|memset|memcpy|\^)" ../clang-tidy.out
   else
-    echo_warn "clang-tidy not found"  
+    echo_warn "clang-tidy not found"
   fi
   cd .. || exit 1
   check_docs
@@ -577,7 +596,7 @@ pkgdebian() {
   SIGNOPT="--no-sign"
   if [ -n "${SIGN+x}" ] && [ "$SIGN" = "TRUE" ]
   then
-	SIGNOPT="--sign-key=$GPGKEYID"  
+	SIGNOPT="--sign-key=$GPGKEYID"
   else
     echo_warn "Package would not be signed"
   fi
@@ -717,18 +736,18 @@ pkgosc() {
   	  OSC_REPO="home:jcorporation/myMPD-devel"
   	fi
   fi
-  
+
   mkdir osc
-  cd osc || exit 1  
+  cd osc || exit 1
   osc checkout "$OSC_REPO"
   rm -f "$OSC_REPO"/*
-  
+
   cd "$STARTPATH" || exit 1
   pkgrpm taronly
 
   cd "$STARTPATH" || exit 1
   cp "package/build/mympd-${VERSION}.tar.gz" "osc/$OSC_REPO/"
-  
+
   if [ -f /etc/debian_version ]
   then
     pkgdebian
@@ -742,7 +761,7 @@ pkgosc() {
   if [ -f /etc/debian_version ]
   then
     cp "../package/mympd_${VERSION}-1.dsc" "$OSC_REPO/"
-    cp "../package/mympd_${VERSION}-1.debian.tar.xz"  "$OSC_REPO/"
+    cp "../package/mympd_${VERSION}-1.debian.tar.xz" "$OSC_REPO/"
   fi
   cp ../contrib/packaging/rpm/mympd.spec "$OSC_REPO/"
   cp ../contrib/packaging/arch/PKGBUILD "$OSC_REPO/"
@@ -763,27 +782,27 @@ installdeps() {
     apt-get update
     apt-get install -y --no-install-recommends \
 	gcc cmake perl libssl-dev libid3tag0-dev libflac-dev \
-	build-essential liblua5.3-dev pkg-config libpcre3-dev
+	build-essential liblua5.3-dev pkg-config libpcre2-dev
   elif [ -f /etc/arch-release ]
   then
     #arch
-    pacman -S gcc cmake perl openssl libid3tag flac lua pkgconf pcre
+    pacman -S gcc cmake perl openssl libid3tag flac lua pkgconf pcre2
   elif [ -f /etc/alpine-release ]
   then
     #alpine
     apk add cmake perl openssl-dev libid3tag-dev flac-dev lua5.4-dev \
-    	alpine-sdk linux-headers pkgconf pcre-dev
+    	alpine-sdk linux-headers pkgconf pcre2-dev
   elif [ -f /etc/SuSE-release ]
   then
     #suse
     zypper install gcc cmake pkgconfig perl openssl-devel libid3tag-devel flac-devel \
-	lua-devel unzip pcre-devel
+	lua-devel unzip pcre2-devel
   elif [ -f /etc/redhat-release ]
-  then  
-    #fedora 	
+  then
+    #fedora
     yum install gcc cmake pkgconfig perl openssl-devel libid3tag-devel flac-devel \
-	lua-devel unzip pcre-devel
-  else 
+	lua-devel unzip pcre2-devel
+  else
     echo_warn "Unsupported distribution detected."
     echo "You should manually install:"
     echo "  - gcc"
@@ -793,19 +812,19 @@ installdeps() {
     echo "  - flac (devel)"
     echo "  - libid3tag (devel)"
     echo "  - lua53 (devel)"
-    echo "  - libpcre3 (devel)"
+    echo "  - libpcre2 (devel)"
   fi
 }
 
 updatelibmympdclient() {
   check_cmd git meson
 
-  cd dist/src/libmpdclient || exit 1
+  cd dist/libmpdclient || exit 1
   STARTDIR=$(pwd)
 
   TMPDIR=$(mktemp -d)
   cd "$TMPDIR" || exit 1
-  git clone -b libmympdclient https://github.com/jcorporation/libmpdclient.git
+  git clone --depth=1 -b libmympdclient https://github.com/jcorporation/libmpdclient.git
   cd libmpdclient || exit 1
   meson . output -Dbuffer_size=8192
 
@@ -823,6 +842,46 @@ updatelibmympdclient() {
   rsync -av "$TMPDIR/libmpdclient/AUTHORS" AUTHORS
 
   rm -rf "$TMPDIR"
+}
+
+updatebootstrapnative() {
+  check_cmd git npm
+  cd dist/bootstrap-native || exit 1
+  STARTDIR=$(pwd)
+
+  TMPDIR=$(mktemp -d)
+  cd "$TMPDIR" || exit 1
+  git clone --depth=1 -b master https://github.com/thednp/bootstrap.native
+  cd bootstrap.native
+  npm install @rollup/plugin-buble
+  cp "$STARTDIR/mympd-config.js" src/
+  cp "$STARTDIR/mympd-init.js" src/util/
+  npm run custom INPUTFILE:src/mympd-config.js,OUTPUTFILE:dist/bootstrap-mympd.js,MIN:false,FORMAT:umd
+  npm run custom INPUTFILE:src/mympd-config.js,OUTPUTFILE:dist/bootstrap-mympd.min.js,MIN:true,FORMAT:umd
+
+  cp dist/bootstrap-mympd.js "$STARTDIR/bootstrap-native.js"
+  cp dist/bootstrap-mympd.min.js "$STARTDIR/bootstrap-native.min.js"
+
+  cd "$STARTDIR" || exit 1
+  rm -rf "$TMPDIR"
+
+  if [ -d ../../debug ]
+  then
+  	cp bootstrap-native.js ../../htdocs/js/
+  fi
+}
+
+updatebootstrap() {
+  check_cmd npm
+  cd dist/bootstrap || exit 1
+  npm i
+  npm run build
+  sed -i '$ d' compiled/custom.css
+  rm compiled/custom.css.map
+  if [ -d ../../debug ]
+  then
+  	cp compiled/custom.css ../../htdocs/css/bootstrap.css
+  fi
 }
 
 #Also deletes stale installations in other locations.
@@ -865,6 +924,7 @@ purge() {
   [ -z "${DESTDIR+x}" ] && DESTDIR=""
   #MYMPD_INSTALL_PREFIX="/usr"
   rm -rf "$DESTDIR/var/lib/mympd"
+  rm -rf "$DESTDIR/var/cache/mympd"
   rm -f "$DESTDIR/etc/init.d/mympd"
   #MYMPD_INSTALL_PREFIX="/opt/mympd/"
   rm -rf "$DESTDIR/var/opt/mympd"
@@ -915,42 +975,54 @@ translate() {
 }
 
 materialicons() {
+  check_cmd jq
+  check_cmd wget
+
   TMPDIR=$(mktemp -d)
   cd "$TMPDIR" || exit 1
-  if ! wget -q https://raw.githubusercontent.com/google/material-design-icons/master/update/current_versions.json \
-	-O current_version.json
+  FONT_URI=$(wget -q "https://fonts.googleapis.com/css2?family=Material+Icons" -O - | \
+    grep url | cut -d\( -f2 | cut -d\) -f1)
+  if ! wget -q "$FONT_URI" -O MaterialIcons-Regular.woff2
   then
-    echo_error "Error downloading json file"
+    echo_error "Error downloading font file"
     exit 1
   fi
-  EXCLUDE="face_unlock|battery_\\d|battery_charging_\\d|signal_cellular_|signal_wifi_\\d_bar"
-  printf "const materialIcons={" > "$STARTPATH/htdocs/js/ligatures.js"
+  METADATA_URI="https://fonts.google.com/metadata/icons"
+  if ! wget -q "$METADATA_URI" -O metadata.json
+  then
+    echo_error "Error downloading metadata"
+    exit 1
+  fi
+  sed -i '1d' metadata.json
+  printf "const materialIcons={" > "ligatures.js"
   I=0
-  #shellcheck disable=SC2013
-  for CAT in $(grep "^\\s" current_version.json | cut -d\" -f2 | cut -d: -f1 | sort -u)
+  for CAT in $(jq -r ".icons[].categories | .[]" < metadata.json | sort -u)
   do
-    [ "$I" -gt 0 ] && printf "," >> "$STARTPATH/htdocs/js/ligatures.js"
-    printf "\"%s\": [" "$CAT" >> "$STARTPATH/htdocs/js/ligatures.js"
-	J=0
-	#shellcheck disable=SC2013
-	for MI in $(cut -d\" -f2 current_version.json | grep "$CAT::" | cut -d: -f3 | grep -v -P "$EXCLUDE")
-	do
-	  [ "$J" -gt 0 ] && printf "," >> "$STARTPATH/htdocs/js/ligatures.js"
-	  printf "\"%s\"" "$MI" >> "$STARTPATH/htdocs/js/ligatures.js"
-	  J=$((J+1))	
-	done
-	printf "]" >> "$STARTPATH/htdocs/js/ligatures.js"
-	I=$((I+1))
-  done 
-  printf "};\\n"  >> "$STARTPATH/htdocs/js/ligatures.js"
-  cd / || exit 1
+    [ "$I" -gt 0 ] && printf "," >> "ligatures.js"
+    printf "\"%s\":[" "$CAT" >> "ligatures.js"
+    J=0
+    for ICON in $(jq -r ".icons[] | select(.categories[]==\"$CAT\") | .name" < metadata.json)
+    do
+      [ "$J" -gt 0 ] && printf "," >> "ligatures.js"
+      printf "\"%s\"" "$ICON" >> "ligatures.js"
+      J=$((J+1))
+    done
+    printf "]" >> "ligatures.js"
+    I=$((I+1))
+  done
+  echo "};"  >> "ligatures.js"
+  cp ligatures.js "$STARTPATH/htdocs/js/"
+  cp MaterialIcons-Regular.woff2 "$STARTPATH/htdocs/assets/"
+  cp MaterialIcons-Regular.woff2 "$STARTPATH/dist/material-icons/"
+  $GZIPCAT "$STARTPATH/dist/material-icons/MaterialIcons-Regular.woff2" > "$STARTPATH/dist/material-icons/MaterialIcons-Regular.woff2.gz"
+  cd "$STARTPATH"
   rm -fr "$TMPDIR"
 }
 
 sbuild_chroots() {
   if [ "$(id -u)" != "0" ]
   then
-    echo "Must be run as root: "
+    echo "Must be run as root:"
     echo "  sudo -E ./build.sh sbuild_chroots"
   	exit 1
   fi
@@ -970,8 +1042,13 @@ sbuild_chroots() {
     do
       CHROOT="${DIST}-${ARCH}"
       echo "Creating chroot for $CHROOT"
-      [ -d "${WORKDIR}/chroot/${CHROOT}" ] && echo "chroot ${CHROOT} already exists... skipping." && continue
-      qemu-debootstrap --arch="${ARCH}" --variant=buildd --cache-dir="${WORKDIR}/cache" --include=fakeroot,build-essential "${DIST}" "${WORKDIR}/chroot/${CHROOT}/" "${DEBIAN_MIRROR}"
+      if [ -d "${WORKDIR}/chroot/${CHROOT}" ]
+      then
+        echo "chroot ${CHROOT} already exists... skipping."
+        continue
+      fi
+      qemu-debootstrap --arch="${ARCH}" --variant=buildd --cache-dir="${WORKDIR}/cache" \
+        --include=fakeroot,build-essential "${DIST}" "${WORKDIR}/chroot/${CHROOT}/" "${DEBIAN_MIRROR}"
 
       grep "${CHROOT}" /etc/schroot/schroot.conf || cat << EOF >> /etc/schroot/schroot.conf
 
@@ -987,7 +1064,7 @@ EOF
 sbuild_build() {
   if [ "$(id -u)" != "0" ]
   then
-    echo "Must be run as root: "
+    echo "Must be run as root:"
     echo "  sudo -E ./build.sh sbuild_build"
   	exit 1
   fi
@@ -1020,7 +1097,7 @@ sbuild_build() {
 sbuild_cleanup() {
   if [ "$(id -u)" != "0" ]
   then
-    echo "Must be run as root: "
+    echo "Must be run as root:"
     echo "  sudo -E ./build.sh sbuild_cleanup"
   	exit 1
   fi
@@ -1042,11 +1119,20 @@ run_eslint() {
     echo "Linting $F"
     eslint -c .eslintrc-min.json $F
   done
+  echo "Check for forbidden js functions"
+  FORBIDDEN_CMDS="innerHTML outerHTML insertAdjacentHTML innerText"
+  for F in $FORBIDDEN_CMDS
+  do
+  	if grep -q "$F" release/htdocs/js/mympd.min.js
+  	then
+  		echo_error "Found $F usage"
+  	fi
+  done
 }
 
 run_stylelint() {
   check_cmd npx
-  for F in mympd.css theme-light.css theme-dark.css
+  for F in mympd.css theme-light.css
   do
     echo "Linting $F"
     npx stylelint "htdocs/css/$F"
@@ -1134,6 +1220,12 @@ case "$ACTION" in
 	libmympdclient)
 	  updatelibmympdclient
 	;;
+  bootstrapnative)
+    updatebootstrapnative
+  ;;
+  bootstrap)
+    updatebootstrap
+  ;;
 	uninstall)
 	  uninstall
 	;;
@@ -1258,9 +1350,14 @@ case "$ACTION" in
     echo "                      - WORKDIR=\"$STARTPATH/builder\""
     echo ""
     echo "Misc options:"
-    echo "  setversion:       sets version and date in packaging files from CMakeLists.txt"
     echo "  addmympduser:     adds mympd group and user"
+    echo ""
+    echo "Source update options:"
+    echo "  bootstrap:        updates bootstrap"
+    echo "  bootstrapnative:  updates bootstrap.native"
     echo "  libmympdclient:   updates libmympdclient (fork of libmpdclient)"
+    echo "  materialicons:    updates the materialicons json"
+    echo "  setversion:       sets version and date in packaging files from CMakeLists.txt"
     echo ""
     echo "Environment variables for building"
     echo "  - MYMPD_INSTALL_PREFIX=\"/usr\""
@@ -1271,6 +1368,7 @@ case "$ACTION" in
     echo "  - EMBEDDED_ASSETS=\"ON\""
     echo "  - MANPAGES=\"ON\""
     echo "  - ENABLE_LIBASAN=\"OFF\""
+    echo "  - EXTRA_CMAKE_OPTIONS=\"\""
     echo ""
     exit 1
 	;;

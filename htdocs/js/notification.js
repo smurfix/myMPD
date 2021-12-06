@@ -4,7 +4,9 @@
 // https://github.com/jcorporation/mympd
 
 function setStateIcon() {
-    if (websocketConnected === false || settings.mpdConnected === false) {
+    if (websocketConnected === false ||
+        settings.mpdConnected === false)
+    {
         document.getElementById('logoBg').setAttribute('fill', '#6c757d');
     }
     else {
@@ -17,28 +19,39 @@ function toggleAlert(alertBox, state, msg) {
     if (state === false) {
         elHide(alertBoxEl);
         elClear(alertBoxEl);
+        return;
     }
-    else {
-        elClear(alertBoxEl);
-        addIconLine(alertBoxEl, 'error', msg);
-        if (alertBox === 'alertMpdStatusError') {
-            const clBtn = elCreate('button', {"class": ["close"]}, '×');
-            alertBoxEl.appendChild(clBtn);
-            clBtn.addEventListener('click', function() {
-                clearMPDerror();
-            }, false);
-        }
-        elShow(alertBoxEl);
+
+    alertBoxEl.textContent = msg;
+    if (alertBox === 'alertMpdStatusError') {
+        const clBtn = elCreateEmpty('button', {"class": ["btn-close", "btn-close-alert"]});
+        alertBoxEl.appendChild(clBtn);
+        clBtn.addEventListener('click', function() {
+            clearMPDerror();
+        }, false);
     }
+    elShow(alertBoxEl);
 }
 
 const severities = {
-    "info": "Info",
-    "warn": "Warning",
-    "error": "Error"
+    "info": {
+        "text": "Info",
+        "icon": "info",
+        "class": "text-success"
+    },
+    "warn": {
+        "text": "Warning",
+        "icon": "warning",
+        "class": "text-warning"
+    },
+    "error": {
+        "text": "Error",
+        "icon": "error",
+        "class": "text-danger"
+    }
 };
 
-const facilities = { 
+const facilities = {
     "player": "Player",
     "queue": "Queue",
     "general": "General",
@@ -55,15 +68,19 @@ const facilities = {
     "session": "Session"
 };
 
+function getSeverityIcon(severity) {
+    return elCreateText('span', {"title": tn(severities[severity].text),
+        "class": ["mi", severities[severity].class, "me-2"]}, severities[severity].icon);
+}
+
 function showNotification(title, text, facility, severity) {
     setStateIcon();
     logMessage(title, text, facility, severity);
-   
     if (severity === 'info') {
         //notifications with severity info can be hidden
         if (settings.webuiSettings.notifyPage === false &&
             settings.webuiSettings.notifyWeb === false)
-        { 
+        {
             return;
         }
         //disabled notification for facility in advanced setting
@@ -71,9 +88,9 @@ function showNotification(title, text, facility, severity) {
         if (show === null ) {
             logDebug('Unknown facility: ' + facility);
             //fallback to general
-            show = settings.webuiSettings['notificationGeneral'];    
+            show = settings.webuiSettings['notificationGeneral'];
         }
-        if (show === false) { 
+        if (show === false) {
             return;
         }
     }
@@ -82,122 +99,70 @@ function showNotification(title, text, facility, severity) {
         const notification = new Notification(title, {icon: 'assets/favicon.ico', body: text});
         setTimeout(notification.close.bind(notification), 3000);
     }
-        
-    if (alertTimeout) {
-        clearTimeout(alertTimeout);
+    if (settings.webuiSettings.notifyPage === true) {
+        const toast = elCreateNode('div', {"class": ["toast"]},
+            elCreateNodes('div', {"class": ["toast-header"]}, [
+                getSeverityIcon(severity),
+                elCreateText('strong', {"class": ["me-auto"]}, title),
+                elCreateEmpty('button', {"type": "button", "class": ["btn-close"], "data-bs-dismiss": "toast"})
+            ])
+        );
+        if (text !== '') {
+            toast.appendChild(elCreateText('div', {"class": ["toast-body"]}, text));
+        }
+        document.getElementById('alertBox').prepend(toast);
+        const toastInit = new BSN.Toast(toast, {delay: 2500});
+        toast.addEventListener('hidden.bs.toast', function() {
+            this.remove();
+        }, false);
+        toastInit.show();
     }
-    let alertBox = document.getElementById('alertBox');
-    if (alertBox === null) {
-        alertBox = document.createElement('div');
-        alertBox.setAttribute('id', 'alertBox');
-        alertBox.classList.add('toast');
-    }
-        
-    let toast = '<div class="toast-header">';
-    if (severity === 'info' ) {
-        toast += '<span class="mi text-success mr-2">info</span>';
-    }
-    else if (severity === 'warn' ) {
-        toast += '<span class="mi text-warning mr-2">warning</span>';
-    }
-    else {
-        toast += '<span class="mi text-danger mr-2">error</span>';
-    }
-    toast += '<strong class="mr-auto">' + e(title) + '</strong>' +
-             '<button type="button" class="ml-2 mb-1 close">&times;</button></div>' +
-             (text === '' ? '' : '<div class="toast-body">' + e(text) + '</div>') +
-             '</div>';
-    alertBox.innerHTML = toast;
-        
-    if (!document.getElementById('alertBox')) {
-        document.getElementsByTagName('main')[0].append(alertBox);
-        requestAnimationFrame(function() {
-            const ab = document.getElementById('alertBox');
-            if (ab) {
-                ab.classList.add('alertBoxActive');
-            }
-        });
-    }
-    alertBox.getElementsByTagName('button')[0].addEventListener('click', function() {
-        hideNotification();
-    }, false);
-
-    alertTimeout = setTimeout(function() {
-        hideNotification();
-    }, 3000);
 }
 
 function logMessage(title, text, facility, severity) {
-    if (severities[severity] !== undefined) {
-        severity = severities[severity];
-    }
-    else { 
-        logDebug('Unknown severity: ' + severity);
-    }
-    
-    if (facilities[facility] !== undefined) {
-        facility = facilities[facility];
-    }
-    else { 
-        logDebug('Unknown facility: ' + facility);
-    }
-    
-    const overview = document.getElementById('logOverview');
-
-    let append = true;
-    const lastEntry = overview.firstElementChild;
-    if (lastEntry && getCustomDomProperty(lastEntry, 'data-title') === title) {
-        append = false;        
-    }
-
-    const entry = document.createElement('div');
-    entry.classList.add('text-light');
-    setCustomDomProperty(entry, 'data-title', title);
-    let occurence = 1;
-    if (append === false) {
-        occurence += Number(getCustomDomProperty(lastEntry, 'data-occurence'));
-    }
-    setCustomDomProperty(entry, 'data-occurence', occurence);
-    entry.innerHTML = '<small>' + localeDate() + '&nbsp;&ndash;&nbsp;' + t(facility) +
-        ':&nbsp;' + t(severity) +
-        (occurence > 1 ? '&nbsp;(' + occurence + ')' : '') + '</small>' +
-        '<p>' + e(title) + (text === '' ? '' : '<br/>' + e(text)) + '</p>';
-
-    if (append === true) {
-        overview.insertBefore(entry, overview.firstElementChild);
+    let messagesLen = messages.length;
+    const lastMessage = messages[messagesLen - 1];
+    if (lastMessage &&
+        lastMessage.title === title)
+    {
+        lastMessage.occurence++;
     }
     else {
-        overview.replaceChild(entry, lastEntry);
+        messages.push({
+            "title": title,
+            "text": text,
+            "facility": facility,
+            "severity": severity,
+            "occurence": 1,
+            "timestamp": getTimestamp()
+        });
+        messagesLen++;
     }
-   
-    const overviewEls = overview.getElementsByTagName('div');
-    if (overviewEls.length > 10) {
-        overviewEls[10].remove();
+    if (messagesLen > 10) {
+        messages.shift();
+        messagesLen = 10;
     }
+    domCache.notificationCount.textContent = messagesLen;
 }
 
-//eslint-disable-next-line no-unused-vars
-function clearLogOverview() {
-    const overviewEls = document.getElementById('logOverview').getElementsByTagName('div');
-    for (let i = overviewEls.length - 1; i >= 0; i--) {
-        overviewEls[i].remove();
-    }
-    setStateIcon();
-}
-
-function hideNotification() {
-    if (alertTimeout) {
-        clearTimeout(alertTimeout);
-    }
-
-    if (document.getElementById('alertBox')) {
-        document.getElementById('alertBox').classList.remove('alertBoxActive');
-        setTimeout(function() {
-            const alertBox = document.getElementById('alertBox');
-            if (alertBox) {
-                alertBox.remove();
-            }
-        }, 750);
+function showMessages() {
+    const overview = document.getElementById('logOverview');
+    elClear(overview);
+    for (const message of messages) {
+        const entry = elCreateEmpty('div', {"class": ["row", "align-items-center", "mb-2", "me-0"]});
+        entry.appendChild(elCreateNode('div', {"class": ["col", "col-1", "ps-0"]}, getSeverityIcon(message.severity)));
+        const col = elCreateEmpty('div', {"class": ["col", "col-11"]});
+        col.appendChild(elCreateText('small', {"class": ["me-2"]}, localeDate(message.timestamp) +
+            smallSpace + nDash + smallSpace + tn(facilities[message.facility])));
+        if (message.occurence > 1) {
+            col.appendChild(elCreateText('div', {"class": ["badge", "bg-secondary"]}, message.occurence));
+        }
+        col.appendChild(elCreateText('p', {"class": ["mb-0"]}, message.title));
+        if (message.text !== '') {
+            col.appendChild(elCreateText('p', {"class": ["mb-0"]}, message.text));
+        }
+        entry.appendChild(col);
+        overview.insertBefore(entry, overview.firstElementChild);
     }
 }
 
@@ -212,7 +177,9 @@ function setElsState(tag, state, type) {
             continue;
         }
         if (state === 'disabled') {
-            if (el.classList.contains('alwaysEnabled') === false && el.getAttribute('disabled') === null) {
+            if (el.classList.contains('alwaysEnabled') === false &&
+                el.getAttribute('disabled') === null)
+            {
                 elDisable(el);
                 el.classList.add('disabled');
             }
@@ -246,7 +213,7 @@ function toggleUI() {
     }
     else {
         toggleAlert('alertMpdState', true, tn('MPD disconnected'));
-        logMessage(t('MPD disconnected'), '', 'mpd', 'error');
+        logMessage(tn('MPD disconnected'), '', 'mpd', 'error');
     }
 
     if (websocketConnected === true) {
@@ -254,7 +221,7 @@ function toggleUI() {
     }
     else if (appInited === true) {
         toggleAlert('alertMympdState', true, tn('Websocket is disconnected'));
-        logMessage(t('Websocket is disconnected'), '', 'general', 'error');
+        logMessage(tn('Websocket is disconnected'), '', 'general', 'error');
     }
 
     toggleTopAlert();
@@ -263,27 +230,26 @@ function toggleUI() {
 
 function toggleTopAlert() {
     const topAlert = document.getElementById('top-alerts');
-    if (uiEnabled === false || (lastState !== undefined && lastState.lastError !== '')) {
+    if (uiEnabled === false || (currentState !== undefined && currentState.lastError !== '')) {
         let topPadding = 0;
         if (window.innerWidth < window.innerHeight) {
             topPadding = document.getElementById('header').offsetHeight;
         }
         topAlert.style.paddingTop = topPadding + 'px';
-        topAlert.classList.remove('hide');
+        elShow(topAlert);
         const mt = topAlert.offsetHeight - parseInt(topAlert.style.paddingTop);
         document.getElementsByTagName('main')[0].style.marginTop = mt + 'px';
     }
     else {
         document.getElementsByTagName('main')[0].style.marginTop = 0;
-        topAlert.classList.add('hide');
+        elHide(topAlert);
     }
 }
 
 function showModalAlert(obj) {
     const aModal = getOpenModal();
     const activeAlert = aModal.getElementsByClassName('modalAlert')[0];
-    const div = elCreate('div', {"class": ["alert", "alert-danger", "modalAlert"]}, '');
-    addIconLine(div, 'error_outline', tn(obj.error.message, obj.error.data));
+    const div = elCreateText('div', {"class": ["alert", "alert-danger", "modalAlert"]}, tn(obj.error.message, obj.error.data));
     if (activeAlert === undefined) {
         aModal.getElementsByClassName('modal-body')[0].appendChild(div);
     }
@@ -292,8 +258,8 @@ function showModalAlert(obj) {
     }
 }
 
-function hideModalAlert() {
-    const activeAlerts = document.getElementsByClassName('modalAlert');
+function hideModalAlert(el) {
+    const activeAlerts = el.getElementsByClassName('modalAlert');
     for (let i = activeAlerts.length - 1; i >= 0; i--) {
         activeAlerts[i].remove();
     }

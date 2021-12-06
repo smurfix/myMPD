@@ -27,16 +27,16 @@ void mpd_worker_api(struct t_mpd_worker_state *mpd_worker_state) {
     MYMPD_LOG_INFO("MPD WORKER API request (%lld)(%ld) %s: %s", request->conn_id, request->id, request->method, request->data);
     //create response struct
     struct t_work_result *response = create_result(request);
-    
+
     switch(request->cmd_id) {
         case MYMPD_API_SMARTPLS_UPDATE_ALL:
             if (mpd_worker_state->smartpls == false) {
-                response->data = jsonrpc_respond_message(response->data, request->method, request->id, false, 
+                response->data = jsonrpc_respond_message(response->data, request->method, request->id, false,
                     "playlist", "error", "Smart playlists are disabled");
                 break;
             }
             if (json_get_bool(request->data, "$.params.force", &bool_buf1, NULL) == true) {
-                response->data = jsonrpc_respond_message(response->data, request->method, request->id, false, 
+                response->data = jsonrpc_respond_message(response->data, request->method, request->id, false,
                     "playlist", "info", "Smart playlists update started");
                 if (request->conn_id > -1) {
                     MYMPD_LOG_DEBUG("Push response to queue for connection %lld: %s", request->conn_id, response->data);
@@ -58,7 +58,7 @@ void mpd_worker_api(struct t_mpd_worker_state *mpd_worker_state) {
             break;
         case MYMPD_API_SMARTPLS_UPDATE:
             if (mpd_worker_state->smartpls == false) {
-                response->data = jsonrpc_respond_message(response->data, request->method, request->id, false, 
+                response->data = jsonrpc_respond_message(response->data, request->method, request->id, false,
                     "playlist", "error", "Smart playlists are disabled");
                 break;
             }
@@ -92,9 +92,9 @@ void mpd_worker_api(struct t_mpd_worker_state *mpd_worker_state) {
     if (async == true) {
         return;
     }
-    
+
     if (sdslen(response->data) == 0) {
-        response->data = jsonrpc_respond_message_phrase(response->data, request->method, request->id, true, 
+        response->data = jsonrpc_respond_message_phrase(response->data, request->method, request->id, true,
             "general", "error", "No response for method %{method}", 2, "method", request->method);
         MYMPD_LOG_ERROR("No response for method \"%s\"", request->method);
     }

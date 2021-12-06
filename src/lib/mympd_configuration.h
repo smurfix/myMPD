@@ -8,13 +8,14 @@
 #define MYMPD_CONFIGURATION_H
 
 #include "mympd_config_defs.h"
-#include "../dist/src/sds/sds.h"
+#include "../dist/sds/sds.h"
 
 #include <stdbool.h>
 
 struct t_config {
     sds user;
     sds workdir;
+    sds cachedir;
     sds http_host;
     sds http_port;
 #ifdef ENABLE_SSL

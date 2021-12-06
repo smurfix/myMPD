@@ -9,47 +9,42 @@ function smartCount(number) {
     else { return 1; }
 }
 
-function t(phrase, number, data) {
-    return e(_translate(phrase, number, data));
-}
-
 function tn(phrase, number, data) {
-    return _translate(phrase, number, data);
-}
-
-function _translate(phrase, number, data) {
     if (phrase === undefined) {
-        logWarn('Phrase is undefined');
-        return 'undefined';
+        logDebug('Phrase is undefined');
+        return 'undefinedPhrase';
     }
     let result = undefined;
-    if (isNaN(number)) {
-        data = number;
-    }
 
     if (phrases[phrase]) {
         result = phrases[phrase][locale];
         if (result === undefined) {
-            if (locale !== 'en-US') {
-                logWarn('Phrase "' + phrase + '" for locale ' + locale + ' not found');
-            }
+/*debug*/   if (locale !== 'en-US') {
+/*debug*/       logDebug('Phrase "' + phrase + '" for locale ' + locale + ' not found');
+/*debug*/   }
             result = phrases[phrase]['en-US'];
         }
     }
     if (result === undefined) {
+        //fallback if phrase is not translated
         result = phrase;
     }
 
-    if (isNaN(number) === false) {
+    if (isNaN(number)) {
+        data = number;
+    }
+    else {
         const p = result.split(' |||| ');
         if (p.length > 1) {
             result = p[smartCount(number)];
         }
         result = result.replace('%{smart_count}', number);
     }
-    
+
     if (data !== null) {
-        result = result.replace(/%\{(\w+)\}/g, function(m0, m1) {
+        //eslint-disable-next-line no-useless-escape
+        const tnRegex = /%\{(\w+)\}/g;
+        result = result.replace(tnRegex, function(m0, m1) {
             return data[m1];
         });
     }
@@ -57,14 +52,7 @@ function _translate(phrase, number, data) {
 }
 
 function localeDate(secs) {
-    let d;
-    if (secs === undefined) {
-       d  = new Date();
-    }
-    else {
-        d = new Date(secs * 1000);
-    }
-    return d.toLocaleString(locale);
+    return new Date(secs * 1000).toLocaleString(locale);
 }
 
 function beautifyDuration(x) {
@@ -73,44 +61,32 @@ function beautifyDuration(x) {
     const minutes = Math.floor(x / 60) - hours * 60 - days * 1440;
     const seconds = x - days * 86400 - hours * 3600 - minutes * 60;
 
-    return (days > 0 ? days + '\u2009'+ t('Days') + ' ' : '') +
-        (hours > 0 ? hours + '\u2009' + t('Hours') + ' ' + 
-        (minutes < 10 ? '0' : '') : '') + minutes + '\u2009' + t('Minutes') + ' ' + 
-        (seconds < 10 ? '0' : '') + seconds + '\u2009' + t('Seconds');
+    return (days > 0 ? days + smallSpace + tn('Days') + ' ' : '') +
+        (hours > 0 ? hours + smallSpace + tn('Hours') + ' ' +
+        (minutes < 10 ? '0' : '') : '') + minutes + smallSpace + tn('Minutes') + ' ' +
+        (seconds < 10 ? '0' : '') + seconds + smallSpace + tn('Seconds');
 }
 
 function beautifySongDuration(x) {
     const hours = Math.floor(x / 3600);
     const minutes = Math.floor(x / 60) - hours * 60;
-    const seconds = x - hours * 3600 - minutes * 60;
+    const seconds = Math.floor(x - hours * 3600 - minutes * 60);
 
-    return (hours > 0 ? hours + ':' + (minutes < 10 ? '0' : '') : '') + 
+    return (hours > 0 ? hours + ':' + (minutes < 10 ? '0' : '') : '') +
         minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
 }
 
-//eslint-disable-next-line no-unused-vars
-function gtPage(phrase, returnedEntities, totalEntities, maxElements) {
-    if (totalEntities > -1) {
-        return t(phrase, totalEntities);
-    }
-    else if (returnedEntities + app.current.offset < maxElements) {
-        return t(phrase, returnedEntities);
-    }
-    else {
-        return '> ' + t(phrase, maxElements);
-    }
-}
-
 function i18nHtml(root) {
-    const attributes = [['data-phrase', 'innerHTML'], 
-        ['data-title-phrase', 'title'], 
+    const attributes = [
+        ['data-phrase', 'textContent'],
+        ['data-title-phrase', 'title'],
         ['data-placeholder-phrase', 'placeholder']
     ];
     for (let i = 0, j = attributes.length; i < j; i++) {
         const els = root.querySelectorAll('[' + attributes[i][0] + ']');
         const elsLen = els.length;
         for (let k = 0, l = elsLen; k < l; k++) {
-            els[k][attributes[i][1]] = t(els[k].getAttribute(attributes[i][0]));
+            els[k][attributes[i][1]] = tn(els[k].getAttribute(attributes[i][0]));
         }
     }
 }

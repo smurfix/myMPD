@@ -27,7 +27,7 @@ bool mympd_api_home_icon_delete(struct t_mympd_state *mympd_state, unsigned pos)
 
 bool mympd_api_home_icon_save(struct t_mympd_state *mympd_state, bool replace, unsigned oldpos,
     const char *name, const char *ligature, const char *bgcolor, const char *color, const char *image,
-    const char *cmd, struct t_list *option_list) 
+    const char *cmd, struct t_list *option_list)
 {
     sds key = sdsnewlen("{", 1);
     key = tojson_char(key, "name", name, true);
@@ -45,7 +45,7 @@ bool mympd_api_home_icon_save(struct t_mympd_state *mympd_state, bool replace, u
         }
         key = sds_catjson(key, current->key, sdslen(current->key));
         current = current->next;
-    }    
+    }
     key = sdscatlen(key, "]}", 2);
     bool rc = false;
     if (replace == true) {
@@ -72,7 +72,7 @@ bool mympd_api_home_file_read(struct t_mympd_state *mympd_state) {
         FREE_SDS(home_file);
         return false;
     }
-    
+
     sds line = sdsempty();
     while (sds_getline(&line, fp, 1000) == 0) {
         if (validate_json(line) == false) {
@@ -125,7 +125,7 @@ bool mympd_api_home_file_save(struct t_mympd_state *mympd_state) {
         FREE_SDS(home_file);
         return false;
     }
-    FREE_SDS(tmp_file);    
+    FREE_SDS(tmp_file);
     FREE_SDS(home_file);
     return true;
 }

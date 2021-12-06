@@ -6,9 +6,9 @@
 
 #include "mympd_config_defs.h"
 
-#include "../dist/src/mongoose/mongoose.h"
-#include "../dist/src/rax/rax.h"
-#include "../dist/src/sds/sds.h"
+#include "../dist/mongoose/mongoose.h"
+#include "../dist/rax/rax.h"
+#include "../dist/sds/sds.h"
 #include "handle_options.h"
 #include "lib/api.h"
 #include "lib/log.h"
@@ -48,12 +48,12 @@ _Thread_local sds thread_logname;
 
 #ifdef ENABLE_LIBASAN
 const char *__asan_default_options(void) {
-    return "verbosity=1:malloc_context_size=50:abort_on_error=true:log_threads=1";
+    return "verbosity=1:malloc_context_size=50:abort_on_error=true:detect_stack_use_after_return=true";
 }
 #endif
 
 static void mympd_signal_handler(int sig_num) {
-    signal(sig_num, mympd_signal_handler);  // Reinstantiate signal handler
+    signal(sig_num, mympd_signal_handler); // Reinstantiate signal handler
     if (sig_num == SIGTERM || sig_num == SIGINT) {
         //Set loop end condition for threads
         s_signal_received = sig_num;
@@ -66,7 +66,7 @@ static void mympd_signal_handler(int sig_num) {
         MYMPD_LOG_NOTICE("Signal SIGHUP received, saving states");
         struct t_work_request *request = create_request(-1, 0, INTERNAL_API_STATE_SAVE, NULL);
         request->data = sdscatlen(request->data, "}}", 2);
-        mympd_queue_push(mympd_api_queue, request, 0);    
+        mympd_queue_push(mympd_api_queue, request, 0);
     }
 }
 
@@ -77,7 +77,7 @@ static bool do_chown(const char *file_path, const char *user_name) {
         return false;
     }
 
-    errno = 0;  
+    errno = 0;
     int rc = chown(file_path, pwd->pw_uid, pwd->pw_gid); /* Flawfinder: ignore */
     //Originally owned by root
     if (rc == -1) {
@@ -101,7 +101,7 @@ static bool drop_privileges(struct t_config *config, uid_t startup_uid) {
         }
         //purge supplementary groups
         errno = 0;
-        if (setgroups(0, NULL) == -1) { 
+        if (setgroups(0, NULL) == -1) {
             MYMPD_LOG_ERROR("setgroups() failed");
             MYMPD_LOG_ERRNO(errno);
             return false;
@@ -142,7 +142,6 @@ static bool check_dirs_initial(struct t_config *config, uid_t startup_uid) {
         //workdir is not accessible
         return false;
     }
-    
     if (testdir_rc == DIR_CREATED) {
         config->first_startup = true;
         //directory exists or was created; set user and group, if uid = 0
@@ -161,25 +160,51 @@ static bool check_dirs_initial(struct t_config *config, uid_t startup_uid) {
         return false;
     }
     FREE_SDS(testdirname);
+
+    testdir_rc = testdir("Cachedir", config->cachedir, true);
+    if (testdir_rc == DIR_CREATE_FAILED) {
+        //cachedir is not accessible
+        return false;
+    }
+    if (testdir_rc == DIR_CREATED) {
+        //directory exists or was created; set user and group, if uid = 0
+        if (startup_uid == 0 &&
+            do_chown(config->cachedir, config->user) == false)
+        {
+            return false;
+        }
+    }
+
     return true;
 }
 
-struct t_workdir_subdirs_entry {
+struct t_subdirs_entry {
     const char *dirname;
     const char *description;
 };
 
-const struct t_workdir_subdirs_entry workdir_subdirs[] = {
+const struct t_subdirs_entry workdir_subdirs[] = {
     {"state",      "State dir"},
     {"smartpls",   "Smartpls dir"},
     {"pics",       "Pics dir"},
     {"empty",      "Empty dir"},
-    {"covercache", "Covercache dir"},
     #ifdef ENABLE_LUA
     {"scripts",    "Scripts dir"},
     #endif
     {NULL, NULL}
 };
+
+const struct t_subdirs_entry cachedir_subdirs[] = {
+    {"covercache", "Covercache dir"},
+    {NULL, NULL}
+};
+
+static bool check_dir(const char *parent, const char *subdir, const char *description) {
+    sds testdirname = sdscatfmt(sdsempty(), "%s/%s", parent, subdir);
+    int rc = testdir(description, testdirname, true);
+    sdsfree(testdirname);
+    return rc;
+}
 
 static bool check_dirs(struct t_config *config) {
     int testdir_rc;
@@ -190,11 +215,10 @@ static bool check_dirs(struct t_config *config) {
             return false;
         }
     #endif
-    sds testdirname = sdsempty();
-    const struct t_workdir_subdirs_entry *p = NULL;
+    const struct t_subdirs_entry *p = NULL;
+    //workdir
     for (p = workdir_subdirs; p->dirname != NULL; p++) {
-        testdirname = sdscatfmt(testdirname, "%s/%s", config->workdir, p->dirname);
-        testdir_rc = testdir(p->description, testdirname, true);
+        testdir_rc = check_dir(config->workdir, p->dirname, p->description);
         if (testdir_rc == DIR_CREATED) {
             if (strcmp(p->dirname, "smartpls") == 0) {
                 //directory created, create default smart playlists
@@ -202,12 +226,16 @@ static bool check_dirs(struct t_config *config) {
             }
         }
         if (testdir_rc == DIR_CREATE_FAILED) {
-            FREE_SDS(testdirname);
             return false;
         }
-        sdsclear(testdirname);
     }
-    FREE_SDS(testdirname);
+    //cachedir
+    for (p = cachedir_subdirs; p->dirname != NULL; p++) {
+        testdir_rc = check_dir(config->cachedir, p->dirname, p->description);
+        if (testdir_rc == DIR_CREATE_FAILED) {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -216,7 +244,7 @@ int main(int argc, char **argv) {
     log_on_tty = isatty(fileno(stdout)) ? true : false;
     log_to_syslog = false;
 
-    worker_threads = 0; 
+    worker_threads = 0;
     s_signal_received = 0;
     bool init_config = false;
     bool init_webserver = false;
@@ -241,7 +269,7 @@ int main(int argc, char **argv) {
 
     //get startup uid
     uid_t startup_uid = getuid();
-    
+
     mympd_api_queue = mympd_queue_create("mympd_api_queue");
     web_server_queue = mympd_queue_create("web_server_queue");
     mympd_script_queue = mympd_queue_create("mympd_script_queue");
@@ -250,12 +278,12 @@ int main(int argc, char **argv) {
     struct t_mg_user_data *mg_user_data = (struct t_mg_user_data *)malloc_assert(sizeof(struct t_mg_user_data));
 
     //initialize random number generator
-    tinymt32_init(&tinymt, (unsigned int)time(NULL));
-    
+    tinymt32_init(&tinymt, (unsigned)time(NULL));
+
     //mympd config defaults
     struct t_config *config = (struct t_config *)malloc_assert(sizeof(struct t_config));
     mympd_config_defaults_initial(config);
-   
+
     //command line option
     if (handle_options(config, argc, argv) == false) {
         loglevel = LOG_ERR;
@@ -300,8 +328,12 @@ int main(int argc, char **argv) {
         log_to_syslog = true;
     }
 
+    #ifdef ENABLE_LIBASAN
+        MYMPD_LOG_NOTICE("Running with libasan memory checker");
+    #endif
+
     MYMPD_LOG_NOTICE("Starting myMPD %s", MYMPD_VERSION);
-    MYMPD_LOG_NOTICE("Libmympdclient %i.%i.%i based on libmpdclient %i.%i.%i", 
+    MYMPD_LOG_NOTICE("Libmympdclient %i.%i.%i based on libmpdclient %i.%i.%i",
             LIBMYMPDCLIENT_MAJOR_VERSION, LIBMYMPDCLIENT_MINOR_VERSION, LIBMYMPDCLIENT_PATCH_VERSION,
             LIBMPDCLIENT_MAJOR_VERSION, LIBMPDCLIENT_MINOR_VERSION, LIBMPDCLIENT_PATCH_VERSION);
     MYMPD_LOG_NOTICE("Mongoose %s", MG_VERSION);
@@ -317,7 +349,7 @@ int main(int argc, char **argv) {
     #ifdef ENABLE_SSL
         MYMPD_LOG_NOTICE("%s", OPENSSL_VERSION_TEXT);
     #endif
-    
+
     //set signal handler
     signal(SIGTERM, mympd_signal_handler);
     signal(SIGINT, mympd_signal_handler);
@@ -327,7 +359,7 @@ int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
-    //init webserver    
+    //init webserver
     struct mg_mgr mgr;
     init_mg_user_data = true;
     init_webserver = web_server_init(&mgr, config, mg_user_data);
@@ -393,7 +425,7 @@ int main(int argc, char **argv) {
     if (init_webserver == true) {
         web_server_free(&mgr);
     }
-    
+
     int expired = expire_result_queue(web_server_queue, 0);
     mympd_queue_free(web_server_queue);
     MYMPD_LOG_DEBUG("Expired %d entries from web_server_queue", expired);

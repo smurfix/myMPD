@@ -6,16 +6,16 @@
 function initSearch() {
     document.getElementById('SearchList').addEventListener('click', function(event) {
         if (event.target.nodeName === 'TD') {
-            clickSong(getCustomDomProperty(event.target.parentNode, 'data-uri'), getCustomDomProperty(event.target.parentNode, 'data-name'));
+            clickSong(getData(event.target.parentNode, 'uri'));
         }
         else if (event.target.nodeName === 'A') {
-            showMenu(event.target, event);
+            showPopover(event);
         }
     }, false);
-    
+
     document.getElementById('searchtags').addEventListener('click', function(event) {
         if (event.target.nodeName === 'BUTTON') {
-            app.current.filter = getCustomDomProperty(event.target, 'data-tag');
+            app.current.filter = getData(event.target, 'tag');
             doSearch(document.getElementById('searchstr').value);
         }
     }, false);
@@ -26,9 +26,9 @@ function initSearch() {
         }
         else if (event.key === 'Enter' && features.featAdvsearch) {
             if (this.value !== '') {
-                const op = getSelectValue(document.getElementById('searchMatch'));
+                const op = getSelectValueId('searchMatch');
                 document.getElementById('searchCrumb').appendChild(createSearchCrumb(app.current.filter, op, this.value));
-                document.getElementById('searchCrumb').classList.remove('hide');
+                elShowId('searchCrumb');
                 this.value = '';
             }
             else {
@@ -52,14 +52,14 @@ function initSearch() {
             //edit search expression
             event.preventDefault();
             event.stopPropagation();
-            document.getElementById('searchstr').value = unescapeMPD(getCustomDomProperty(event.target, 'data-filter-value'));
-            selectTag('searchtags', 'searchtagsdesc', getCustomDomProperty(event.target, 'data-filter-tag'));
-            document.getElementById('searchMatch').value = getCustomDomProperty(event.target, 'data-filter-op');
+            document.getElementById('searchstr').value = unescapeMPD(getData(event.target, 'filter-value'));
+            selectTag('searchtags', 'searchtagsdesc', getData(event.target, 'filter-tag'));
+            document.getElementById('searchMatch').value = getData(event.target, 'filter-op');
             event.target.remove();
-            app.current.filter = getCustomDomProperty(event.target,'data-filter-tag');
+            app.current.filter = getData(event.target,'filter-tag');
             doSearch(document.getElementById('searchstr').value);
             if (document.getElementById('searchCrumb').childElementCount === 0) {
-                document.getElementById('searchCrumb').classList.add('hide');
+                elHideId('searchCrumb');
             }
         }
     }, false);
@@ -67,10 +67,12 @@ function initSearch() {
     document.getElementById('searchMatch').addEventListener('change', function() {
         doSearch(document.getElementById('searchstr').value);
     }, false);
-    
+
     document.getElementById('SearchList').getElementsByTagName('tr')[0].addEventListener('click', function(event) {
-        if (features.featAdvsearch === false || event.target.nodeName !== 'TH' ||
-            event.target.innerHTML === '') {
+        if (features.featAdvsearch === false ||
+            event.target.nodeName !== 'TH' ||
+            event.target.textContent === '')
+        {
             return;
         }
         let col = event.target.getAttribute('data-col');
@@ -79,7 +81,7 @@ function initSearch() {
         }
         let sortcol = app.current.sort;
         let sortdesc = true;
-                
+
         if (sortcol === col || sortcol === '-' + col) {
             if (sortcol.indexOf('-') === 0) {
                 sortdesc = true;
@@ -97,95 +99,106 @@ function initSearch() {
             sortdesc = false;
             sortcol = col;
         }
-                
+
         const s = document.getElementById('SearchList').getElementsByClassName('sort-dir');
         for (let i = 0, j = s.length; i < j; i++) {
             s[i].remove();
         }
         app.current.sort = sortcol;
-        event.target.innerHTML = t(col) + '<span class="sort-dir mi pull-right">' + 
-            (sortdesc === true ? 'arrow_drop_up' : 'arrow_drop_down') + '</span>';
-        appGoto(app.current.app, app.current.tab, app.current.view,
-            app.current.offset, app.current.limit, app.current.filter,  app.current.sort, '-', app.current.search);
+
+        elClear(event.target);
+        event.target.appendChild(
+            document.createTextNode(
+                tn(
+                    event.target.getAttribute('data-col')
+                )
+            )
+        );
+        event.target.appendChild(
+            elCreateText('span', {"class": ["sort-dir", "mi", "float-end"]}, (sortdesc === true ? 'arrow_drop_up' : 'arrow_drop_down'))
+        );
+        appGoto(app.current.card, app.current.tab, app.current.view,
+            app.current.offset, app.current.limit, app.current.filter, app.current.sort, '-', app.current.search);
     }, false);
 }
 
 function doSearch(x) {
     if (features.featAdvsearch) {
-        const expression = createSearchExpression(document.getElementById('searchCrumb'), app.current.filter, getSelectValue('searchMatch'), x);
-        appGoto('Search', undefined, undefined, '0', app.current.limit, app.current.filter, app.current.sort, '-', expression, 0);
+        const expression = createSearchExpression(document.getElementById('searchCrumb'), app.current.filter, getSelectValueId('searchMatch'), x);
+        appGoto('Search', undefined, undefined, 0, app.current.limit, app.current.filter, app.current.sort, '-', expression, 0);
     }
     else {
-        appGoto('Search', undefined, undefined, '0', app.current.limit, app.current.filter, app.current.sort, '-', x, 0);
+        appGoto('Search', undefined, undefined, 0, app.current.limit, app.current.filter, app.current.sort, '-', x, 0);
     }
 }
 
 function parseSearch(obj) {
-    if (checkResult(obj, 'Search', null) === false) {
+    const table = document.getElementById('SearchList');
+    const tfoot = table.getElementsByTagName('tfoot')[0];
+    elClear(tfoot);
+
+    if (checkResultId(obj, 'SearchList') === false) {
         return;
     }
 
     if (obj.result.returnedEntities > 0) {
-        elEnable('searchAddAllSongs');
-        elEnable('searchAddAllSongsBtn');
-    } 
+        elEnableId('searchAddAllSongs');
+        elEnableId('searchAddAllSongsBtn');
+    }
     else {
-        elDisable('searchAddAllSongs');
-        elDisable('searchAddAllSongsBtn');
+        elDisableId('searchAddAllSongs');
+        elDisableId('searchAddAllSongsBtn');
     }
 
     const rowTitle = webuiSettingsDefault.clickSong.validValues[settings.webuiSettings.clickSong];
 
     updateTable(obj, 'Search', function(row, data) {
-        setCustomDomProperty(row, 'data-type', data.Type);
-        setCustomDomProperty(row, 'data-uri', data.uri);
+        setData(row, 'type', data.Type);
+        setData(row, 'uri', data.uri);
         row.setAttribute('tabindex', 0);
         row.setAttribute('title', rowTitle);
-        if (features.featTags === true && features.featAdvsearch === true) {
-            //add artist and album information for album actions
-            if (data.Album !== undefined) {
-                setCustomDomProperty(row, 'data-album', data.Album);
-            }
-            if (data[tagAlbumArtist] !== undefined) {
-                setCustomDomProperty(row, 'data-albumartist', data[tagAlbumArtist]);
-            }
-        }
-        setCustomDomProperty(row, 'data-name', data.Title);
+        setData(row, 'name', data.Title);
     });
+
+    if (obj.result.totalEntities > 0) {
+        const colspan = settings.colsSearch.length + 1;
+        tfoot.appendChild(
+            elCreateNode('tr', {},
+                elCreateText('td', {"colspan": colspan}, tn('Num songs', obj.result.totalEntities))
+            )
+        );
+    }
 }
 
 //eslint-disable-next-line no-unused-vars
 function saveSearchAsSmartPlaylist() {
-    parseSmartPlaylist({"jsonrpc":"2.0","id":0,"result":{"method":"MYMPD_API_SMARTPLS_GET", 
+    parseSmartPlaylist({"jsonrpc":"2.0","id":0,"result":{"method":"MYMPD_API_SMARTPLS_GET",
         "plist": "",
         "type": "search",
         "expression": app.current.search
     }});
 }
 
-function addAllFromSearchPlist(plist, searchstr, replace, callback) {
-    if (searchstr === null) {
-        searchstr = app.current.search;    
-    }
-    if (features.featAdvsearch) {
-        sendAPI("MYMPD_API_DATABASE_SEARCH_ADV", {"plist": plist, 
-            "sort": "", 
-            "sortdesc": false, 
-            "expression": searchstr,
-            "offset": 0,
-            "limit": 0,
-            "cols": settings.colsSearch, 
-            "replace": replace},
-            callback, true);
-    }
-    else {
-        sendAPI("MYMPD_API_DATABASE_SEARCH", {"plist": plist, 
-            "filter": app.current.filter, 
-            "searchstr": searchstr,
-            "offset": 0,
-            "limit": 0, 
-            "cols": settings.colsSearch, 
-            "replace": replace},
-            callback, true);
+//eslint-disable-next-line no-unused-vars
+function addAllFromSearch(mode, type) {
+    switch(mode) {
+        case 'append':
+            appendQueue(type, app.current.search);
+            break;
+        case 'appendPlay':
+            appendPlayQueue(type, app.current.search);
+            break;
+        case 'insertAfterCurrent':
+            insertAfterCurrentQueue(type, app.current.search);
+            break;
+        case 'insertPlayAfterCurrent':
+            insertPlayAfterCurrentQueue(type, app.current.search);
+            break;
+        case 'replace':
+            replaceQueue(type, app.current.search, false);
+            break;
+        case 'replacePlay':
+            replacePlayQueue(type, app.current.search, true);
+            break;
     }
 }

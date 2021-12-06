@@ -32,7 +32,7 @@ myMPD has only a few dependencies beside the standard c libraries. Not installin
 - cmake >= 3.4
 - libasan3 - for debug builds only
 - Perl - to create translation files
-- pcre - for pcre support
+- pcre2 - for pcre support
 - Optional (devel packages): 
   - OpenSSL >= 1.1.0 - for https support
   - libid3tag - to extract embedded coverimages
@@ -64,10 +64,11 @@ Compile time options are set through environment variables.
 | ENABLE_SSL | ON | ON = Enables SSL, requires OpenSSL >= 1.1.0 |
 | ENABLE_LIBID3TAG | ON | ON = Enables libid3tag usage for extracting coverimages |
 | ENABLE_FLAC | ON | ON = Enables flac usage for extracting coverimages |
-| ENABLE_LUA | ON | ON =  Enables scripting support with lua |
+| ENABLE_LUA | ON | ON = Enables scripting support with lua |
 | EMBEDDED_ASSETS | - | ON = Embeds assets in binary, default ON for release else OFF |
 | MANPAGES | ON | ON = build manpages |
 | ENABLE_LIBASAN | - | ON = compile with libasan, default ON for memcheck else OFF |
+| EXTRA_CMAKE_OPTIONS | | Extra options for cmake | 
 {: .table .table-sm}
 
 There are three compile targets for myMPD.

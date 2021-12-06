@@ -7,14 +7,14 @@
 #include "mympd_config_defs.h"
 #include "http_client.h"
 
-#include "../../dist/src/mongoose/mongoose.h"
+#include "../../dist/mongoose/mongoose.h"
 #include "log.h"
 #include "sds_extras.h"
 
 #include <errno.h>
 
 //private definitions
-static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data, 
+static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data,
     void *fn_data);
 
 //public functions
@@ -62,7 +62,7 @@ sds get_dnsserver(void) {
     return buffer;
 }
 
-void http_client_request(struct mg_client_request_t *mg_client_request, 
+void http_client_request(struct mg_client_request_t *mg_client_request,
     struct mg_client_response_t *mg_client_response)
 {
     struct mg_mgr mgr_client;
@@ -74,7 +74,7 @@ void http_client_request(struct mg_client_request_t *mg_client_request,
     sds dns_uri = get_dnsserver();
     MYMPD_LOG_DEBUG("Setting dns server to %s", dns_uri);
     mgr_client.dns4.url = dns_uri;
-    
+
     mgr_client.userdata = mg_client_request;
     MYMPD_LOG_DEBUG("HTTP client connecting to \"%s\"", mg_client_request->uri);
     mg_http_connect(&mgr_client, mg_client_request->uri, _http_client_ev_handler, mg_client_response);
@@ -86,7 +86,7 @@ void http_client_request(struct mg_client_request_t *mg_client_request,
 }
 
 //private functions
-static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data, 
+static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data,
     void *fn_data)
 {
     struct mg_client_request_t *mg_client_request = (struct mg_client_request_t *) nc->mgr->userdata;
@@ -113,7 +113,7 @@ static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_d
                 "\r\n"
                 "%s\r\n",
                 mg_url_uri(mg_client_request->uri),
-                (int) host.len, host.ptr, 
+                (int) host.len, host.ptr,
                 mg_client_request->extra_headers,
                 strlen(mg_client_request->post_data),
                 mg_client_request->post_data);
@@ -128,7 +128,7 @@ static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_d
                 (int) host.len, host.ptr,
                 mg_client_request->extra_headers);
         }
-    } 
+    }
     else if (ev == MG_EV_HTTP_MSG) {
         //Response is received. Return it
         struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -139,17 +139,17 @@ static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_d
             if (hm->headers[i].name.len == 0) {
                 break;
             }
-            mg_client_response->header = sdscatprintf(mg_client_response->header, "%.*s: %.*s\n", 
+            mg_client_response->header = sdscatprintf(mg_client_response->header, "%.*s: %.*s\n",
                 (int) hm->headers[i].name.len, hm->headers[i].name.ptr,
                 (int) hm->headers[i].value.len, hm->headers[i].value.ptr);
         }
         //response code line
-        for (unsigned i = 0; i <  hm->message.len; i++) {
+        for (unsigned i = 0; i < hm->message.len; i++) {
             if (hm->message.ptr[i] == '\n') {
                 break;
             }
             if (isprint(hm->message.ptr[i])) {
-                mg_client_response->response = sdscatprintf(mg_client_response->response, 
+                mg_client_response->response = sdscatprintf(mg_client_response->response,
                     "%c", hm->message.ptr[i]);
             }
         }
@@ -164,7 +164,7 @@ static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_d
         MYMPD_LOG_DEBUG("HTTP client received body \"%s\"", mg_client_response->body);
         //Tell mongoose to close this connection
         nc->is_closing = 1;
-    } 
+    }
     else if (ev == MG_EV_ERROR) {
         struct mg_client_response_t *mg_client_response = (struct mg_client_response_t *) fn_data;
         mg_client_response->body = sdscat(mg_client_response->body, "HTTP connection failed");

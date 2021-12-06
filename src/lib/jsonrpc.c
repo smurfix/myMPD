@@ -7,7 +7,7 @@
 #include "mympd_config_defs.h"
 #include "jsonrpc.h"
 
-#include "../../dist/src/mjson/mjson.h"
+#include "../../dist/mjson/mjson.h"
 #include "log.h"
 #include "sds_extras.h"
 #include "utility.h"
@@ -19,7 +19,6 @@
 static bool _icb_json_get_tag(sds key, sds value, int vtype, validate_callback vcb, void *userdata, sds *error);
 static bool _json_get_string(sds s, const char *path, size_t min, size_t max, sds *result, validate_callback vcb, sds *error);
 static void _set_parse_error(sds *error, const char *fmt, ...);
-static const char *get_mjson_toktype_name(unsigned vtype);
 
 //public functions
 
@@ -96,17 +95,17 @@ sds jsonrpc_respond_ok(sds buffer, const char *method, long id, const char *faci
     return jsonrpc_respond_message(buffer, method, id, false, facility, "info", "ok");
 }
 
-sds jsonrpc_respond_message(sds buffer, const char *method, long id, bool error, 
+sds jsonrpc_respond_message(sds buffer, const char *method, long id, bool error,
                             const char *facility, const char *severity, const char *message)
 {
     return jsonrpc_respond_message_phrase(buffer, method, id, error, facility, severity, message, 0);
 }
 
-sds jsonrpc_respond_message_phrase(sds buffer, const char *method, long id, bool error, 
+sds jsonrpc_respond_message_phrase(sds buffer, const char *method, long id, bool error,
                             const char *facility, const char *severity, const char *message, int count, ...)
 {
     sdsclear(buffer);
-    buffer = sdscatprintf(buffer, "{\"jsonrpc\":\"2.0\",\"id\":%ld,\"%s\":{", 
+    buffer = sdscatprintf(buffer, "{\"jsonrpc\":\"2.0\",\"id\":%ld,\"%s\":{",
         id, (error == true ? "error" : "result"));
     buffer = tojson_char(buffer, "method", method, true);
     buffer = tojson_char(buffer, "facility", facility, true);
@@ -130,6 +129,14 @@ sds jsonrpc_respond_message_phrase(sds buffer, const char *method, long id, bool
     }
     va_end(args);
     buffer = sdscatlen(buffer, "}}}", 3);
+    return buffer;
+}
+
+sds tojson_raw(sds buffer, const char *key, const char *value, bool comma) {
+    buffer = sdscatfmt(buffer, "\"%s\":%s", key, value);
+    if (comma) {
+        buffer = sdscatlen(buffer, ",", 1);
+    }
     return buffer;
 }
 
@@ -425,6 +432,21 @@ bool json_find_key(sds s, const char *path) {
     return vtype == MJSON_TOK_INVALID ? false : true;
 }
 
+const char *get_mjson_toktype_name(unsigned vtype) {
+    switch(vtype) {
+        case MJSON_TOK_INVALID: return "MJSON_TOK_INVALID";
+        case MJSON_TOK_KEY:     return "MJSON_TOK_KEY";
+        case MJSON_TOK_STRING:  return "MJSON_TOK_STRING";
+        case MJSON_TOK_NUMBER:  return "MJSON_TOK_NUMBER";
+        case MJSON_TOK_TRUE:    return "MJSON_TOK_TRUE";
+        case MJSON_TOK_FALSE:   return "MJSON_TOK_FALSE";
+        case MJSON_TOK_NULL:    return "MJSON_TOK_NULL";
+        case MJSON_TOK_ARRAY:   return "MJSON_TOK_ARRAY";
+        case MJSON_TOK_OBJECT:  return "MJSON_TOK_OBJECT";
+        default:                return "MJSON_TOK_UNKNOWN";
+    }
+}
+
 //private functions
 
 static bool _icb_json_get_tag(sds key, sds value, int vtype, validate_callback vcb, void *userdata, sds *error) {
@@ -468,7 +490,7 @@ static bool _json_get_string(sds s, const char *path, size_t min, size_t max, sd
     int vtype = mjson_find(s, (int)sdslen(s), path, &p, &n);
     if (vtype != MJSON_TOK_STRING) {
         *result = NULL;
-        _set_parse_error(error, "JSON path \"%s\" not found or value is not string type, found type is \"%s\"", 
+        _set_parse_error(error, "JSON path \"%s\" not found or value is not string type, found type is \"%s\"",
             path, get_mjson_toktype_name(vtype));
         return false;
     }
@@ -481,7 +503,7 @@ static bool _json_get_string(sds s, const char *path, size_t min, size_t max, sd
         _set_parse_error(error, "Value length for JSON path \"%s\" is too short", path);
         return false;
     }
-    
+
     //strip quotes
     n = n - 2;
     p++;
@@ -505,17 +527,4 @@ static bool _json_get_string(sds s, const char *path, size_t min, size_t max, sd
     return true;
 }
 
-static const char *get_mjson_toktype_name(unsigned vtype) {
-    switch(vtype) {
-        case MJSON_TOK_INVALID: return "MJSON_TOK_INVALID";
-        case MJSON_TOK_KEY:     return "MJSON_TOK_KEY";
-        case MJSON_TOK_STRING:  return "MJSON_TOK_STRING";
-        case MJSON_TOK_NUMBER:  return "MJSON_TOK_NUMBER";
-        case MJSON_TOK_TRUE:    return "MJSON_TOK_TRUE";
-        case MJSON_TOK_FALSE:   return "MJSON_TOK_FALSE";
-        case MJSON_TOK_NULL:    return "MJSON_TOK_NULL";
-        case MJSON_TOK_ARRAY:   return "MJSON_TOK_ARRAY";
-        case MJSON_TOK_OBJECT:  return "MJSON_TOK_OBJECT";
-        default:                return "MJSON_TOK_UNKNOWN";
-    }
-}
+

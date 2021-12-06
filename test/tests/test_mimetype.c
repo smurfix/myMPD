@@ -6,7 +6,7 @@
 
 #include "mympd_config_defs.h"
 
-#include "../../dist/src/utest/utest.h"
+#include "../../dist/utest/utest.h"
 #include "../../src/lib/mimetype.h"
 
 #include <stdio.h>
@@ -38,7 +38,7 @@ UTEST(mimetype, test_get_ext_by_mime_type) {
 UTEST(mimetype, test_get_mime_type_by_magic) {
     FILE *fp = fopen("../../htdocs/assets/appicon-192.png", "rb");
     ASSERT_FALSE(fp == NULL);
-    
+
     unsigned char binary_buffer[12];
     size_t read = fread(binary_buffer, 1, sizeof(binary_buffer), fp);
     fclose(fp);
@@ -46,7 +46,7 @@ UTEST(mimetype, test_get_mime_type_by_magic) {
     const char *mime_type = get_mime_type_by_magic_stream(stream);
     ASSERT_STREQ("image/png", mime_type);
 
-    //empty    
+    //empty
     sdsclear(stream);
     mime_type = get_mime_type_by_magic_stream(stream);
     ASSERT_STREQ("application/octet-stream", mime_type);

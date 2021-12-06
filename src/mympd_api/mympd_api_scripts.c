@@ -29,8 +29,8 @@
 
 #include <lua.h>
 #include <lualib.h>
-#include <lauxlib.h>  
-#ifndef DEBUG
+#include <lauxlib.h>
+#ifdef EMBEDDED_ASSETS
     //embedded files for release build
     #include "mympd_api_scripts_lualibs.c"
 #endif
@@ -75,7 +75,7 @@ sds mympd_api_script_list(struct t_config *config, sds buffer, sds method, long 
         buffer = jsonrpc_respond_message(buffer, method, request_id, true, "script", "error", "Can not open script directory");
         return buffer;
     }
-    
+
     struct dirent *next_file;
     int nr = 0;
     sds entry = sdsempty();
@@ -112,7 +112,7 @@ sds mympd_api_script_list(struct t_config *config, sds buffer, sds method, long 
     FREE_SDS(scriptfilename);
     FREE_SDS(entry);
     FREE_SDS(scriptdirname);
-    buffer = sdscatlen(buffer, "]", 1);        
+    buffer = sdscatlen(buffer, "]", 1);
     buffer = jsonrpc_result_end(buffer);
     return buffer;
 }
@@ -211,7 +211,7 @@ sds mympd_api_script_get(struct t_config *config, sds buffer, sds method, long r
             "script", "error", "Can not open scriptfile");
     }
     FREE_SDS(scriptfilename);
-    
+
     return buffer;
 }
 
@@ -256,9 +256,9 @@ static sds parse_script_metadata(sds entry, const char *scriptfilename, int *ord
     if (fp == NULL) {
         MYMPD_LOG_ERROR("Can not open file \"%s\": %s", scriptfilename);
         MYMPD_LOG_ERRNO(errno);
-        return entry;    
+        return entry;
     }
-    
+
     sds line = sdsempty();
     if (sds_getline(&line, fp, 1000) == 0 && strncmp(line, "-- ", 3) == 0) {
         sdsrange(line, 3, -1);
@@ -284,12 +284,12 @@ static void *mympd_api_script_execute(void *script_thread_arg) {
     thread_logname = sds_replace(thread_logname, "script");
     prctl(PR_SET_NAME, thread_logname, 0, 0, 0);
     struct t_script_thread_arg *script_arg = (struct t_script_thread_arg *) script_thread_arg;
-    
+
     const char *script_return_text = NULL;
     lua_State *lua_vm = luaL_newstate();
     if (lua_vm == NULL) {
         MYMPD_LOG_ERROR("Memory allocation error in luaL_newstate");
-        sds buffer = jsonrpc_notify_phrase(sdsempty(), "script", "error", 
+        sds buffer = jsonrpc_notify_phrase(sdsempty(), "script", "error",
             "Error executing script %{script}: Memory allocation error", 2, "script", script_arg->script_name);
         ws_notify(buffer);
         FREE_SDS(buffer);
@@ -363,7 +363,7 @@ static void *mympd_api_script_execute(void *script_thread_arg) {
     }
     if (rc == 0) {
         if (script_return_text == NULL) {
-            sds buffer = jsonrpc_notify_phrase(sdsempty(), "script", "info", "Script %{script} executed successfully", 
+            sds buffer = jsonrpc_notify_phrase(sdsempty(), "script", "info", "Script %{script} executed successfully",
                 2, "script", script_arg->script_name);
             ws_notify(buffer);
             FREE_SDS(buffer);
@@ -426,11 +426,7 @@ static sds lua_err_to_str(sds buffer, int rc, bool phrase, const char *script) {
 
 static bool mympd_luaopen(lua_State *lua_vm, const char *lualib) {
     MYMPD_LOG_DEBUG("Loading embedded lua library %s", lualib);
-    #ifdef DEBUG
-        sds filename = sdscatfmt(sdsempty(), "%s/%s.lua", LUALIBS_PATH, lualib);
-        int rc = luaL_dofile(lua_vm, filename);
-        FREE_SDS(filename);
-    #else
+    #ifdef EMBEDDED_ASSETS
         sds lib_string;
         if (strcmp(lualib, "json") == 0) {
             lib_string = sdscatlen(sdsempty(), json_lua_data, json_lua_size);
@@ -443,6 +439,10 @@ static bool mympd_luaopen(lua_State *lua_vm, const char *lualib) {
         }
         int rc = luaL_dostring(lua_vm, lib_string);
         FREE_SDS(lib_string);
+    #else
+        sds filename = sdscatfmt(sdsempty(), "%s/%s.lua", LUALIBS_PATH, lualib);
+        int rc = luaL_dofile(lua_vm, filename);
+        FREE_SDS(filename);
     #endif
     int nr_return = lua_gettop(lua_vm);
     MYMPD_LOG_DEBUG("Lua library returns %d values", nr_return);
@@ -533,7 +533,7 @@ static int _mympd_api(lua_State *lua_vm, bool raw) {
     }
 
     long tid = syscall(__NR_gettid);
-    
+
     struct t_work_request *request = create_request(-2, tid, method_id, NULL);
     if (raw == false) {
         for (int i = 2; i < n; i = i + 2) {
@@ -554,11 +554,11 @@ static int _mympd_api(lua_State *lua_vm, bool raw) {
         request->data = sdscatlen(request->data, "}", 1);
     }
     else if (n == 2) {
-        sdsrange(request->data, 0, -2);  //trim {
+        sdsrange(request->data, 0, -2); //trim {
         request->data = sdscat(request->data, lua_tostring(lua_vm, 2));
     }
     request->data = sdscatlen(request->data, "}", 1);
-    
+
     mympd_queue_push(mympd_api_queue, request, tid);
 
     int i = 0;
@@ -571,7 +571,7 @@ static int _mympd_api(lua_State *lua_vm, bool raw) {
                 MYMPD_LOG_DEBUG("Populating lua global state table mympd");
                 struct t_list *lua_mympd_state = (struct t_list *)response->extra;
                 lua_newtable(lua_vm);
-                populate_lua_table(lua_vm, lua_mympd_state);    
+                populate_lua_table(lua_vm, lua_mympd_state);
                 lua_setglobal(lua_vm, "mympd_state");
                 lua_mympd_state_free(lua_mympd_state);
                 lua_mympd_state = NULL;
@@ -618,7 +618,7 @@ static int _mympd_api_http_client(lua_State *lua_vm) {
         .extra_headers = lua_tostring(lua_vm, 3),
         .post_data = lua_tostring(lua_vm, 4)
     };
-    
+
     struct mg_client_response_t mg_client_response = {
         .rc = -1,
         .response = sdsempty(),
@@ -627,7 +627,7 @@ static int _mympd_api_http_client(lua_State *lua_vm) {
     };
 
     http_client_request(&mg_client_request, &mg_client_response);
-    
+
     lua_pushinteger(lua_vm, mg_client_response.rc);
     lua_pushlstring(lua_vm, mg_client_response.response, sdslen(mg_client_response.response));
     lua_pushlstring(lua_vm, mg_client_response.header, sdslen(mg_client_response.header));

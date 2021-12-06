@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h> 
+#include <sys/stat.h>
 
 unsigned long mpd_shared_get_db_mtime(struct t_mpd_state *mpd_state) {
     struct mpd_stats *stats = mpd_run_stats(mpd_state->conn);
@@ -71,7 +71,7 @@ unsigned long mpd_shared_get_playlist_mtime(struct t_mpd_state *mpd_state, const
     return mtime;
 }
 
-sds mpd_shared_playlist_shuffle_sort(struct t_mpd_state *mpd_state, sds buffer, sds method, 
+sds mpd_shared_playlist_shuffle_sort(struct t_mpd_state *mpd_state, sds buffer, sds method,
                                      long request_id, const char *uri, const char *tagstr)
 {
     struct t_tags sort_tags = {
@@ -80,7 +80,7 @@ sds mpd_shared_playlist_shuffle_sort(struct t_mpd_state *mpd_state, sds buffer, 
     };
 
     bool rc = false;
-    
+
     if (strcmp(tagstr, "shuffle") == 0) {
         MYMPD_LOG_INFO("Shuffling playlist %s", uri);
         rc = mpd_send_list_playlist(mpd_state->conn, uri);
@@ -88,7 +88,7 @@ sds mpd_shared_playlist_shuffle_sort(struct t_mpd_state *mpd_state, sds buffer, 
     else if (strcmp(tagstr, "filename") == 0) {
         MYMPD_LOG_INFO("Sorting playlist %s by filename", uri);
         rc = mpd_send_list_playlist(mpd_state->conn, uri);
-    } 
+    }
     else if (sort_tags.tags[0] != MPD_TAG_UNKNOWN) {
         MYMPD_LOG_INFO("Sorting playlist %s by tag %s", uri, tagstr);
         enable_mpd_tags(mpd_state, &sort_tags);
@@ -131,7 +131,9 @@ sds mpd_shared_playlist_shuffle_sort(struct t_mpd_state *mpd_state, sds buffer, 
         }
     }
     else {
-        if (mpd_state->feat_tags == false || strcmp(tagstr, "filename") == 0) {
+        if (mpd_state->feat_mpd_tags == false ||
+            strcmp(tagstr, "filename") == 0)
+        {
             if (list_sort_by_key(&plist, LIST_SORT_ASC) == false) {
                 if (buffer != NULL) {
                     buffer = jsonrpc_respond_message(buffer, method, request_id, true, "playlist", "error", "Playlist is too small to sort");
@@ -152,11 +154,11 @@ sds mpd_shared_playlist_shuffle_sort(struct t_mpd_state *mpd_state, sds buffer, 
             }
         }
     }
-    
-    unsigned int randnr = randrange(100000, 999999);
+
+    unsigned randnr = randrange(100000, 999999);
     sds uri_tmp = sdscatprintf(sdsempty(), "%u-tmp-%s", randnr, uri);
     sds uri_old = sdscatprintf(sdsempty(), "%u-old-%s", randnr, uri);
-    
+
     //add sorted/shuffled songs to a new playlist
     if (mpd_command_list_begin(mpd_state->conn, false) == true) {
         struct t_list_node *current = plist.head;
@@ -205,10 +207,10 @@ sds mpd_shared_playlist_shuffle_sort(struct t_mpd_state *mpd_state, sds buffer, 
         FREE_SDS(uri_old);
         return buffer;
     }
-    
+
     FREE_SDS(uri_tmp);
     FREE_SDS(uri_old);
-    
+
     if (sort_tags.tags[0] != MPD_TAG_UNKNOWN) {
         enable_mpd_tags(mpd_state, &mpd_state->tag_types_mympd);
     }
@@ -223,8 +225,8 @@ sds mpd_shared_playlist_shuffle_sort(struct t_mpd_state *mpd_state, sds buffer, 
     return buffer;
 }
 
-bool mpd_shared_smartpls_save(const char *workdir, const char *smartpltype, const char *playlist, 
-                              const char *expression, const int maxentries, 
+bool mpd_shared_smartpls_save(const char *workdir, const char *smartpltype, const char *playlist,
+                              const char *expression, const int maxentries,
                               const int timerange, const char *sort)
 {
     sds tmp_file = sdscatfmt(sdsempty(), "%s/smartpls/%s.XXXXXX", workdir, playlist);

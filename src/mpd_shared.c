@@ -22,7 +22,7 @@ void mpd_shared_default_mpd_state(struct t_mpd_state *mpd_state) {
     mpd_state->reconnect_time = 0;
     mpd_state->reconnect_interval = 0;
     mpd_state->mpd_keepalive = false;
-    mpd_state->mpd_timeout = 10000;
+    mpd_state->mpd_timeout = 30000;
     mpd_state->state = MPD_STATE_UNKNOWN;
     mpd_state->mpd_host = sdsnew("/run/mpd/socket");
     mpd_state->mpd_port = 6600;
@@ -67,8 +67,8 @@ void mpd_shared_mpd_disconnect(struct t_mpd_state *mpd_state) {
     }
 }
 
-bool check_rc_error_and_recover(struct t_mpd_state *mpd_state, sds *buffer, 
-                                sds method, long request_id, bool notify, bool rc, 
+bool check_rc_error_and_recover(struct t_mpd_state *mpd_state, sds *buffer,
+                                sds method, long request_id, bool notify, bool rc,
                                 const char *command)
 {
     if (check_error_and_recover2(mpd_state, buffer, method, request_id, notify) == false) {
@@ -91,16 +91,16 @@ bool check_rc_error_and_recover(struct t_mpd_state *mpd_state, sds *buffer,
     return true;
 }
 
-bool check_error_and_recover2(struct t_mpd_state *mpd_state, sds *buffer, sds method, long request_id, 
+bool check_error_and_recover2(struct t_mpd_state *mpd_state, sds *buffer, sds method, long request_id,
                               bool notify)
 {
     enum mpd_error error = mpd_connection_get_error(mpd_state->conn);
-    if (error  != MPD_ERROR_SUCCESS) {   
+    if (error != MPD_ERROR_SUCCESS) {
         const char *error_msg = mpd_connection_get_error_message(mpd_state->conn);
         MYMPD_LOG_ERROR("MPD error: %s (%d)", error_msg , error);
         if (buffer != NULL && *buffer != NULL) {
             if (notify == false) {
-                *buffer = jsonrpc_respond_message(*buffer, method, request_id, true, 
+                *buffer = jsonrpc_respond_message(*buffer, method, request_id, true,
                     "mpd", "error", error_msg);
             }
             else {
@@ -133,18 +133,18 @@ sds check_error_and_recover_notify(struct t_mpd_state *mpd_state, sds buffer) {
 }
 
 sds respond_with_command_error(sds buffer, sds method, long request_id, const char *command) {
-    return jsonrpc_respond_message_phrase(buffer, method, request_id, 
-                            true, "mpd", "error", "Error in response to command: %{command}",
-                            2, "command", command);
+    return jsonrpc_respond_message_phrase(buffer, method, request_id,
+        true, "mpd", "error", "Error in response to command: %{command}",
+        2, "command", command);
 }
 
-sds respond_with_mpd_error_or_ok(struct t_mpd_state *mpd_state, sds buffer, sds method, 
-                                 long request_id, bool rc, const char *command)
+sds respond_with_mpd_error_or_ok(struct t_mpd_state *mpd_state, sds buffer, sds method,
+                                 long request_id, bool rc, const char *command, bool *result)
 {
     sdsclear(buffer);
-    if (check_rc_error_and_recover(mpd_state, &buffer, method, request_id, false, 
-                                   rc, command) == false)
-    {
+    *result = check_rc_error_and_recover(mpd_state, &buffer, method, request_id, false,
+                                   rc, command);
+    if (*result == false) {
         return buffer;
     }
     return jsonrpc_respond_ok(buffer, method, request_id, "mpd");
@@ -152,6 +152,5 @@ sds respond_with_mpd_error_or_ok(struct t_mpd_state *mpd_state, sds buffer, sds 
 
 bool mpd_shared_set_keepalive(struct t_mpd_state *mpd_state) {
     bool rc = mpd_connection_set_keepalive(mpd_state->conn, mpd_state->mpd_keepalive);
-    check_rc_error_and_recover(mpd_state, NULL, NULL, 0, false, rc, "mpd_connection_set_keepalive");
-    return rc;
+    return check_rc_error_and_recover(mpd_state, NULL, NULL, 0, false, rc, "mpd_connection_set_keepalive");
 }

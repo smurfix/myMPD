@@ -108,15 +108,15 @@ void mympd_api_timer_check(struct t_timer_list *l) {
     }
 }
 
-bool mympd_api_timer_replace(struct t_timer_list *l, unsigned int timeout, int interval, time_handler handler, 
+bool mympd_api_timer_replace(struct t_timer_list *l, unsigned timeout, int interval, time_handler handler,
                    int timer_id, struct t_timer_definition *definition, void *user_data)
 {
     mympd_api_timer_remove(l, timer_id);
     return mympd_api_timer_add(l, timeout, interval, handler, timer_id, definition, user_data);
 }
 
-bool mympd_api_timer_add(struct t_timer_list *l, unsigned int timeout, int interval, time_handler handler, 
-               int timer_id, struct t_timer_definition *definition, void *user_data) 
+bool mympd_api_timer_add(struct t_timer_list *l, unsigned timeout, int interval, time_handler handler,
+               int timer_id, struct t_timer_definition *definition, void *user_data)
 {
     struct t_timer_node *new_node = (struct t_timer_node *)malloc_assert(sizeof(struct t_timer_node));
     new_node->callback = handler;
@@ -125,7 +125,7 @@ bool mympd_api_timer_add(struct t_timer_list *l, unsigned int timeout, int inter
     new_node->timeout = timeout;
     new_node->interval = interval;
     new_node->timer_id = timer_id;
- 
+
     if (definition == NULL || definition->enabled == true) {
         new_node->fd = timerfd_create(CLOCK_REALTIME, 0);
         if (new_node->fd == -1) {
@@ -133,7 +133,7 @@ bool mympd_api_timer_add(struct t_timer_list *l, unsigned int timeout, int inter
             MYMPD_LOG_ERROR("Can't create timerfd");
             return false;
         }
- 
+
         struct itimerspec new_value;
         //timeout
         new_value.it_value.tv_sec = timeout;
@@ -141,7 +141,7 @@ bool mympd_api_timer_add(struct t_timer_list *l, unsigned int timeout, int inter
         //interval
         //0 = one shote and deactivate
         //-1 = one shot and remove
-        
+
         new_value.it_interval.tv_sec = interval > 0 ? interval : 0;
         new_value.it_interval.tv_nsec = 0;
 
@@ -160,11 +160,11 @@ bool mympd_api_timer_add(struct t_timer_list *l, unsigned int timeout, int inter
     MYMPD_LOG_DEBUG("Added timer with id %d, start time in %ds", timer_id, timeout);
     return true;
 }
- 
+
 void mympd_api_timer_remove(struct t_timer_list *l, int timer_id) {
     struct t_timer_node *current = NULL;
     struct t_timer_node *previous = NULL;
-    
+
     for (current = l->list; current != NULL; previous = current, current = current->next) {
         if (current->timer_id == timer_id) {
             MYMPD_LOG_DEBUG("Removing timer with id %d", timer_id);
@@ -199,7 +199,7 @@ void mympd_api_timer_toggle(struct t_timer_list *l, int timer_id) {
 void mympd_api_timer_timerlist_truncate(struct t_timer_list *l) {
     struct t_timer_node *current = l->list;
     struct t_timer_node *tmp = NULL;
-    
+
     while (current != NULL) {
         MYMPD_LOG_DEBUG("Removing timer with id %d", current->timer_id);
         tmp = current;
@@ -215,7 +215,6 @@ void mympd_api_timer_free_definition(struct t_timer_definition *timer_def) {
     FREE_SDS(timer_def->subaction);
     FREE_SDS(timer_def->playlist);
     list_clear(&timer_def->arguments);
-    FREE_PTR(timer_def);
 }
 
 void mympd_api_timer_free_node(struct t_timer_node *node) {
@@ -224,8 +223,10 @@ void mympd_api_timer_free_node(struct t_timer_node *node) {
     }
     if (node->definition != NULL) {
         mympd_api_timer_free_definition(node->definition);
+        free(node->definition);
+        node->definition = NULL;
     }
-    free(node);
+    FREE_PTR(node);
 }
 
 bool mympd_api_timer_timerlist_free(struct t_timer_list *l) {
@@ -270,12 +271,8 @@ struct t_timer_definition *mympd_api_timer_parse(struct t_timer_definition *time
     }
 
     MYMPD_LOG_ERROR("Error parsing timer definition");
-    list_clear(&timer_def->arguments);
-    FREE_SDS(timer_def->name);
-    FREE_SDS(timer_def->action);
-    FREE_SDS(timer_def->subaction);
-    FREE_SDS(timer_def->playlist);
-    free(timer_def);
+    mympd_api_timer_free_definition(timer_def);
+    FREE_PTR(timer_def);
 
     return NULL;
 }
@@ -332,7 +329,7 @@ sds mympd_api_timer_list(struct t_mympd_state *mympd_state, sds buffer, sds meth
         }
         current = current->next;
     }
-    
+
     buffer = sdscatlen(buffer, "],", 2);
     buffer = tojson_long(buffer, "returnedEntities", entities_returned, false);
     buffer = jsonrpc_result_end(buffer);
@@ -371,7 +368,7 @@ sds mympd_api_timer_get(struct t_mympd_state *mympd_state, sds buffer, sds metho
                     buffer = sdscatlen(buffer, ",", 1);
                 }
                 buffer = tojson_char(buffer, argument->key, argument->value_p, false);
-                argument = argument->next;            
+                argument = argument->next;
             }
             buffer = sdscatlen(buffer, "}", 1);
             found = true;
@@ -379,9 +376,9 @@ sds mympd_api_timer_get(struct t_mympd_state *mympd_state, sds buffer, sds metho
         }
         current = current->next;
     }
-    
+
     buffer = jsonrpc_result_end(buffer);
-    
+
     if (found == false) {
         buffer = jsonrpc_respond_message(buffer, method, request_id, true,
             "timer", "error", "Timer with given id not found");
@@ -415,10 +412,10 @@ bool mympd_api_timer_file_read(struct t_mympd_state *mympd_state) {
         param = sdscatfmt(param, "{\"params\":%s}", line);
         timer_def = mympd_api_timer_parse(timer_def, param, NULL);
         int interval;
-        int timerid;            
+        int timerid;
         if (timer_def != NULL &&
-            json_get_int(param, "$.params.interval", -1, 604800, &interval, NULL) == true &&
-            json_get_int(param, "$.params.timerid", 101, 200, &timerid, NULL) == true) 
+            json_get_int(param, "$.params.interval", TIMER_INTERVAL_MIN, TIMER_INTERVAL_MAX, &interval, NULL) == true &&
+            json_get_int(param, "$.params.timerid", 101, 200, &timerid, NULL) == true)
         {
             if (timerid > mympd_state->timer_list.last_id) {
                 mympd_state->timer_list.last_id = timerid;
@@ -429,6 +426,10 @@ bool mympd_api_timer_file_read(struct t_mympd_state *mympd_state) {
         else {
             MYMPD_LOG_ERROR("Invalid timer line");
             MYMPD_LOG_DEBUG("Errorneous line: %s", line);
+            if (timer_def != NULL) {
+                mympd_api_timer_free_definition(timer_def);
+                FREE_PTR(timer_def);
+            }
         }
         i++;
     }
@@ -483,7 +484,7 @@ bool mympd_api_timer_file_save(struct t_mympd_state *mympd_state) {
                     buffer = sdscatlen(buffer, ",", 1);
                 }
                 buffer = tojson_char(buffer, argument->key, argument->value_p, false);
-                argument = argument->next;            
+                argument = argument->next;
             }
             buffer = sdscatlen(buffer, "}}\n", 3);
             fputs(buffer, fp);
@@ -503,13 +504,13 @@ bool mympd_api_timer_file_save(struct t_mympd_state *mympd_state) {
     }
     FREE_SDS(tmp_file);
     FREE_SDS(timer_file);
-    return true;    
+    return true;
 }
 
-//private functions 
+//private functions
 static struct t_timer_node *get_timer_from_fd(struct t_timer_list *l, int fd) {
     struct t_timer_node *current = l->list;
- 
+
     while (current != NULL) {
         if (current->fd == fd) {
             return current;

@@ -23,7 +23,6 @@
 //optional includes
 #ifdef ENABLE_LIBID3TAG
     #include <id3tag.h>
-    #include "../../dist/src/utf8decode/utf8decode.h"
 #endif
 
 #ifdef ENABLE_FLAC
@@ -50,7 +49,7 @@ sds mympd_api_lyrics_get(struct t_mympd_state *mympd_state, sds buffer, sds meth
         buffer = jsonrpc_respond_message(buffer, method, request_id, true, "lyrics", "error", "Can not get lyrics for stream uri");
         return buffer;
     }
-    if (mympd_state->mpd_state->feat_library == false) {
+    if (mympd_state->mpd_state->feat_mpd_library == false) {
         MYMPD_LOG_DEBUG("Can not get lyrics, no access to music directory");
         buffer = jsonrpc_respond_message(buffer, method, request_id, false, "lyrics", "info", "No lyrics found");
         return buffer;
@@ -85,7 +84,7 @@ static int _mympd_api_lyrics_unsynced(struct t_mympd_state *mympd_state, sds *bu
     return returned_entities;
 }
 
-static int _mympd_api_lyrics_synced(struct t_mympd_state *mympd_state, sds *buffer, int returned_entities, sds mediafile, const char *mime_type_mediafile) { 
+static int _mympd_api_lyrics_synced(struct t_mympd_state *mympd_state, sds *buffer, int returned_entities, sds mediafile, const char *mime_type_mediafile) {
     //try .lrc file in folder in the music directory
     returned_entities = lyrics_fromfile(buffer, mediafile, mympd_state->lyrics_sylt_ext, true, returned_entities);
     //get embedded lyrics
@@ -153,7 +152,7 @@ static int lyricsextract_unsynced_id3(sds *buffer, sds media_file, int returned_
         id3_file_close(file_struct);
         return returned_entities;
     }
-    
+
     int i = 0;
     struct id3_frame *frame;
     while ((frame = id3_tag_findframe(tags, "USLT", i)) != NULL) {
@@ -176,7 +175,7 @@ static int lyricsextract_unsynced_id3(sds *buffer, sds media_file, int returned_
             else {
                 *buffer = tojson_char(*buffer, "lang", "", true);
             }
-            
+
             const id3_ucs4_t *uslt_desc = id3_field_getstring(&frame->fields[2]);
             if (uslt_desc != NULL) {
                 id3_utf8_t *uslt_desc_utf8 = id3_ucs4_utf8duplicate(uslt_desc);
@@ -186,7 +185,7 @@ static int lyricsextract_unsynced_id3(sds *buffer, sds media_file, int returned_
             else {
                 *buffer = tojson_char(*buffer, "desc", "", true);
             }
-            
+
             id3_utf8_t *uslt_text_utf8 = id3_ucs4_utf8duplicate(uslt_text);
             *buffer = tojson_char(*buffer, "text", (char *)uslt_text_utf8, false);
             FREE_PTR(uslt_text_utf8);
@@ -201,7 +200,7 @@ static int lyricsextract_unsynced_id3(sds *buffer, sds media_file, int returned_
         i++;
     }
     id3_file_close(file_struct);
-    
+
     if (i == 0) {
         MYMPD_LOG_DEBUG("No embedded unsynced lyrics detected");
     }
@@ -244,7 +243,7 @@ static int lyricsextract_synced_id3(sds *buffer, sds media_file, int returned_en
                 *buffer = sdscatlen(*buffer, ",", 1);
             }
             *buffer = sdscat(*buffer, "{\"synced\":true,");
-            
+
             enum id3_field_textencoding encoding = id3_field_gettextencoding(&frame->fields[0]);
             *buffer = tojson_long(*buffer, "encoding", encoding, true);
 
@@ -256,13 +255,13 @@ static int lyricsextract_synced_id3(sds *buffer, sds media_file, int returned_en
             else {
                 *buffer = tojson_char(*buffer, "lang", "", true);
             }
-            
+
             long time_stamp = id3_field_getint(&frame->fields[2]);
             *buffer = tojson_long(*buffer, "timestamp", time_stamp, true);
-            
+
             long content_type = id3_field_getint(&frame->fields[3]);
             *buffer = tojson_long(*buffer, "contenttype", content_type, true);
-            
+
             const id3_ucs4_t *uslt_desc = id3_field_getstring(&frame->fields[4]);
             if (uslt_desc != NULL) {
                 id3_utf8_t *uslt_desc_utf8 = id3_ucs4_utf8duplicate(uslt_desc);
@@ -275,7 +274,7 @@ static int lyricsextract_synced_id3(sds *buffer, sds media_file, int returned_en
             sds text = decode_sylt(sylt_data, sylt_data_len, encoding);
             //sylt data is already encoded
             *buffer = sdscatfmt(*buffer, "\"text\":\"%s\"", text);
-            
+
             //*buffer = tojson_char(*buffer, "text", text, false);
             FREE_SDS(text);
             *buffer = sdscatlen(*buffer, "}", 1);
@@ -314,15 +313,11 @@ static sds decode_sylt(const id3_byte_t *binary_data, id3_length_t binary_length
     sds sylt_text = sdsempty();
     //text buffer
     sds text_buf = sdsempty();
-
     unsigned sep_len = encoding == 0 || encoding == 3 ? 1 : 2;
     unsigned i = 0;
-/*
-    uint32_t codepoint;
-    uint32_t state = UTF8_ACCEPT;
-*/
+
     MYMPD_LOG_DEBUG("Sylt encoding: %u", encoding);
-    
+
     while (i + sep_len + 4 < binary_length) {
         //look for bom and skip it
         if ((encoding == 1 && binary_data[i] == 0xff && binary_data[i + 1] == 0xfe) ||
@@ -330,7 +325,7 @@ static sds decode_sylt(const id3_byte_t *binary_data, id3_length_t binary_length
             //utf-16 le or be
             i = i + 2;
         }
-        else if (encoding == 3 && binary_data[i] == 0xef && binary_data[i + 1] == 0xbb && binary_data[i + 2] == 0xbf) { 
+        else if (encoding == 3 && binary_data[i] == 0xef && binary_data[i + 1] == 0xbb && binary_data[i + 2] == 0xbf) {
             //utf-8
             i = i + 3;
         }
@@ -410,11 +405,6 @@ static sds decode_sylt(const id3_byte_t *binary_data, id3_length_t binary_length
                     //ascii char
                     text_buf = sds_catjsonchar(text_buf, (char)binary_data[i]);
                 }
-/*
-                else if (!decode_utf8(&state, &codepoint, binary_data[i])) {
-                    text_buf = sdscatprintf(text_buf, "\\u%04x", codepoint);
-                }
-*/
                 else {
                     text_buf = sdscatprintf(text_buf, "%c", binary_data[i]);
                 }
@@ -459,7 +449,7 @@ static int lyricsextract_flac(sds *buffer, sds media_file, bool is_ogg, const ch
     MYMPD_LOG_DEBUG("Exctracting lyrics from %s", media_file);
     FLAC__StreamMetadata *metadata = NULL;
     FLAC__Metadata_Chain *chain = FLAC__metadata_chain_new();
-    
+
     if(! (is_ogg? FLAC__metadata_chain_read_ogg(chain, media_file) : FLAC__metadata_chain_read(chain, media_file)) ) {
         MYMPD_LOG_ERROR("%s: ERROR: reading metadata", media_file);
         FLAC__metadata_chain_delete(chain);
@@ -508,7 +498,7 @@ static int lyricsextract_flac(sds *buffer, sds media_file, bool is_ogg, const ch
             }
         }
     } while (ok && FLAC__metadata_iterator_next(iterator));
-    
+
     if (found_lyrics == 0) {
         MYMPD_LOG_DEBUG("No embedded lyrics detected");
     }

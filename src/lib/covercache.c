@@ -19,7 +19,7 @@
 #include <time.h>
 #include <unistd.h>
 
-bool covercache_write_file(const char *workdir, const char *uri, const char *mime_type, sds binary) {
+bool covercache_write_file(const char *cachedir, const char *uri, const char *mime_type, sds binary) {
     if (mime_type[0] == '\0') {
         MYMPD_LOG_WARN("Covercache file for \"%s\" not written, mime_type is empty", uri);
         return false;
@@ -32,7 +32,7 @@ bool covercache_write_file(const char *workdir, const char *uri, const char *mim
     bool rc = false;
     sds filename = sdsnew(uri);
     sdsmapchars(filename, "/", "_", 1);
-    sds tmp_file = sdscatfmt(sdsempty(), "%s/covercache/%s.XXXXXX", workdir, filename);
+    sds tmp_file = sdscatfmt(sdsempty(), "%s/covercache/%s.XXXXXX", cachedir, filename);
     errno = 0;
     int fd = mkstemp(tmp_file);
     if (fd < 0) {
@@ -43,7 +43,7 @@ bool covercache_write_file(const char *workdir, const char *uri, const char *mim
         FILE *fp = fdopen(fd, "w");
         fwrite(binary, 1, sdslen(binary), fp);
         fclose(fp);
-        sds cover_file = sdscatfmt(sdsempty(), "%s/covercache/%s.%s", workdir, filename, ext);
+        sds cover_file = sdscatfmt(sdsempty(), "%s/covercache/%s.%s", cachedir, filename, ext);
         errno = 0;
         if (rename(tmp_file, cover_file) == -1) {
             MYMPD_LOG_ERROR("Rename file from \"%s\" to \"%s\" failed", tmp_file, cover_file);
@@ -63,13 +63,13 @@ bool covercache_write_file(const char *workdir, const char *uri, const char *mim
     return rc;
 }
 
-int covercache_clear(const char *workdir, int keepdays) {
+int covercache_clear(const char *cachedir, int keepdays) {
     int num_deleted = 0;
     bool error = false;
-    time_t expire_time = time(NULL) - keepdays * 24 * 60 * 60;
-    
-    sds covercache = sdscatfmt(sdsempty(), "%s/covercache", workdir);
-    MYMPD_LOG_NOTICE("Cleaning covercache %s", covercache);
+    time_t expire_time = time(NULL) - (long)(keepdays * 24 * 60 * 60);
+
+    sds covercache = sdscatfmt(sdsempty(), "%s/covercache", cachedir);
+    MYMPD_LOG_NOTICE("Cleaning covercache \"%s\"", covercache);
     MYMPD_LOG_DEBUG("Remove files older than %ld sec", expire_time);
     errno = 0;
     DIR *covercache_dir = opendir(covercache);
@@ -82,7 +82,7 @@ int covercache_clear(const char *workdir, int keepdays) {
                 struct stat status;
                 if (stat(filepath, &status) == 0) {
                     if (status.st_mtime < expire_time) {
-                        MYMPD_LOG_DEBUG("Deleting %s: %ld", filepath, status.st_mtime);
+                        MYMPD_LOG_DEBUG("Deleting \"%s\": %ld", filepath, status.st_mtime);
                         errno = 0;
                         if (unlink(filepath) != 0) {
                             MYMPD_LOG_ERROR("Error removing file \"%s\"", filepath);
@@ -101,7 +101,7 @@ int covercache_clear(const char *workdir, int keepdays) {
         FREE_SDS(filepath);
     }
     else {
-        MYMPD_LOG_ERROR("Error opening directory %s", covercache);
+        MYMPD_LOG_ERROR("Error opening directory \"%s\"", covercache);
         MYMPD_LOG_ERRNO(errno);
     }
     MYMPD_LOG_NOTICE("Deleted %d files from covercache", num_deleted);

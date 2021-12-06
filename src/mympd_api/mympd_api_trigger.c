@@ -84,7 +84,7 @@ void mympd_api_trigger_execute(struct t_mympd_state *mympd_state, enum trigger_e
     struct t_list_node *current = mympd_state->triggers.head;
     while (current != NULL) {
         if (current->value_i == event) {
-            MYMPD_LOG_NOTICE("Executing script %s for trigger %s (%d)", current->value_p, 
+            MYMPD_LOG_NOTICE("Executing script %s for trigger %s (%d)", current->value_p,
                 mympd_api_trigger_name(event), event);
             _trigger_execute(current->value_p, (struct t_list *)current->user_data);
         }
@@ -123,7 +123,7 @@ sds mympd_api_trigger_list(struct t_mympd_state *mympd_state, sds buffer, sds me
         current = current->next;
         j++;
     }
-    
+
     buffer = sdscatlen(buffer, "],", 2);
     buffer = tojson_long(buffer, "returnedEntities", entities_returned, false);
     buffer = jsonrpc_result_end(buffer);
@@ -155,7 +155,7 @@ sds mympd_api_trigger_get(struct t_mympd_state *mympd_state, sds buffer, sds met
     else {
         buffer = jsonrpc_respond_message(buffer, method, request_id, false, "trigger", "warn", "Trigger not found");
     }
-    
+
     return buffer;
 }
 
@@ -272,7 +272,7 @@ bool mympd_api_trigger_file_save(struct t_mympd_state *mympd_state) {
     }
     FREE_SDS(tmp_file);
     FREE_SDS(trigger_file);
-    return true;    
+    return true;
 }
 
 //private functions

@@ -7,7 +7,7 @@
 #include "mympd_config_defs.h"
 #include "sds_extras.h"
 
-#include "../../dist/src/utf8decode/utf8decode.h"
+#include "../../dist/utf8/utf8.h"
 #include "log.h"
 
 #include <ctype.h>
@@ -15,25 +15,28 @@
 
 #define HEXTOI(x) (x >= '0' && x <= '9' ? x - '0' : x - 'W')
 
+void sds_utf8_tolower(sds s) {
+    utf8_int32_t cp;
+
+    void *pn = utf8codepoint(s, &cp);
+    while (cp != 0) {
+        const size_t size = utf8codepointsize(cp);
+        const utf8_int32_t lwr_cp = utf8lwrcodepoint(cp);
+        const size_t lwr_size = utf8codepointsize(lwr_cp);
+
+        if (lwr_cp != cp && lwr_size == size) {
+            utf8catcodepoint(s, lwr_cp, lwr_size);
+        }
+
+        s = pn;
+        pn = utf8codepoint(s, &cp);
+    }
+}
+
 sds sds_catjson(sds s, const char *p, size_t len) {
     s = sdscatlen(s, "\"", 1);
-/*
-    uint32_t codepoint;
-    uint32_t state = UTF8_ACCEPT;
-*/
     for (size_t i = 0; i < len; i++) {
-        if ((p[i] & 0x80) == 0x00) {
-            //ascii char
             s = sds_catjsonchar(s, p[i]);
-        }
-/*        
-        else if (!decode_utf8(&state, &codepoint, (uint8_t)p[i])) {
-            s = sdscatprintf(s, "\\u%04x", codepoint);
-        }
-*/
-        else {
-            s = sdscatprintf(s, "%c", p[i]);
-        }
     }
     return sdscatlen(s, "\"", 1);
 }
@@ -44,13 +47,13 @@ sds sds_catjsonchar(sds s, const char p) {
         case '"':
             s = sdscatprintf(s, "\\%c", p);
             break;
-        case '\b': s = sdscatlen(s, "\\b", 2);     break;
-        case '\f': s = sdscatlen(s, "\\f", 2);     break;
-        case '\n': s = sdscatlen(s, "\\n", 2);     break;
-        case '\r': s = sdscatlen(s, "\\r", 2);     break;
-        case '\t': s = sdscatlen(s, "\\t", 2);     break;
+        case '\b': s = sdscatlen(s, "\\b", 2); break;
+        case '\f': s = sdscatlen(s, "\\f", 2); break;
+        case '\n': s = sdscatlen(s, "\\n", 2); break;
+        case '\r': s = sdscatlen(s, "\\r", 2); break;
+        case '\t': s = sdscatlen(s, "\\t", 2); break;
         //ignore vertical tabulator and alert
-        case '\v': 
+        case '\v':
         case '\a':
             //this escapes are not accepted in the unescape function
             break;
@@ -111,7 +114,7 @@ sds sds_urldecode(sds s, const char *p, size_t len, int is_form_url_encoded) {
                 s = sdscatprintf(s, "%c", (char) ((HEXTOI(a) << 4) | HEXTOI(b)));
                 i += 2;
                 p += 2;
-            } 
+            }
             else {
                 sdsclear(s);
                 return s;
@@ -218,7 +221,7 @@ void sds_basename_uri(sds uri) {
     if (uri_len == 0) {
         return;
     }
-    
+
     if (strstr(uri, "://") == NULL) {
         //filename, remove path
         for (i = uri_len - 1; i >= 0; i--) {
@@ -231,7 +234,7 @@ void sds_basename_uri(sds uri) {
     }
 
     //uri, remove query and hash
-    for (i = 0;  i < uri_len; i++) {
+    for (i = 0; i < uri_len; i++) {
         if (uri[i] == '#' || uri[i] == '?') {
             break;
         }
@@ -241,7 +244,7 @@ void sds_basename_uri(sds uri) {
     }
 }
 
-void sds_strip_slash(sds s) {      
+void sds_strip_slash(sds s) {
     char *sp = s;
     char *ep = s + sdslen(s) - 1;
     while(ep >= sp && *ep == '/') {

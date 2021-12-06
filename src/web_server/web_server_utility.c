@@ -52,7 +52,7 @@ void webserver_populate_dummy_hm(struct mg_connection *nc, struct mg_http_messag
     else if (nc->label[1] == 'P') { hm->method = mg_str("POST"); }
     hm->uri = mg_str("/");
     hm->message = mg_str("");
-    hm->body = mg_str("");  
+    hm->body = mg_str("");
     hm->query = mg_str("");
     hm->proto = mg_str("HTTP/1.1"); //we only accept HTTP/1.1
     //add accept-encoding header to deliver gziped embedded files
@@ -107,9 +107,9 @@ void webserver_send_error(struct mg_connection *nc, int code, const char *msg) {
 
 void webserver_send_header_ok(struct mg_connection *nc, size_t len, const char *headers) {
     mg_printf(nc, "HTTP/1.1 200 OK\r\n"
-      "%s"
-      "Content-Length: %lu\r\n\r\n",
-      headers, len);
+        "%s"
+        "Content-Length: %lu\r\n\r\n",
+        headers, len);
 }
 
 void webserver_send_data(struct mg_connection *nc, const char *data, size_t len, const char *headers) {
@@ -120,9 +120,9 @@ void webserver_send_data(struct mg_connection *nc, const char *data, size_t len,
 
 void webserver_send_header_redirect(struct mg_connection *nc, const char *location) {
     mg_printf(nc, "HTTP/1.1 301 Moved Permanently\r\n"
-      "Location: %s\r\n"
-      "Content-Length: 0\r\n\r\n", 
-      location);
+        "Location: %s\r\n"
+        "Content-Length: 0\r\n\r\n",
+        location);
 }
 
 void webserver_handle_connection_close(struct mg_connection *nc) {
@@ -143,7 +143,7 @@ void webserver_serve_stream_image(struct mg_connection *nc, struct mg_http_messa
 void webserver_serve_asset_image(struct mg_connection *nc, struct mg_http_message *hm, const char *name) {
     struct t_mg_user_data *mg_user_data = (struct t_mg_user_data *) nc->mgr->userdata;
     struct t_config *config = mg_user_data->config;
-    
+
     sds asset_image = sdscatfmt(sdsempty(), "%s/pics/%s", config->workdir, name);
     asset_image = webserver_find_image_file(asset_image);
     if (sdslen(asset_image) > 0) {
@@ -192,14 +192,13 @@ bool webserver_serve_embedded_files(struct mg_connection *nc, sds uri, struct mg
         {"/sw.js", 6, "application/javascript; charset=utf-8", true, false, sw_js_data, sw_js_size},
         {"/mympd.webmanifest", 18, "application/manifest+json", true, false, mympd_webmanifest_data, mympd_webmanifest_size},
         {"/assets/coverimage-notavailable.svg", 35, "image/svg+xml", true, true, coverimage_notavailable_svg_data, coverimage_notavailable_svg_size},
-        {"/assets/MaterialIcons-Regular.woff2", 35, "font/woff2", false, true, MaterialIcons_Regular_woff2_data, MaterialIcons_Regular_woff2_size},
+        {"/assets/MaterialIcons-Regular.woff2", 35, "font/woff2", true, true, MaterialIcons_Regular_woff2_data, MaterialIcons_Regular_woff2_size},
         {"/assets/coverimage-stream.svg", 29, "image/svg+xml", true, true, coverimage_stream_svg_data, coverimage_stream_svg_size},
         {"/assets/coverimage-loading.svg", 30, "image/svg+xml", true, true, coverimage_loading_svg_data, coverimage_loading_svg_size},
         {"/assets/coverimage-booklet.svg", 30, "image/svg+xml", true, true, coverimage_booklet_svg_data, coverimage_booklet_svg_size},
         {"/assets/coverimage-mympd.svg", 28, "image/svg+xml", true, true, coverimage_mympd_svg_data, coverimage_mympd_svg_size},
         {"/assets/mympd-background-dark.svg", 33, "image/svg+xml", true, true, mympd_background_dark_svg_data, mympd_background_dark_svg_size},
         {"/assets/mympd-background-light.svg", 34, "image/svg+xml", true, true, mympd_background_light_svg_data, mympd_background_light_svg_size},
-        {"/assets/mympd-background-default.svg", 36, "image/svg+xml", true, true, mympd_background_default_svg_data, mympd_background_default_svg_size},
         {"/assets/favicon.ico", 19, "image/vnd.microsoft.icon", false, true, favicon_ico_data, favicon_ico_size},
         {"/assets/appicon-192.png", 23, "image/png", false, true, appicon_192_png_data, appicon_192_png_size},
         {"/assets/appicon-512.png", 23, "image/png", false, true, appicon_512_png_data, appicon_512_png_size},
@@ -219,7 +218,7 @@ bool webserver_serve_embedded_files(struct mg_connection *nc, sds uri, struct mg
             break;
         }
     }
-    
+
     if (p->uri != NULL) {
         //respond with error if browser don't support compression and asset is compressed
         if (p->compressed == true) {
