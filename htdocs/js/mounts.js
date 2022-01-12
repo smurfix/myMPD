@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 function initMounts() {
@@ -30,9 +30,9 @@ function initMounts() {
             sendAPI("MYMPD_API_MOUNT_NEIGHBOR_LIST", {}, parseNeighbors, true);
         }
         else {
-            const dropdownNeighbors = document.getElementById('dropdownNeighbors').children[0];
+            const dropdownNeighbors = document.getElementById('dropdownNeighbors').firstElementChild;
             elReplaceChild(dropdownNeighbors,
-                elCreateEmpty('div', {"class": ["list-group-item", "nowrap"]}, tn('Neighbors are disabled'))
+                elCreateText('div', {"class": ["list-group-item", "nowrap"]}, tn('Neighbors are disabled'))
             );
         }
     }, false);

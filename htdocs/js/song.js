@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 function initSong() {
@@ -8,17 +8,19 @@ function initSong() {
         if (event.target.nodeName === 'A') {
             if (event.target.id === 'calcFingerprint') {
                 sendAPI("MYMPD_API_DATABASE_FINGERPRINT", {
-                        "uri": getData(event.target, 'uri')
+                    "uri": getData(event.target, 'uri')
                 }, parseFingerprint, true);
                 event.preventDefault();
                 const spinner = elCreateEmpty('div', {"class": ["spinner-border", "spinner-border-sm"]});
                 elHide(event.target);
                 event.target.parentNode.appendChild(spinner);
             }
-            else if (event.target.classList.contains('external')) {
+            else if (event.target.classList.contains('download') ||
+                event.target.classList.contains('external'))
+            {
                 //do nothing, link opens in new browser window
             }
-            else if (event.target.parentNode.getAttribute('data-tag') !== null) {
+            else if (getData(event.target.parentNode, 'tag') !== undefined) {
                 uiElements.modalSongDetails.hide();
                 event.preventDefault();
                 gotoBrowse(event);
@@ -43,14 +45,14 @@ function songDetails(uri) {
 
 function parseFingerprint(obj) {
     if (obj.error) {
-        elReplaceChild(document.getElementById('fingerprint'),
+        elReplaceChildId('fingerprint',
             elCreateText('div', {"class": ["alert", "alert-danger"]}, tn(obj.error.message, obj.error.data))
         );
         return;
     }
     const textarea = elCreateEmpty('textarea', {"class": ["form-control", "text-monospace", "small", "breakAll"], "rows": 5});
     textarea.value = obj.result.fingerprint;
-    elReplaceChild(document.getElementById('fingerprint'), textarea);
+    elReplaceChildId('fingerprint', textarea);
 }
 
 function getMBtagLink(tag, value) {
@@ -70,7 +72,9 @@ function getMBtagLink(tag, value) {
             MBentity = 'recording';
             break;
     }
-    if (MBentity === '' || value === '-') {
+    if (MBentity === '' ||
+        value === '-')
+    {
         return elCreateText('span', {}, value);
     }
     else {
@@ -106,7 +110,9 @@ function parseSongDetails(obj) {
     const tbody = document.getElementById('tbodySongDetails');
     elClear(tbody);
     for (let i = 0, j = settings.tagList.length; i < j; i++) {
-        if (settings.tagList[i] === 'Title' || obj.result[settings.tagList[i]] === '-') {
+        if (settings.tagList[i] === 'Title' ||
+            obj.result[settings.tagList[i]] === '-')
+        {
             continue;
         }
         const tr = elCreateEmpty('tr', {});
@@ -117,7 +123,9 @@ function parseSongDetails(obj) {
         if (settings.tagList[i] === 'Album' && obj.result[tagAlbumArtist] !== null) {
             setData(td, 'AlbumArtist', obj.result[tagAlbumArtist]);
         }
-        if (settings.tagListBrowse.includes(settings.tagList[i]) && obj.result[settings.tagList[i]] !== '-') {
+        if (settings.tagListBrowse.includes(settings.tagList[i]) &&
+            checkTagValue(obj.result[settings.tagList[i]],'-') === false)
+        {
             td.appendChild(elCreateText('a', {"class": ["text-success"], "href": "#"}, obj.result[settings.tagList[i]]));
         }
         else if (settings.tagList[i].indexOf('MUSICBRAINZ') === 0) {
@@ -133,7 +141,8 @@ function parseSongDetails(obj) {
     if (features.featLibrary === true) {
         tbody.appendChild(
             songDetailsRow('Filename',
-                elCreateText('a', {"class": ["text-break", "text-success", "downdload"], "href": "#",
+                elCreateText('a', {"class": ["text-break", "text-success", "download"],
+                    "href": myEncodeURI(subdir + '/browse/music/' + obj.result.uri),
                     "target": "_blank", "title": tn(obj.result.uri)}, basename(obj.result.uri, false))
             )
         );
@@ -166,11 +175,11 @@ function parseSongDetails(obj) {
         );
         for (const sticker of stickerList) {
             if (sticker === 'stickerLike') {
-                const thDown = elCreateText('button', {"data-vote": "0", "title": tn('Love song'), "class": ["btn", "btn-sm", "btn-secondary", "mi"]}, 'thumb_down');
+                const thDown = elCreateText('button', {"data-vote": "0", "title": tn('Hate song'), "class": ["btn", "btn-sm", "btn-secondary", "mi"]}, 'thumb_down');
                 if (obj.result[sticker] === 0) {
                     thDown.classList.add('active');
                 }
-                const thUp = elCreateText('button', {"data-vote": "2", "title": tn('Hate song'), "class": ["btn", "btn-sm", "btn-secondary", "mi"]}, 'thumb_up');
+                const thUp = elCreateText('button', {"data-vote": "2", "title": tn('Love song'), "class": ["btn", "btn-sm", "btn-secondary", "mi"]}, 'thumb_up');
                 if (obj.result[sticker] === 2) {
                     thUp.classList.add('active');
                 }
@@ -422,7 +431,7 @@ function parseUnsyncedLyrics(parent, text) {
 }
 
 function parseSyncedLyrics(parent, lyrics, currentLyrics) {
-    for (const line of lyrics.replace('\r').split('\n')) {
+    for (const line of lyrics.replace(/\r/g, '').split('\n')) {
         //line must start with timestamp
         const elements = line.match(/^\[(\d+):(\d+)\.(\d+)\](.*)$/);
         if (elements) {

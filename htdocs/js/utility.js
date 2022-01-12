@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 //element handling shortcuts
@@ -25,20 +25,24 @@ function elCreateNodes(tagName, attributes, nodes) {
 }
 
 function elCreateEmpty(tagName, attributes) {
-    const tag = attributes['is'] === undefined ?
-        document.createElement(tagName) : document.createElement(tagName, {is: attributes['is']});
+    const tag = document.createElement(tagName);
     for (const key in attributes) {
         switch(key) {
-            case "class":
+            case 'class':
                 tag.classList.add(...attributes[key]);
                 break;
-            case "is":
+            case 'is':
+                tag.setAttribute('data-is', attributes[key]);
                 break;
             default:
                 tag.setAttribute(key, attributes[key]);
         }
     }
     return tag;
+}
+
+function elReplaceChildId(id, child) {
+    elReplaceChild(document.getElementById(id), child);
 }
 
 function elReplaceChild(el, child) {
@@ -166,12 +170,21 @@ function showConfirmInline(el, text, btnText, callback) {
     el.appendChild(confirm);
 }
 
+function myEncodeURIhost(str) {
+    const match = str.match(/(https?:\/\/[^/]+)(.*)$/);
+    if (match) {
+        //encode only non host part of uri
+        return match[1] + myEncodeURI(match[2]);
+    }
+    return myEncodeURI(str);
+}
+
 //custom encoding function
 //works like encodeURIComponent but
-//- does not escape /
+//- does not escape /:
 //- escapes further reserved characters
 function myEncodeURI(str) {
-    return encodeURI(str).replace(/[!'()*#?;,:@&=+$~]/g, function(c) {
+    return encodeURI(str).replace(/[!'()*#?;:,@&=+$~]/g, function(c) {
         return '%' + c.charCodeAt(0).toString(16);
     });
 }
@@ -207,13 +220,49 @@ function clickAlbumPlay(albumArtist, album) {
 
 function clickSong(uri) {
     switch (settings.webuiSettings.clickSong) {
-        case 'append':             return appendQueue('song', uri);
-        case 'appendPlay':         return appendPlayQueue('song', uri);
+        case 'append': return appendQueue('song', uri);
+        case 'appendPlay': return appendPlayQueue('song', uri);
         case 'insertAfterCurrent': return insertAfterCurrentQueue('song', uri);
         case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('song', uri);
-        case 'replace':            return replaceQueue('song', uri);
-        case 'replacePlay':        return replacePlayQueue('song', uri);
-        case 'view':               return songDetails(uri);
+        case 'replace': return replaceQueue('song', uri);
+        case 'replacePlay': return replacePlayQueue('song', uri);
+        case 'view': return songDetails(uri);
+    }
+}
+
+function clickRadiobrowser(uri, uuid) {
+    switch (settings.webuiSettings.clickRadiobrowser) {
+        case 'append': return appendQueue('song', uri);
+        case 'appendPlay': return appendPlayQueue('song', uri);
+        case 'insertAfterCurrent': return insertAfterCurrentQueue('song', uri);
+        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('song', uri);
+        case 'replace': return replaceQueue('song', uri);
+        case 'replacePlay': return replacePlayQueue('song', uri);
+    }
+    countClickRadiobrowser(uuid);
+}
+
+function clickWebradiodb(uri) {
+    switch (settings.webuiSettings.clickRadiobrowser) {
+        case 'append': return appendQueue('song', uri);
+        case 'appendPlay': return appendPlayQueue('song', uri);
+        case 'insertAfterCurrent': return insertAfterCurrentQueue('song', uri);
+        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('song', uri);
+        case 'replace': return replaceQueue('song', uri);
+        case 'replacePlay': return replacePlayQueue('song', uri);
+    }
+}
+
+function clickRadioFavorites(uri) {
+    const fullUri = getRadioFavoriteUri(uri);
+    switch(settings.webuiSettings.clickRadioFavorites) {
+        case 'append': return appendQueue('plist', fullUri);
+        case 'appendPlay': return appendPlayQueue('plist', fullUri);
+        case 'insertAfterCurrent': return insertAfterCurrentQueue('plist', fullUri);
+        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('plist', fullUri);
+        case 'replace': return replaceQueue('plist', fullUri);
+        case 'replacePlay': return replacePlayQueue('plist', fullUri);
+        case 'edit': return editRadioFavorite(uri);
     }
 }
 
@@ -247,6 +296,26 @@ function clickPlaylist(uri) {
     }
 }
 
+function clickFilesystemPlaylist(uri) {
+    switch(settings.webuiSettings.clickFilesystemPlaylist) {
+        case 'append': return appendQueue('plist', uri);
+        case 'appendPlay': return appendPlayQueue('plist', uri);
+        case 'insertAfterCurrent': return insertAfterCurrentQueue('plist', uri);
+        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('plist', uri);
+        case 'replace': return replaceQueue('plist', uri);
+        case 'replacePlay': return replacePlayQueue('plist', uri);
+        case 'view':
+            //remember offset for current browse uri
+            browseFilesystemHistory[app.current.search] = {
+                "offset": app.current.offset,
+                "scrollPos": document.body.scrollTop ? document.body.scrollTop : document.documentElement.scrollTop
+            };
+            //reset filter and show playlist
+            app.current.filter = '-';
+            appGoto('Browse', 'Filesystem', undefined, 0, app.current.limit, app.current.filter, app.current.sort, 'plist', uri);
+    }
+}
+
 function clickFolder(uri) {
     switch(settings.webuiSettings.clickFolder) {
         case 'append':  return appendQueue('dir', uri);
@@ -263,7 +332,7 @@ function clickFolder(uri) {
             };
             //reset filter and open folder
             app.current.filter = '-';
-            appGoto('Browse', 'Filesystem', undefined, 0, app.current.limit, app.current.filter, app.current.sort, '-', uri);
+            appGoto('Browse', 'Filesystem', undefined, 0, app.current.limit, app.current.filter, app.current.sort, 'dir', uri);
     }
 }
 
@@ -531,7 +600,10 @@ function addTagList(elId, list) {
         stack.appendChild(elCreateText('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": settings[list][i]}, tn(settings[list][i])));
     }
     if (elId === 'BrowseNavFilesystemDropdown' ||
-        elId === 'BrowseNavPlaylistsDropdown')
+        elId === 'BrowseNavPlaylistsDropdown' ||
+        elId === 'BrowseNavRadioFavoritesDropdown' ||
+        elId === 'BrowseNavWebradiodbDropdown' ||
+        elId === 'BrowseNavRadiobrowserDropdown')
     {
         if (features.featTags === true && features.featAdvsearch === true) {
             elClear(stack);
@@ -540,7 +612,10 @@ function addTagList(elId, list) {
     }
     if (elId === 'BrowseDatabaseByTagDropdown' ||
         elId === 'BrowseNavFilesystemDropdown' ||
-        elId === 'BrowseNavPlaylistsDropdown')
+        elId === 'BrowseNavPlaylistsDropdown' ||
+        elId === 'BrowseNavRadioFavoritesDropdown' ||
+        elId === 'BrowseNavWebradiodbDropdown' ||
+        elId === 'BrowseNavRadiobrowserDropdown')
     {
         if (elId === 'BrowseDatabaseByTagDropdown') {
             stack.appendChild(elCreateEmpty('div', {"class": ["dropdown-divider"]}));
@@ -551,6 +626,13 @@ function addTagList(elId, list) {
         }
         stack.appendChild(elCreateText('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Filesystem"}, tn('Filesystem')));
         if (elId === 'BrowseNavFilesystemDropdown') {
+            stack.lastChild.classList.add('active');
+        }
+        stack.appendChild(elCreateText('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Radio"}, tn('Webradios')));
+        if (elId === 'BrowseNavRadioFavoritesDropdown' ||
+            elId === 'BrowseNavWebradiodbDropdown' ||
+            elId === 'BrowseNavRadiobrowserDropdown')
+        {
             stack.lastChild.classList.add('active');
         }
     }
@@ -617,12 +699,22 @@ function focusSearch() {
         case 'BrowsePlaylistsDetail':
             document.getElementById('searchPlaylistsDetailStr').focus();
             break;
+        case 'BrowseRadioWebradiodb':
+            document.getElementById('BrowseRadioWebradiodbSearchStr').focus();
+            break;
+        case 'BrowseRadioRadiobrowser':
+            document.getElementById('BrowseRadioRadiobrowserSearchStr').focus();
+            break;
         case 'Search':
             document.getElementById('searchstr').focus();
             break;
         default:
             appGoto('Search');
     }
+}
+
+function btnWaitingId(id, waiting) {
+    btnWaiting(document.getElementById(id), waiting);
 }
 
 function btnWaiting(btn, waiting) {
@@ -983,6 +1075,9 @@ function parseCmd(event, href) {
             case 'sendAPI':
                 sendAPI(cmd.options[0].cmd, {});
                 break;
+            case 'createLocalPlaybackEl':
+                window[cmd.cmd](event, ... cmd.options);
+                break;
             case 'toggleBtn':
             case 'toggleBtnChk':
             case 'toggleBtnGroup':
@@ -1111,6 +1206,8 @@ function printValue(key, value) {
                 case 'smartpls': return elCreateText('span', {"class": ["mi"]}, 'queue_music');
                 case 'plist':    return elCreateText('span', {"class": ["mi"]}, 'list');
                 case 'dir':      return elCreateText('span', {"class": ["mi"]}, 'folder_open');
+                case 'stream':	 return elCreateText('span', {"class": ["mi"]}, 'stream');
+                case 'webradio': return elCreateText('span', {"class": ["mi"]}, 'radio');
                 default:         return elCreateText('span', {"class": ["mi"]}, 'radio_button_unchecked');
             }
         case 'Duration':
@@ -1129,15 +1226,16 @@ function printValue(key, value) {
             return elCreateText('span', {"class": ["mi"]},
                 value === 0 ? 'thumb_down' : value === 1 ? 'radio_button_unchecked' : 'thumb_up');
         case 'Artist':
+        case 'ArtistSort':
         case 'AlbumArtist':
-        case 'Genre':
+        case 'AlbumArtistSort':
         case 'Composer':
         case 'Performer':
         case 'Conductor':
         case 'Ensemble':
         case 'MUSICBRAINZ_ARTISTID':
         case 'MUSICBRAINZ_ALBUMARTISTID': {
-            //multi value tags
+            //multi value tags - print lines
             const span = elCreateEmpty('span', {});
             for (let i = 0, j = value.length; i < j; i++) {
                 if (i > 0) {
@@ -1152,6 +1250,30 @@ function printValue(key, value) {
             }
             return span;
         }
+        case 'Genre':
+            //multi value tags - print comma separated
+            if (typeof value === 'string') {
+                return document.createTextNode(value);
+            }
+            return document.createTextNode(
+                value.join(', ')
+            );
+        case 'tags':
+            return document.createTextNode(
+                value.replace(/,(\S)/g, ', $1')
+            );
+        case 'homepage':
+        case 'Homepage':
+            if (value === '') {
+                return document.createTextNode(value);
+            }
+            return elCreateText('a', {"class": ["text-success", "external"],
+                        "href": myEncodeURIhost(value),
+                        "target": "_blank"}, value);
+        case 'lastcheckok':
+            return elCreateText('span', {"class": ["mi"]},
+                    (value === 1 ? 'check_circle' : 'error')
+                );
         default:
             if (key.indexOf('MUSICBRAINZ') === 0) {
                 return getMBtagLink(key, value);
@@ -1167,6 +1289,10 @@ function getTimestamp() {
 }
 
 function setScrollViewHeight(container) {
+    if (isMobile === true) {
+        container.parentNode.style.maxHeight = '';
+        return;
+    }
     const footerHeight = document.getElementsByTagName('footer')[0].offsetHeight;
     const tpos = getYpos(container.parentNode);
     const maxHeight = window.innerHeight - tpos - footerHeight;
@@ -1332,7 +1458,12 @@ function showModal(modal) {
 }
 
 function checkMediaSessionSupport() {
-    return settings.mediaSession && 'mediaSession' in navigator
+    if (settings.mediaSession === false ||
+        navigator.mediaSession === undefined)
+    {
+        return false;
+    }
+    return true;
 }
 
 function checkTagValue(tag, value) {
@@ -1344,4 +1475,17 @@ function checkTagValue(tag, value) {
 
 function strToBool(str) {
     return str === 'true';
+}
+
+function getParent(el, nodeName) {
+    let target = el;
+    let i = 0;
+    while (target.nodeName !== nodeName) {
+        i++;
+        if (i > 10) {
+            return null;
+        }
+        target = target.parentNode;
+    }
+    return target;
 }

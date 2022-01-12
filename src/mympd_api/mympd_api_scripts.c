@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -131,7 +131,7 @@ bool mympd_api_script_delete(struct t_config *config, const char *script) {
 }
 
 bool mympd_api_script_save(struct t_config *config, sds script, sds oldscript, int order, sds content, struct t_list *arguments) {
-    sds tmp_file = sdscatfmt(sdsempty(), "%s/scripts/%.XXXXXX", config->workdir, script);
+    sds tmp_file = sdscatfmt(sdsempty(), "%s/scripts/%s.XXXXXX", config->workdir, script);
     errno = 0;
     int fd = mkstemp(tmp_file);
     if (fd < 0 ) {
@@ -140,7 +140,7 @@ bool mympd_api_script_save(struct t_config *config, sds script, sds oldscript, i
         FREE_SDS(tmp_file);
         return false;
     }
-    FILE *fp = fdopen(fd, "w");
+    FILE *fp = fdopen(fd, OPEN_FLAGS_WRITE);
     //write metadata line
     sds argstr = sdsempty();
     argstr = list_to_json_array(argstr, arguments);

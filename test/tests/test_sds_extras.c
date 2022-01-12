@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -30,11 +30,11 @@ UTEST(sds_extras, test_sds_strip_file_extension) {
     sdsfree(test_input);
 }
 
-UTEST(sds_extras, test_sds_streamuri_to_filename) {
+UTEST(sds_extras, test_sds_sanitize_filename) {
     struct t_input_result testcases[] = {
-        {"http://host:80/verz/verz/test?safsaf#798234",   "host_80_verz_verz_test_safsaf_798234" },
-        {"https://host:443/verz/verz/test?safsaf#798234", "host_443_verz_verz_test_safsaf_798234" },
-        {"https://host/verz/verz/test",                   "host_verz_verz_test" },
+        {"http://host:80/verz/verz/test?safsaf#798234",   "http___host_80_verz_verz_test_safsaf_798234" },
+        {"https://host:443/verz/verz/test?safsaf#798234", "https___host_443_verz_verz_test_safsaf_798234" },
+        {"https://host/verz/verz/test",                   "https___host_verz_verz_test" },
         {"",                                              "" },
         {"/test/test.mp3.mp3",                            "_test_test_mp3_mp3" },
         {NULL,                                            NULL}
@@ -43,7 +43,7 @@ UTEST(sds_extras, test_sds_streamuri_to_filename) {
     sds test_input = sdsempty();
     while (p->input != NULL) {
         test_input = sdscatfmt(test_input, "%s", p->input);
-        sds_streamuri_to_filename(test_input);
+        sds_sanitize_filename(test_input);
         ASSERT_STREQ(p->result, test_input);
         sdsclear(test_input);
         p++;
@@ -113,9 +113,16 @@ UTEST(sds_extras, sds_basename_uri) {
 
 UTEST(sds_extras, sds_urldecode) {
     sds test_input = sdsnew("/Musict/Led%20Zeppelin/1975%20-%20Physical%20Graffiti%20%5B1994%2C%20Atlantic%2C%207567-92442-2%5D/CD%201/folder.jpg");
-    sds s = sdsempty();
-    s = sds_urldecode(s, test_input, sdslen(test_input), 0);
+    sds s = sds_urldecode(sdsempty(), test_input, sdslen(test_input), 0);
     ASSERT_STREQ("/Musict/Led Zeppelin/1975 - Physical Graffiti [1994, Atlantic, 7567-92442-2]/CD 1/folder.jpg", s);
+    sdsfree(test_input);
+    sdsfree(s);
+}
+
+UTEST(sds_extras, sds_urlencode) {
+    sds test_input = sdsnew("/Musict/Led Zeppelin/1975 - Physical Graffiti [1994, Atlantic, 7567-92442-2]/CD 1/folder.jpg");
+    sds s = sds_urlencode(sdsempty(), test_input, sdslen(test_input));
+    ASSERT_STREQ("/Musict/Led%20Zeppelin/1975%20-%20Physical%20Graffiti%20%5B1994%2C%20Atlantic%2C%207567-92442-2%5D/CD%201/folder.jpg", s);
     sdsfree(test_input);
     sdsfree(s);
 }

@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 function smartCount(number) {
@@ -10,6 +10,10 @@ function smartCount(number) {
 }
 
 function tn(phrase, number, data) {
+    if (isNaN(phrase) === false) {
+        //do not translate numbers
+        return phrase;
+    }
     if (phrase === undefined) {
         logDebug('Phrase is undefined');
         return 'undefinedPhrase';

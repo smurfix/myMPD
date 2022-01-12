@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -238,7 +238,7 @@ static int _sdssplit_whitespace(sds line, sds *name, sds *value) {
     *name = sdsempty();
     *value = sdsempty();
     int tokens = 0;
-    unsigned i = 0;
+    size_t i = 0;
     const char *p = line;
 
     if (*p == '#') {

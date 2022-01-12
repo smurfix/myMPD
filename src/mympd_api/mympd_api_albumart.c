@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -10,6 +10,7 @@
 #include "../lib/covercache.h"
 #include "../lib/jsonrpc.h"
 #include "../lib/log.h"
+#include "../lib/mem.h"
 #include "../lib/mimetype.h"
 #include "../lib/mympd_configuration.h"
 
@@ -19,7 +20,7 @@ sds mympd_api_albumart_getcover(struct t_mympd_state *mympd_state, sds buffer, s
                         const char *uri, sds *binary)
 {
     unsigned offset = 0;
-    void *binary_buffer = malloc(mympd_state->mpd_state->mpd_binarylimit);
+    void *binary_buffer = malloc_assert(mympd_state->mpd_state->mpd_binarylimit);
     int recv_len = 0;
     if (mympd_state->mpd_state->feat_mpd_albumart == true) {
         MYMPD_LOG_DEBUG("Try mpd command albumart for \"%s\"", uri);

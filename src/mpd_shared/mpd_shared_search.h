@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -20,5 +20,5 @@ sds mpd_shared_search_adv(struct t_mpd_state *mympd_state, sds buffer, sds metho
                           const unsigned offset, unsigned limit, const struct t_tags *tagcols,
                           rax *sticker_cache, bool *result);
 
-sds escape_mpd_search_expression(sds buffer, const char *tag, const char *operator, sds value);
+sds escape_mpd_search_expression(sds buffer, const char *tag, const char *operator, const char *value);
 #endif

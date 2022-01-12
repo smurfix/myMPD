@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 #SPDX-License-Identifier: GPL-3.0-or-later
-#myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+#myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 #https://github.com/jcorporation/mympd
 
 #exit on error
@@ -112,7 +112,7 @@ umask 0022
 
 #get myMPD version
 VERSION=$(grep CPACK_PACKAGE_VERSION_ CMakeLists.txt | cut -d\" -f2 | tr '\n' '.' | sed 's/\.$//')
-COPYRIGHT="myMPD ${VERSION} | (c) 2018-2021 Juergen Mang <mail@jcgames.de> | SPDX-License-Identifier: GPL-2.0-or-later | https://github.com/jcorporation/mympd"
+COPYRIGHT="myMPD ${VERSION} | (c) 2018-2022 Juergen Mang <mail@jcgames.de> | SPDX-License-Identifier: GPL-3.0-or-later | https://github.com/jcorporation/mympd"
 
 #check for command
 check_cmd() {
@@ -216,15 +216,6 @@ minify() {
   return 0
 }
 
-createi18n() {
-  DST=$1
-  PRETTY=$2
-  cd src/i18n || exit 1
-  echo "Creating i18n json"
-  perl ./tojson.pl "$PRETTY" > "$DST"
-  cd ../.. || exit 1
-}
-
 createassets() {
   [ -z "${MYMPD_BUILDDIR+x}" ] && MYMPD_BUILDDIR="release"
 
@@ -236,7 +227,8 @@ createassets() {
   install -d "$MYMPD_BUILDDIR/htdocs/assets"
 
   #Create translation phrases file
-  createi18n "../../$MYMPD_BUILDDIR/htdocs/js/i18n.min.js" ""
+  createi18n "../../$MYMPD_BUILDDIR/htdocs/js/i18n.min.js" "" 2>/dev/null
+  transstatus $MYMPD_BUILDDIR/htdocs/js/i18n.min.js
 
   echo "Minifying javascript"
   JSSRCFILES=""
@@ -376,7 +368,8 @@ installrelease() {
 
 builddebug() {
   install -d debug/htdocs/js
-  createi18n ../../debug/htdocs/js/i18n.js pretty
+  createi18n ../../debug/htdocs/js/i18n.js pretty 2>/dev/null
+  transstatus debug/htdocs/js/i18n.js
   check_docs
   check_includes
 
@@ -781,33 +774,34 @@ installdeps() {
     #debian
     apt-get update
     apt-get install -y --no-install-recommends \
-	gcc cmake perl libssl-dev libid3tag0-dev libflac-dev \
-	build-essential liblua5.3-dev pkg-config libpcre2-dev
+	    gcc cmake perl libssl-dev libid3tag0-dev libflac-dev \
+	    build-essential liblua5.3-dev pkg-config libpcre2-dev jq
   elif [ -f /etc/arch-release ]
   then
     #arch
-    pacman -S gcc cmake perl openssl libid3tag flac lua pkgconf pcre2
+    pacman -S gcc cmake perl openssl libid3tag flac lua pkgconf pcre2 jq
   elif [ -f /etc/alpine-release ]
   then
     #alpine
     apk add cmake perl openssl-dev libid3tag-dev flac-dev lua5.4-dev \
-    	alpine-sdk linux-headers pkgconf pcre2-dev
+    	alpine-sdk linux-headers pkgconf pcre2-dev jq
   elif [ -f /etc/SuSE-release ]
   then
     #suse
     zypper install gcc cmake pkgconfig perl openssl-devel libid3tag-devel flac-devel \
-	lua-devel unzip pcre2-devel
+	    lua-devel unzip pcre2-devel jq
   elif [ -f /etc/redhat-release ]
   then
     #fedora
     yum install gcc cmake pkgconfig perl openssl-devel libid3tag-devel flac-devel \
-	lua-devel unzip pcre2-devel
+	    lua-devel unzip pcre2-devel jq
   else
     echo_warn "Unsupported distribution detected."
     echo "You should manually install:"
     echo "  - gcc"
     echo "  - cmake"
     echo "  - perl"
+    echo "  - jq"
     echo "  - openssl (devel)"
     echo "  - flac (devel)"
     echo "  - libid3tag (devel)"
@@ -959,19 +953,30 @@ purge() {
   fi
 }
 
-transstatus() {
-  TRANSOUT=$(./build.sh translate 2>&1)
-  for F in src/i18n/*-*.txt
-  do
-    T=$(basename "$F" .txt)
-    NR=$(echo "$TRANSOUT" | { grep -c "$T not found" || true; })
-    echo "$T: $NR"
-  done
+createi18n() {
+  DST=$1
+  PRETTY=$2
+  cd src/i18n || exit 1
+  echo "Creating i18n json"
+  perl ./tojson.pl "$PRETTY" > "$DST"
+  cd ../.. || exit 1
 }
 
-translate() {
-  cd src/i18n || exit 1
-  perl ./tojson.pl pretty > ../../htdocs/js/i18n.js
+transstatus() {
+  if check_cmd_silent jq
+  then
+    TFILE=$1
+    MISSING=$(grep missingPhrases "$TFILE" | sed -e 's/.*missingPhrases=//' -e 's/;//' | jq '.' -r -M)
+    if [ "$MISSING" = "{}" ]
+    then
+      echo "All translation phrased found"
+    else
+      echo_warn "Missing translation phrases ($TFILE):"
+      echo "$MISSING"
+    fi
+  else
+    echo_warn "jq not found - can not print translation statistics"
+  fi
 }
 
 materialicons() {
@@ -1234,10 +1239,11 @@ case "$ACTION" in
 	  purge
 	;;
 	translate)
-	  translate
+	  createi18n ../../htdocs/js/i18n.js pretty
 	;;
 	transstatus)
-	  transstatus
+    createi18n ../../htdocs/js/i18n.js pretty 2>/dev/null
+	  transstatus htdocs/js/i18n.js
 	;;
 	materialicons)
 		materialicons

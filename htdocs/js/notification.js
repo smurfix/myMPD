@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 function setStateIcon() {
@@ -121,11 +121,12 @@ function showNotification(title, text, facility, severity) {
 
 function logMessage(title, text, facility, severity) {
     let messagesLen = messages.length;
-    const lastMessage = messages[messagesLen - 1];
+    const lastMessage = messagesLen > 0 ? messages[messagesLen - 1] : null;
     if (lastMessage &&
         lastMessage.title === title)
     {
         lastMessage.occurence++;
+        lastMessage.timestamp = getTimestamp();
     }
     else {
         messages.push({

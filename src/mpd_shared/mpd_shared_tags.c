@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -40,19 +40,18 @@ bool is_multivalue_tag(enum mpd_tag_type tag) {
 }
 
 enum mpd_tag_type get_sort_tag(enum mpd_tag_type tag) {
-    if (tag == MPD_TAG_ARTIST) {
-        return MPD_TAG_ARTIST_SORT;
+    switch(tag) {
+        case MPD_TAG_ARTIST:
+            return MPD_TAG_ARTIST_SORT;
+        case MPD_TAG_ALBUM_ARTIST:
+            return MPD_TAG_ALBUM_ARTIST_SORT;
+        case MPD_TAG_ALBUM:
+            return MPD_TAG_ALBUM_SORT;
+        case MPD_TAG_COMPOSER:
+            return MPD_TAG_COMPOSER_SORT;
+        default:
+            return tag;
     }
-    if (tag == MPD_TAG_ALBUM_ARTIST) {
-        return MPD_TAG_ALBUM_ARTIST_SORT;
-    }
-    if (tag == MPD_TAG_ALBUM) {
-        return MPD_TAG_ALBUM_SORT;
-    }
-    if (tag == MPD_TAG_COMPOSER) {
-        return MPD_TAG_COMPOSER_SORT;
-    }
-    return tag;
 }
 
 void copy_tag_types(struct t_tags *src_tag_list, struct t_tags *dst_tag_list) {
@@ -106,9 +105,13 @@ sds mpd_shared_get_tag_value_string(struct mpd_song const *song, const enum mpd_
     tag_values = _mpd_shared_get_tag_value_string(song, tag, tag_values);
     if (sdslen(tag_values) == 0) {
         if (tag == MPD_TAG_TITLE) {
-            //title fallback to filename
-            tag_values = sdscat(tag_values, mpd_song_get_uri(song));
-            sds_basename_uri(tag_values);
+            //title fallback to name
+            tag_values = _mpd_shared_get_tag_value_string(song, MPD_TAG_NAME, tag_values);
+            if (sdslen(tag_values) == 0) {
+                //title fallback to filename
+                tag_values = sdscat(tag_values, mpd_song_get_uri(song));
+                sds_basename_uri(tag_values);
+            }
         }
         else if (tag == MPD_TAG_ALBUM_ARTIST) {
             //albumartist fallback to artist tag
@@ -123,11 +126,15 @@ sds mpd_shared_get_tag_values(struct mpd_song const *song, const enum mpd_tag_ty
     tag_values = _mpd_shared_get_tag_values(song, tag, tag_values, multi);
     if (sdslen(tag_values) == 0) {
         if (tag == MPD_TAG_TITLE) {
-            //title fallback to filename
-            sds filename = sdsnew(mpd_song_get_uri(song));
-            sds_basename_uri(filename);
-            tag_values = sds_catjson(tag_values, filename, sdslen(filename));
-            sdsfree(filename);
+            //title fallback to name
+            tag_values = _mpd_shared_get_tag_values(song, MPD_TAG_NAME, tag_values, multi);
+            if (sdslen(tag_values) == 0) {
+                //title fallback to filename
+                sds filename = sdsnew(mpd_song_get_uri(song));
+                sds_basename_uri(filename);
+                tag_values = sds_catjson(tag_values, filename, sdslen(filename));
+                sdsfree(filename);
+            }
         }
         else if (tag == MPD_TAG_ALBUM_ARTIST) {
             //albumartist fallback to artist tag
@@ -151,7 +158,7 @@ sds get_song_tags(sds buffer, struct t_mpd_state *mpd_state, const struct t_tags
 {
     sds tag_value = sdsempty();
     if (mpd_state->feat_mpd_tags == true) {
-        for (size_t tagnr = 0; tagnr < tagcols->len; ++tagnr) {
+        for (int tagnr = 0; tagnr < tagcols->len; ++tagnr) {
             tag_value = mpd_shared_get_tag_values(song, tagcols->tags[tagnr], tag_value);
             buffer = sdscatfmt(buffer, "\"%s\":%s,", mpd_tag_name(tagcols->tags[tagnr]), tag_value);
         }
@@ -173,7 +180,7 @@ sds get_empty_song_tags(sds buffer, struct t_mpd_state *mpd_state, const struct 
     sds filename = sdsnew(uri);
     sds_basename_uri(filename);
     if (mpd_state->feat_mpd_tags == true) {
-        for (size_t tagnr = 0; tagnr < tagcols->len; ++tagnr) {
+        for (int tagnr = 0; tagnr < tagcols->len; ++tagnr) {
             const bool multi = is_multivalue_tag(tagcols->tags[tagnr]);
             buffer = sdscatfmt(buffer, "\"%s\":", mpd_tag_name(tagcols->tags[tagnr]));
             if (multi == true) {
@@ -216,7 +223,7 @@ bool filter_mpd_song(const struct mpd_song *song, sds searchstr, const struct t_
     }
     sds value = sdsempty();
     bool rc = false;
-    for (size_t i = 0; i < tagcols->len; i++) {
+    for (int i = 0; i < tagcols->len; i++) {
         value = _mpd_shared_get_tag_values(song, tagcols->tags[i], value, false);
         sdstolower(value);
         if (strstr(value, searchstr) != NULL) {

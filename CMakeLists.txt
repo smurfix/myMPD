@@ -1,14 +1,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+# myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 # https://github.com/jcorporation/mympd
 
+#myMPD is written in C
+#supported compilers: gcc, clang
 project (mympd C)
-set(CPACK_PACKAGE_VERSION_MAJOR "8")
-set(CPACK_PACKAGE_VERSION_MINOR "2")
+
+#update myMPD version here and run ./build.sh setversion to update
+#the source files
+set(CPACK_PACKAGE_VERSION_MAJOR "9")
+set(CPACK_PACKAGE_VERSION_MINOR "1")
 set(CPACK_PACKAGE_VERSION_PATCH "0")
 
+#minimal cmake version needed for correct GNUInstallDirs
 cmake_minimum_required(VERSION 3.4)
 
+#available options
 option(ENABLE_SSL "Enables OpenSSL usage, default ON" ON)
 option(ENABLE_LIBID3TAG "Enables libid3tag usage, default ON" ON)
 option(ENABLE_FLAC "Enables flac usage, default ON" ON)
@@ -16,12 +23,15 @@ option(ENABLE_LUA "Enables lua usage, default ON" ON)
 option(EMBEDDED_ASSETS "Embeds assets in binary, default ON" ON)
 option(ENABLE_LIBASAN "Enables build with libasan, default OFF" OFF)
 
+#cmake modules
 include(GNUInstallDirs)
 include(CheckCSourceCompiles)
 include(CheckCCompilerFlag)
 
+#custom cmake modules
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/")
 
+#clang compatibility
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   message("Compiling with clang")
   add_compile_options("-Wno-unknown-warning-option")
@@ -29,14 +39,16 @@ endif()
 
 message("Compiler: ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
 
+#calculate paths
 if("${CMAKE_INSTALL_PREFIX}" MATCHES "/usr")
   set(SUBDIR "/${PROJECT_NAME}")
   set(SUBDIRLIB "/lib")
   set(SUBDIRCACHE "/cache")
 else()
+  #for install in /opt
   set(SUBDIR "")
   set(SUBDIRLIB "")
-  set(SUBDIRCACHE "/")
+  set(SUBDIRCACHE "")
 endif()
 
 message("BIN_PATH: ${CMAKE_INSTALL_FULL_BINDIR}")
@@ -55,6 +67,8 @@ else()
 endif()
 message("VARCACHE_PATH: ${VARCACHE_PATH}")
 
+#default is to deliver embedded assets for release
+#and assets in htdocs for debug
 if("${EMBEDDED_ASSETS}" MATCHES "ON")
   set(ASSETS_PATH "${VARLIB_PATH}/empty")
   set(LUALIBS_PATH "")
@@ -66,15 +80,18 @@ else()
 endif()
 message("ASSETS_PATH: ${ASSETS_PATH}")
 
+#set debug define for source
 if(CMAKE_BUILD_TYPE MATCHES RELEASE)
   set(DEBUG "OFF")
 else()
   set(DEBUG "ON")
 endif()
 
+#required dependencies
 find_package(Threads REQUIRED)
 find_package(PCRE2 REQUIRED)
 
+#optional dependencies
 if(NOT "${ENABLE_SSL}" MATCHES "OFF")
   message("Searching for openssl")
   find_package(OpenSSL)
@@ -84,7 +101,7 @@ if(NOT "${ENABLE_SSL}" MATCHES "OFF")
       set(MONGOOSE_SSL "-DMG_ENABLE_OPENSSL=1")
       include_directories(${OPENSSL_INCLUDE_DIR})
     else()
-      message("OpenSSL is disabled because a version lower then 1.1.0 was found")
+      message("OpenSSL is disabled because a version lower than 1.1.0 was found")
       set(ENABLE_SSL "OFF")
     endif()
   else()
@@ -134,7 +151,7 @@ if(NOT "${ENABLE_LUA}" MATCHES "OFF")
       set(ENABLE_LUA "ON")
       include_directories(${LUA_INCLUDE_DIR})
     else()
-      message("Lua is disabled because a version lower then 5.3.0 was found")
+      message("Lua is disabled because a version lower than 5.3.0 was found")
       set(ENABLE_LUA "OFF")
     endif()
   else()
@@ -145,17 +162,21 @@ else()
   message("Lua is disabled by user")
 endif()
 
+#configure some files - version and path information
 configure_file(src/mympd_config_defs.h.in ${PROJECT_BINARY_DIR}/mympd_config_defs.h)
 configure_file(cmake/CopyConfig.cmake.in cmake/CopyConfig.cmake @ONLY)
 configure_file(contrib/initscripts/mympd.service.in contrib/initscripts/mympd.service @ONLY)
 configure_file(contrib/initscripts/mympd.sysVinit.in contrib/initscripts/mympd.sysVinit @ONLY)
 configure_file(contrib/initscripts/mympd.openrc.in contrib/initscripts/mympd.openrc @ONLY)
 
+#set include dirs
 include_directories(${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 include_directories(${PCRE2_INCLUDE_DIRS})
+
+#we use the integrated libmpdclient, distribution versions are often outdated
 include_directories("dist/libmpdclient/include")
 
-#set strict global compile flags
+#check for enabling libasan
 if("${ENABLE_LIBASAN}" MATCHES "ON")
   message("Compiling with libasan")
   set(LIBASAN_FLAGS "-fsanitize=address \
@@ -168,17 +189,21 @@ else()
   set(LIBASAN_FLAGS "")
 endif()
 
+#set mongoose functions
 set(MONGOOSE_FLAGS "${MONGOOSE_SSL} -DMG_ENABLE_DIRECTORY_LISTING=1 -DMG_ENABLE_SSI=0")
+#set mjson functions
 set(MJSON_FLAGS "-D MJSON_ENABLE_PRINT=0 -D MJSON_ENABLE_BASE64=0 -D MJSON_ENABLE_RPC=0 \
   -D MJSON_ENABLE_PRETTY=0 -D MJSON_ENABLE_MERGE=0")
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror -Wvla -Winit-self -Wuninitialized \
-	-Werror=array-bounds -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
-	-ffunction-sections -fdata-sections -Wextra -pedantic -Wunused-parameter -Wshadow -Wwrite-strings \
+#set strict global compile flags
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
+  -ffunction-sections -fdata-sections -Wall -Werror -Wvla -Winit-self -Wuninitialized \
+	-Werror=array-bounds -Wextra -pedantic -Wunused-parameter -Wshadow -Wwrite-strings \
 	-Wformat=2 -Wstrict-prototypes -Wold-style-definition -Wredundant-decls -Wnested-externs \
-  -Wmissing-include-dirs -Wundef -Wformat-nonliteral \
+	-Wmissing-include-dirs -Wundef -Wformat-nonliteral -Wsign-compare \
 	${LIBASAN_FLAGS} ${MONGOOSE_FLAGS} ${MJSON_FLAGS}")
 
+#check for supported compiler flags
 foreach(FLAG IN ITEMS "-std=gnu17" "-fstack-clash-protection" "-fcf-protection" "-fno-plt")
   message("Checking for compiler flag ${FLAG}")
   unset(COMPILER_SUPPORTS_FLAG CACHE)
@@ -189,23 +214,25 @@ foreach(FLAG IN ITEMS "-std=gnu17" "-fstack-clash-protection" "-fcf-protection" 
   endif()
 endforeach()
 
+#set debug/release flags
 if(CMAKE_BUILD_TYPE MATCHES RELEASE)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -fPIE -DMG_ENABLE_LOG=0")
-  set (CMAKE_EXE_LINKER_FLAGS "-Wl,-z,relro -Wl,-z,now -pie -s -Wl,--gc-sections")
+  set (CMAKE_EXE_LINKER_FLAGS "-Wl,-z,relro,-z,now,--gc-sections -pie -s")
 else()
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb -Og")
-  set (CMAKE_EXE_LINKER_FLAGS "-Wl,-z,relro -Wl,-z,now")
+  set (CMAKE_EXE_LINKER_FLAGS "")
 endif()
 
 #relax some compiler settings for dist sources
 #compiler flags for mongoose
 set_property(SOURCE dist/mongoose/mongoose.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral")
 #compiler flags for rax
-set_property(SOURCE dist/rax/rax.c PROPERTY COMPILE_FLAGS "-Wno-shadow -Wno-format-nonliteral \
-  -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers")
+set_property(SOURCE dist/rax/rax.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral \
+  -Wno-shadow -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers")
 #compiler flags for sds
-set_property(SOURCE dist/sds/sds.c PROPERTY COMPILE_FLAGS "-Wno-shadow -Wno-format-nonliteral")
+set_property(SOURCE dist/sds/sds.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral")
 
+#set source files
 set(MYMPD_SOURCES
   dist/mjson/mjson.c
   dist/mongoose/mongoose.c
@@ -220,6 +247,7 @@ set(MYMPD_SOURCES
   src/lib/list.c
   src/lib/log.c
   src/lib/lua_mympd_state.c
+  src/lib/m3u.c
   src/lib/mimetype.c
   src/lib/mympd_pin.c
   src/lib/mympd_queue.c
@@ -262,12 +290,16 @@ set(MYMPD_SOURCES
   src/mympd_api/mympd_api_timer_handlers.c
   src/mympd_api/mympd_api_trigger.c
   src/mympd_api/mympd_api_utility.c
+  src/mympd_api/mympd_api_webradios.c
   src/mympd_config.c
   src/web_server.c
   src/web_server/web_server_albumart.c
+  src/web_server/web_server_proxy.c
+  src/web_server/web_server_radiobrowser.c
   src/web_server/web_server_sessions.c
   src/web_server/web_server_tagart.c
   src/web_server/web_server_utility.c
+  src/web_server/web_server_webradiodb.c
 )
 
 if("${ENABLE_SSL}" MATCHES "ON")
@@ -336,11 +368,14 @@ set(LIBMPDCLIENT_SOURCES
   dist/libmpdclient/src/tag.c
 )
 
+#compile the executeable
 add_executable(mympd ${MYMPD_SOURCES} ${LIBMPDCLIENT_SOURCES} ${CERT_SOURCES})
 
+#link required dependencies
 target_link_libraries(mympd ${CMAKE_THREAD_LIBS_INIT})
 target_link_libraries(mympd m)
 target_link_libraries(mympd ${PCRE2_LIBRARIES})
+#link optional dependencies
 if(OPENSSL_FOUND)
   target_link_libraries(mympd ${OPENSSL_LIBRARIES})
 endif()
@@ -354,6 +389,7 @@ if(LUA_FOUND)
   target_link_libraries(mympd ${LUA_LIBRARIES})
 endif()
 
+#install
 install(TARGETS mympd DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/cmake/CopyConfig.cmake)
 

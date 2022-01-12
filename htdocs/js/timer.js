@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 function initTimer() {
@@ -108,7 +108,10 @@ function saveTimer() {
         setIsInvalid(selectTimerAction);
     }
 
-    if (jukeboxMode === '0' && selectTimerPlaylist === 'Database'&& getSelectValue(selectTimerAction) === 'startplay') {
+    if (jukeboxMode === 'off' &&
+        selectTimerPlaylist === 'Database' &&
+        getSelectValue(selectTimerAction) === 'startplay')
+    {
         formOK = false;
         setIsInvalidId('btnTimerJukeboxModeGroup');
     }
@@ -124,8 +127,10 @@ function saveTimer() {
         for (let i = 0, j = argEls.length; i < j; i++) {
             args[getData(argEls[i], 'name')] = argEls[i].value;
         }
-        let interval = Number(inputTimerIntervalEl.value);
-        if (interval > 0) {
+        let interval = Number(getSelectValueId('selectTimerInterval'));
+        if (interval === -2) {
+            //repeat
+            interval = Number(inputTimerIntervalEl.value);
             //convert interval to seconds
             const unit = Number(getSelectValueId('selectTimerIntervalUnit'));
             interval = interval * unit;
@@ -142,7 +147,7 @@ function saveTimer() {
             "subaction": getSelectValue(selectTimerAction),
             "volume": Number(document.getElementById('inputTimerVolume').value),
             "playlist": selectTimerPlaylist,
-            "jukeboxMode": Number(jukeboxMode),
+            "jukeboxMode": jukeboxMode,
             "arguments": args
         }, saveTimerCheckError, true);
     }
@@ -174,7 +179,7 @@ function showEditTimer(timerid) {
         }, parseEditTimer);
     }
     else {
-        filterPlaylistsSelect(1, 'selectTimerPlaylist', '', 'Database');
+        filterPlaylistsSelect(0, 'selectTimerPlaylist', '', 'Database');
         document.getElementById('selectTimerPlaylist').value = tn('Database');
         setDataId('selectTimerPlaylist', 'value', 'Database');
 
@@ -188,7 +193,7 @@ function showEditTimer(timerid) {
         document.getElementById('selectTimerPlaylist').value = 'Database';
         selectTimerIntervalChange(86400);
         selectTimerActionChange();
-        toggleBtnGroupValue(document.getElementById('btnTimerJukeboxModeGroup'), 1);
+        toggleBtnGroupValue(document.getElementById('btnTimerJukeboxModeGroup'), 'song');
         const weekdayBtns = ['btnTimerMon', 'btnTimerTue', 'btnTimerWed', 'btnTimerThu', 'btnTimerFri', 'btnTimerSat', 'btnTimerSun'];
         for (let i = 0, j = weekdayBtns.length; i < j; i++) {
             toggleBtnChkId(weekdayBtns[i], false);
@@ -222,6 +227,7 @@ function parseEditTimer(obj) {
 
 function selectTimerIntervalChange(value) {
     if (value === undefined) {
+        //change event from select itself
         value = Number(getSelectValueId('selectTimerInterval'));
     }
     else {
@@ -238,6 +244,7 @@ function selectTimerIntervalChange(value) {
         //repeat
         elShowId('groupTimerInterval');
         if (value === -2) {
+            //default interval is one day
             value = 86400;
         }
     }
@@ -279,7 +286,7 @@ function showTimerScriptArgs(option, values) {
     if (values === undefined) {
         values = {};
     }
-    const args = JSON.parse(getData(option, 'arguments'));
+    const args = getData(option, 'arguments');
     const list = document.getElementById('timerActionScriptArguments');
     elClear(list);
     for (let i = 0, j = args.arguments.length; i < j; i++) {

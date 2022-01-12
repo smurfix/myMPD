@@ -1,7 +1,7 @@
 "use strict";
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -50,7 +50,12 @@ function sendAPI(method) {
                     }
                     else if (obj.result) {
                         setTest(request, 'ok', ajaxRequest.responseText);
-                    } 
+                    }
+                    else if (obj.error &&
+                        obj.error.message === 'Invalid API request')
+                    {
+                        setTest(request, 'error', ajaxRequest.responseText);
+                    }
                     else {
                         setTest(request, 'warn', ajaxRequest.responseText);
                     }

@@ -24,6 +24,7 @@ myMPD also integrates extended features like an advanced jukebox mode, timers, t
 - MPD output attributes
 - Browse mpd database by tags (gridview)
 - Browse filesystem
+- Webradios: [Webradiodb](https://jcorporation.github.io/webradiodb/) and [RadioBrowser](https://www.radio-browser.info/)
 - Queue management
 - Playlist management
 - Advanced search
@@ -31,7 +32,7 @@ myMPD also integrates extended features like an advanced jukebox mode, timers, t
 - Customizable home screen and navigation bar
 - [Smart playlists and saved searches](https://jcorporation.github.io/myMPD/references/smart-playlists)
 - Playback statistics and song voting
-- [Local albumart support: embedded and image per folder](https://jcorporation.github.io/myMPD/references/pictures)
+- [Albumart: embedded and image per folder](https://jcorporation.github.io/myMPD/references/pictures)
 - [Unsynchronized and synchronized Lyrics](https://jcorporation.github.io/myMPD/references/tags)
 - Local booklet support (per album folder)
 - HTTP stream support
@@ -73,7 +74,6 @@ On the first startup myMPD reads some environments variables and tries to autode
 
 - [Configuration](https://jcorporation.github.io/myMPD/configuration/)
 
-
 ``
 Usage: ./mympd
 ``
@@ -84,6 +84,6 @@ For further information on installation and configuration, see the [myMPD docume
 
 ## Copyright
 
-2018-2021 Juergen Mang <mail@jcgames.de>
+2018-2022 Juergen Mang <mail@jcgames.de>
 
-myMPD is a fork of [ympd](https://github.com/notandy/ympd).
+myMPD was originally a fork of [ympd](https://github.com/notandy/ympd), but it has evolved into a much more featurefull MPD client.

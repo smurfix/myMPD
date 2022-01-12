@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,15 +12,17 @@
 #include "../lib/lua_mympd_state.h"
 #include "../lib/mympd_configuration.h"
 #include "../lib/sds_extras.h"
+#include "../lib/utility.h"
 #include "../mpd_shared.h"
 #include "../mpd_shared/mpd_shared_sticker.h"
 #include "../mpd_shared/mpd_shared_tags.h"
 #include "mympd_api_utility.h"
+#include "mympd_api_webradios.h"
 
 //private definitions
 static sds _mympd_api_get_outputs(struct t_mympd_state *mympd_state, sds buffer, sds method, long request_id);
 static int _mympd_api_get_volume(struct t_mympd_state *mympd_state);
-static unsigned get_current_song_start_time(struct t_mympd_state *mympd_state);
+static time_t get_current_song_start_time(struct t_mympd_state *mympd_state);
 
 //public functions
 sds mympd_api_status_updatedb_state(struct t_mympd_state *mympd_state, sds buffer) {
@@ -89,30 +91,35 @@ sds mympd_api_status_get(struct t_mympd_state *mympd_state, sds buffer, sds meth
     mympd_state->mpd_state->song_pos = mpd_status_get_song_pos(status);
     mympd_state->mpd_state->next_song_id = mpd_status_get_next_song_id(status);
     mympd_state->mpd_state->queue_version = mpd_status_get_queue_version(status);
-    mympd_state->mpd_state->queue_length = mpd_status_get_queue_length(status);
+    mympd_state->mpd_state->queue_length = (long long) mpd_status_get_queue_length(status);
     mympd_state->mpd_state->crossfade = mpd_status_get_crossfade(status);
 
-    const unsigned total_time = mpd_status_get_total_time(status);
-    const unsigned elapsed_time = mympd_api_get_elapsed_seconds(status);
-    unsigned uptime = time(NULL) - mympd_state->config->startup_time;
-    if (total_time > 10 && uptime > elapsed_time) {
-        time_t now = time(NULL);
-        mympd_state->mpd_state->song_end_time = now + total_time - elapsed_time - 10;
-        mympd_state->mpd_state->song_start_time = now - elapsed_time;
-        unsigned half_time = total_time / 2;
+    time_t total_time = (time_t)mpd_status_get_total_time(status);
+    time_t elapsed_time = (time_t)mympd_api_get_elapsed_seconds(status);
 
-        if (half_time > 240) {
-            mympd_state->mpd_state->set_song_played_time = now - elapsed_time + 240;
-        }
-        else {
-            mympd_state->mpd_state->set_song_played_time = elapsed_time < half_time ? now - (long)elapsed_time + (long)half_time : now;
-        }
+    time_t now = time(NULL);
+    time_t uptime = now - mympd_state->config->startup_time;
+
+    if (total_time == 0) {
+        //no song end time for streams
+        mympd_state->mpd_state->song_end_time = 0;
     }
     else {
-        //don't track songs with length < 10s
-        mympd_state->mpd_state->song_end_time = 0;
-        mympd_state->mpd_state->song_start_time = 0;
+        mympd_state->mpd_state->song_end_time = now + total_time - elapsed_time;
+    }
+    mympd_state->mpd_state->song_start_time = now - elapsed_time;
+    time_t half_time = total_time / 2;
+
+    if (total_time <= 10 ||  //don't track songs with length < 10s
+        uptime < half_time)  //don't track songs with played more then half before startup
+    {
         mympd_state->mpd_state->set_song_played_time = 0;
+    }
+    else if (half_time > 240) {  //set played after 4 minutes
+        mympd_state->mpd_state->set_song_played_time = now - elapsed_time + 240;
+    }
+    else { //set played after halftime of song
+        mympd_state->mpd_state->set_song_played_time = elapsed_time < half_time ? now - (long)elapsed_time + (long)half_time : now;
     }
 
     if (method == NULL) {
@@ -134,7 +141,7 @@ sds mympd_api_status_get(struct t_mympd_state *mympd_state, sds buffer, sds meth
     buffer = tojson_long(buffer, "totalTime", mpd_status_get_total_time(status), true);
     buffer = tojson_long(buffer, "currentSongId", mpd_status_get_song_id(status), true);
     buffer = tojson_long(buffer, "kbitrate", mpd_status_get_kbit_rate(status), true);
-    buffer = tojson_long(buffer, "queueLength", mpd_status_get_queue_length(status), true);
+    buffer = tojson_llong(buffer, "queueLength", mpd_status_get_queue_length(status), true);
     buffer = tojson_long(buffer, "queueVersion", mpd_status_get_queue_version(status), true);
     buffer = tojson_long(buffer, "nextSongPos", mpd_status_get_next_song_pos(status), true);
     buffer = tojson_long(buffer, "nextSongId", mpd_status_get_next_song_id(status), true);
@@ -249,6 +256,15 @@ sds mympd_api_status_current_song(struct t_mympd_state *mympd_state, sds buffer,
     }
     buffer = sdscatlen(buffer, ",", 1);
     buffer = get_extra_files(mympd_state, buffer, uri, false);
+    if (is_streamuri(uri) == true) {
+        sds webradio = get_webradio_from_uri(mympd_state->config, uri);
+        if (sdslen(webradio) > 0) {
+            buffer = sdscat(buffer, ",\"webradio\":{");
+            buffer = sdscatsds(buffer, webradio);
+            buffer = sdscatlen(buffer, "}", 1);
+        }
+        sdsfree(webradio);
+    }
     mpd_song_free(song);
 
     mpd_response_finish(mympd_state->mpd_state->conn);
@@ -256,14 +272,14 @@ sds mympd_api_status_current_song(struct t_mympd_state *mympd_state, sds buffer,
         return buffer;
     }
     buffer = sdscatlen(buffer, ",", 1);
-    unsigned start_time = get_current_song_start_time(mympd_state);
-    buffer = tojson_long(buffer, "startTime", start_time, false);
+    time_t start_time = get_current_song_start_time(mympd_state);
+    buffer = tojson_llong(buffer, "startTime", (long long)start_time, false);
     buffer = jsonrpc_result_end(buffer);
     return buffer;
 }
 
 //private functions
-static unsigned get_current_song_start_time(struct t_mympd_state *mympd_state) {
+static time_t get_current_song_start_time(struct t_mympd_state *mympd_state) {
     if (mympd_state->mpd_state->song_start_time > 0) {
         return mympd_state->mpd_state->song_start_time;
     }
@@ -273,7 +289,7 @@ static unsigned get_current_song_start_time(struct t_mympd_state *mympd_state) {
         check_error_and_recover2(mympd_state->mpd_state, NULL, NULL, 0, false);
         return 0;
     }
-    const unsigned start_time = time(NULL) - mympd_api_get_elapsed_seconds(status);
+    const time_t start_time = time(NULL) - mympd_api_get_elapsed_seconds(status);
     mpd_status_free(status);
     mpd_response_finish(mympd_state->mpd_state->conn);
     check_error_and_recover2(mympd_state->mpd_state, NULL, NULL, 0, false);

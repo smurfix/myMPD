@@ -36,14 +36,8 @@ About
 Local playback
 Lokale Wiedergabe
 
-Connecting to stream...
-Verbinde...
-
 Error loading stream
 Fehler beim Laden des Streams
-
-JavaScript is disabled
-JavaScript ist deaktiviert
 
 Apply
 Anwenden
@@ -599,6 +593,9 @@ Wiedergabelisten anzeigen
 
 Show browse filesystem
 Dateisystem anzeigen
+
+Show browse webradio
+Webradios anzeigen
 
 Show search
 Suche anzeigen
@@ -1324,7 +1321,7 @@ Picture
 Bild
 
 Homescreen welcome
-Du hast noch keine Icons hinzugefügt. Du kannst einzelne Ansichten, Wiedergabelisten und Skripte hinzufügen.
+Du hast noch keine Homeicons hinzugefügt. Homeicons können über das Kontextmenü und folgende Icons hinzugefügt werden:
 
 Can not open directory pics
 Konnte Verzeichnis pics nicht öffnen
@@ -1455,6 +1452,9 @@ Klick auf Verzeichnis
 Click playlist
 Klick auf Wiedergabeliste
 
+Click filesystem playlist
+Klick auf Wiedergabeliste im Dateisystem
+
 Click song in queue
 Klick auf Lied in Warteschlange
 
@@ -1466,15 +1466,6 @@ Abspielen
 
 Homescreen
 Startbildschirm
-
-Homescreen help view
-Gehe zur Ansicht und klicke auf:
-
-Homescreen help playlist
-Öffne das Contextmenü einer Wiedergabeliste und wähle "Zum Startbildschirm hinzufügen"
-
-Homescreen help script
-Öffne die Skriptverwaltung und klicke auf:
 
 Help to improve myMPD
 Hilf mit myMPD zu verbessern
@@ -1837,7 +1828,7 @@ AudioFormat
 Audioformat
 
 Not playing
-gestoppt
+Wiedergabe nicht gestartet
 
 Choose a playlist or enter a new playlist name
 Wiedergabeliste wählen oder neuen Namen eingeben
@@ -1892,9 +1883,6 @@ Neu hinzugefügte Lieder konnten nicht wiedergegeben werden
 
 Current search
 Aktuelle Suche
-
-Home icon
-Homeicon
 
 Replaced the queue
 Warteschlange wurde ersetzt
@@ -1982,3 +1970,144 @@ Wiedergabe nach aktuellem Lied beenden
 
 Disable single mode
 Beende "Nur ein Lied" Modus
+
+Homeicon
+Home Icon
+
+Show
+Anzeigen
+
+Can't set playback options
+Wiedergabeeinstellungen konnten nicht gespeichert werden
+
+Can't set playback options: MPD not connected
+Wiedergabeeinstellungen konnten nicht gespeichert werden: keine Verbidnung zum MPD Server
+
+Addings songs from jukebox to queue failed
+Es konnten keine Lieder von der Jukebox zur Warteschlange hinzugefügt werden
+
+Filling jukebox queue
+Jukebox Warteschlange wird aufgefüllt
+
+Clear jukebox queue
+Leere Jukebox Warteschlange
+
+Mixramp delay
+Mixramp Verzögerung
+
+Mixramp db
+Mixramp DB
+
+Country
+Land
+
+Tags
+Tags
+
+Webradios
+Webradios
+
+Can not open webradios directory
+Konnte das Webradio Verzeichnis nicht öffnen
+
+Can not parse webradio favorite file
+Konnte die Webradioa Favoriten Datei nicht parsen
+
+Click webradio
+Klick auf Webradio
+
+Click webradio favorite
+Klick auf Webradio Favorit
+
+Could not delete webradio favorite
+Konnte Webradio Favorit nicht löschen
+
+Could not save webradio favorite
+Konnte Webradio Favorit nicht speichern
+
+Edit webradio favorite
+Webradio Favorit editieren
+
+Error connection to radio-browser.info
+Verbindung zu radio-browser.info fehlgeschlagen
+
+Manually add webradio favorite
+Webradio Favorit manuell hinzufügen
+
+Browse radio-browser.info
+Suche auf radio-browser.info
+
+Type or select picture
+Bild wählen oder URL eingeben
+
+Uri
+Url
+
+Webradio details
+Webradio Details
+
+Webradio favorite successfully saved
+Webradio Favorit erfolgreich gespeichert
+
+Webradio favorites
+Webradio Favoriten
+
+Add to favorites
+Zu Favoriten hinzufügen
+
+Webradio
+Webradio
+
+Delete webradio favorite
+Webradio Favorit löschen
+
+Empty response from radio-browser.info
+Fehlerhafte Antwort von radio-browser.info
+
+Language
+Sprache
+
+Description
+Beschreibung
+
+Browse WebradioDB
+Suche in der WebradioDB
+
+Empty response from webradiodb backend
+Leere Antwort vom WebradioDB Backend
+
+Loading...
+Lade...
+
+Stream uri
+Stream URL
+
+clickcount
+Klick Anzahl
+
+country
+Land
+
+homepage
+Homepage
+
+language
+Sprache
+
+lastchangetime
+Geändert
+
+lastcheckok
+Check
+
+tags
+Tags
+
+url_resolved
+URL
+
+votes
+Stimmen
+
+Add to WebradioDB
+Zu WebradioDB hinzufügen

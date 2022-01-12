@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,8 +12,8 @@
 #include "../lib/mem.h"
 #include "../lib/mimetype.h"
 #include "../lib/sds_extras.h"
+#include "../lib/utility.h"
 #include "../lib/validate.h"
-#include "mympd_api_utility.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -313,8 +313,8 @@ static sds decode_sylt(const id3_byte_t *binary_data, id3_length_t binary_length
     sds sylt_text = sdsempty();
     //text buffer
     sds text_buf = sdsempty();
-    unsigned sep_len = encoding == 0 || encoding == 3 ? 1 : 2;
-    unsigned i = 0;
+    int sep_len = encoding == 0 || encoding == 3 ? 1 : 2;
+    id3_length_t i = 0;
 
     MYMPD_LOG_DEBUG("Sylt encoding: %u", encoding);
 
@@ -406,7 +406,7 @@ static sds decode_sylt(const id3_byte_t *binary_data, id3_length_t binary_length
                     text_buf = sds_catjsonchar(text_buf, (char)binary_data[i]);
                 }
                 else {
-                    text_buf = sdscatprintf(text_buf, "%c", binary_data[i]);
+                    text_buf = sdscatfmt(text_buf, "%c", binary_data[i]);
                 }
                 i++;
             }
