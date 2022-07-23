@@ -46,6 +46,21 @@ function initTimer() {
         showListTimer();
     });
 
+    document.getElementById('btnTimerJukeboxModeGroup').addEventListener('mouseup', function () {
+        setTimeout(function() {
+            const value = getData(document.getElementById('btnTimerJukeboxModeGroup').getElementsByClassName('active')[0], 'value');
+            const selectTimerPlaylistEl = document.getElementById('selectTimerPlaylist');
+            if (value === 'album') {
+                elDisable(selectTimerPlaylistEl);
+                selectTimerPlaylistEl.value = 'Database';
+                setData(selectTimerPlaylistEl, 'value', 'Database');
+            }
+            else if (value === 'song') {
+                elEnable(selectTimerPlaylistEl);
+            }
+        }, 100);
+    });
+
     setDataId('selectTimerPlaylist', 'cb-filter', 'filterPlaylistsSelect');
     setDataId('selectTimerPlaylist', 'cb-filter-options', [0, 'selectTimerPlaylist']);
 }
@@ -106,6 +121,13 @@ function saveTimer() {
     if (selectTimerAction.selectedIndex === -1) {
         formOK = false;
         setIsInvalid(selectTimerAction);
+    }
+
+    if (jukeboxMode === 'album' &&
+        selectTimerPlaylist !== 'Database')
+    {
+        formOK = false;
+        setIsInvalidId('btnTimerJukeboxModeGroup');
     }
 
     if (jukeboxMode === 'off' &&
@@ -180,8 +202,6 @@ function showEditTimer(timerid) {
     }
     else {
         filterPlaylistsSelect(0, 'selectTimerPlaylist', '', 'Database');
-        document.getElementById('selectTimerPlaylist').value = tn('Database');
-        setDataId('selectTimerPlaylist', 'value', 'Database');
 
         document.getElementById('inputTimerId').value = '0';
         document.getElementById('inputTimerName').value = '';
@@ -190,7 +210,6 @@ function showEditTimer(timerid) {
         document.getElementById('selectTimerMinute').value = '0';
         document.getElementById('selectTimerAction').value = 'startplay';
         document.getElementById('inputTimerVolume').value = '50';
-        document.getElementById('selectTimerPlaylist').value = 'Database';
         selectTimerIntervalChange(86400);
         selectTimerActionChange();
         toggleBtnGroupValue(document.getElementById('btnTimerJukeboxModeGroup'), 'song');
@@ -200,14 +219,21 @@ function showEditTimer(timerid) {
         }
         elShowId('timerActionPlay');
     }
-    document.getElementById('inputTimerName').focus();
+    setFocusId('inputTimerName');
 }
 
 function parseEditTimer(obj) {
-    const playlistValue = obj.result.playlist;
+    let playlistValue = obj.result.playlist;
+    const selectTimerPlaylistEl = document.getElementById('selectTimerPlaylist');
+    //force album mode to use database as playlist
+    if (obj.result.jukeboxMode === 'album') {
+        elDisable(selectTimerPlaylistEl);
+        playlistValue = 'Database';
+    }
+    else {
+        elEnable(selectTimerPlaylistEl);
+    }
     filterPlaylistsSelect(1, 'selectTimerPlaylist', '', playlistValue);
-    document.getElementById('selectTimerPlaylist').value = playlistValue === 'Datbase' ? tn('Database'): playlistValue;
-    setDataId('selectTimerPlaylist', 'value', playlistValue);
 
     document.getElementById('inputTimerId').value = obj.result.timerid;
     document.getElementById('inputTimerName').value = obj.result.name;
@@ -219,6 +245,7 @@ function parseEditTimer(obj) {
     selectTimerIntervalChange(obj.result.interval);
     document.getElementById('inputTimerVolume').value = obj.result.volume;
     toggleBtnGroupValueId('btnTimerJukeboxModeGroup', obj.result.jukeboxMode);
+
     const weekdayBtns = ['btnTimerMon', 'btnTimerTue', 'btnTimerWed', 'btnTimerThu', 'btnTimerFri', 'btnTimerSat', 'btnTimerSun'];
     for (let i = 0, j = weekdayBtns.length; i < j; i++) {
         toggleBtnChkId(weekdayBtns[i], obj.result.weekdays[i]);

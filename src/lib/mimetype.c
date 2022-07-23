@@ -9,12 +9,17 @@
 
 #include "log.h"
 #include "sds_extras.h"
+#include "utility.h"
 
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
+
+/**
+ * List of mime types with magic numbers and typical extensions
+ */
 struct t_mime_type_entry {
     size_t skip;
     const char *magic_bytes;
@@ -39,23 +44,34 @@ const struct t_mime_type_entry mime_entries[] = {
     {0, NULL,               NULL,   "application/octet-stream"}
 };
 
+/**
+ * Gets the mime type by extension
+ * @param filename 
+ * @return the mime type
+ */
 const char *get_mime_type_by_ext(const char *filename) {
-    sds ext = sds_get_extension_from_filename(filename);
-
+    const char *ext = get_extension_from_filename(filename);
+    if (ext == NULL) {
+        return "application/octet-stream";
+    }
     const struct t_mime_type_entry *p = NULL;
     for (p = mime_entries; p->extension != NULL; p++) {
-        if (strcmp(ext, p->extension) == 0) {
+        if (strcasecmp(ext, p->extension) == 0) {
             break;
         }
     }
-    FREE_SDS(ext);
     return p->mime_type;
 }
 
+/**
+ * Gets the extension by mime type
+ * @param mime_type 
+ * @return the extension
+ */
 const char *get_ext_by_mime_type(const char *mime_type) {
     const struct t_mime_type_entry *p = NULL;
     for (p = mime_entries; p->extension != NULL; p++) {
-        if (strcmp(mime_type, p->mime_type) == 0) {
+        if (strcasecmp(mime_type, p->mime_type) == 0) {
             break;
         }
     }
@@ -65,6 +81,11 @@ const char *get_ext_by_mime_type(const char *mime_type) {
     return p->extension;
 }
 
+/**
+ * Gets the mime type by magic numbers in binary buffer
+ * @param stream binary buffer
+ * @return the mime type or generic application/octet-stream
+ */
 const char *get_mime_type_by_magic_stream(sds stream) {
     sds hex_buffer = sdsempty();
     size_t stream_len = sdslen(stream) < 12 ? sdslen(stream) : 12;
@@ -90,4 +111,36 @@ const char *get_mime_type_by_magic_stream(sds stream) {
     }
     FREE_SDS(hex_buffer);
     return p->mime_type;
+}
+
+/**
+ * List of image type extionsions
+ */
+const char *image_extensions[] = {
+    "webp",
+    "jpg",
+    "jpeg",
+    "png",
+    "avif",
+    "svg",
+    NULL
+};
+
+/**
+ * Checks the filetype by extension
+ * @param filename 
+ * @return true if it is a image extension else false
+ */
+bool is_image(const char *filename) {
+    const char *ext = get_extension_from_filename(filename);
+    if (ext == NULL) {
+        return false;
+    }
+    const char *p;
+    for (p = *image_extensions; p!= NULL; p++) {
+        if (strcasecmp(p, ext) == 0) {
+            return true;
+        }
+    }
+    return false;
 }

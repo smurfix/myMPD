@@ -18,12 +18,16 @@ function initJukebox() {
         }
     }, false);
     document.getElementById('searchQueueJukeboxStr').addEventListener('keyup', function(event) {
+        clearSearchTimer();
         if (event.key === 'Escape') {
             this.blur();
         }
         else {
-            appGoto(app.current.card, app.current.tab, app.current.view,
-                0, app.current.limit, app.current.filter, app.current.sort, '-', this.value);
+            const value = this.value;
+            searchTimer = setTimeout(function() {
+                appGoto(app.current.card, app.current.tab, app.current.view,
+                    0, app.current.limit, app.current.filter, app.current.sort, '-', value);
+            }, searchTimerTimeout);
         }
     }, false);
 }
@@ -69,7 +73,9 @@ function parseJukeboxList(obj) {
     elHideId('QueueJukeboxDisabled');
     elShowId('QueueJukeboxList');
 
-    const rowTitle = webuiSettingsDefault.clickAlbumPlay.validValues[settings.webuiSettings.clickAlbumPlay];
+    const rowTitle = settings.jukeboxMode === 'song' ?
+        webuiSettingsDefault.clickSong.validValues[settings.webuiSettings.clickSong] :
+        webuiSettingsDefault.clickQuickPlay.validValues[settings.webuiSettings.clickQuickPlay];
     updateTable(obj, 'QueueJukebox', function(row, data) {
         setData(row, 'uri', data.uri);
         setData(row, 'name', data.Title);

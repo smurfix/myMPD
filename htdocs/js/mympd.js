@@ -4,7 +4,7 @@
 // https://github.com/jcorporation/mympd
 
 /* eslint-enable no-unused-vars */
-function appPrepare(scrollPos) {
+function appPrepare() {
     if (app.current.card !== app.last.card ||
         app.current.tab !== app.last.tab ||
         app.current.view !== app.last.view)
@@ -36,7 +36,7 @@ function appPrepare(scrollPos) {
         {
             elShowId('view' + app.current.card + app.current.tab + app.current.view);
         }
-        //show active navbar icon
+        //highlight active navbar icon
         let nav = document.getElementById('nav' + app.current.card + app.current.tab);
         if (nav) {
             nav.classList.add('active');
@@ -50,7 +50,6 @@ function appPrepare(scrollPos) {
     }
     const list = document.getElementById(app.id + 'List');
     if (list) {
-        scrollToPosY(list.parentNode, scrollPos);
         list.classList.add('opacity05');
     }
 }
@@ -80,7 +79,7 @@ function appGoto(card, tab, view, offset, limit, filter, sort, tag, search, newS
 
     //save scrollPos of old app
     if (oldptr !== ptr) {
-        oldptr.scrollPos = document.body.scrollTop ? document.body.scrollTop : document.documentElement.scrollTop;
+        oldptr.scrollPos = getScrollPosY();
     }
 
     //set options to default, if not defined
@@ -93,6 +92,13 @@ function appGoto(card, tab, view, offset, limit, filter, sort, tag, search, newS
     //enforce number type
     offset = Number(offset);
     limit = Number(limit);
+    //enforce sort, migration from pre 9.4.0 releases
+    if (typeof sort === 'string') {
+        sort = {
+            "tag": sort,
+            "desc": false
+        };
+    }
     //set new scrollpos
     if (newScrollPos !== undefined) {
         ptr.scrollPos = newScrollPos;
@@ -148,13 +154,15 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             }
         }
         if (jsonHash === null) {
-            appPrepare(0);
-            if (features.featHome === true) {
-                appGoto('Home');
+            appPrepare();
+            let initialStartupView = settings.webuiSettings.uiStartupView;
+            if (initialStartupView === undefined ||
+                initialStartupView === null)
+            {
+                initialStartupView = features.featHome === true ? 'Home' : 'Playback';
             }
-            else {
-                appGoto('Playback');
-            }
+            const path = initialStartupView.split('/');
+            appGoto(...path);
             return;
         }
     }
@@ -195,31 +203,77 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
     ptr.tag = app.current.tag;
     ptr.search = app.current.search;
     app.current.scrollPos = ptr.scrollPos;
-
-    appPrepare(app.current.scrollPos);
+    appPrepare();
 
     switch(app.id) {
         case 'Home': {
-            const list = document.getElementById('HomeList');
-            list.classList.remove('opacity05');
-            setScrollViewHeight(list);
-            sendAPI("MYMPD_API_HOME_LIST", {}, parseHome);
+            sendAPI("MYMPD_API_HOME_ICON_LIST", {}, parseHome);
             break;
         }
         case 'Playback': {
-            const list = document.getElementById('PlaybackList');
-            list.classList.remove('opacity05');
-            setScrollViewHeight(list);
-            sendAPI("MYMPD_API_PLAYER_CURRENT_SONG", {}, songChange);
+            sendAPI("MYMPD_API_PLAYER_CURRENT_SONG", {}, parseCurrentSong);
             break;
         }
         case 'QueueCurrent': {
-            selectTag('searchqueuetags', 'searchqueuetagsdesc', app.current.filter);
-            getQueue();
+            setFocusId('searchQueueStr');
+            if (features.featAdvqueue === true) {
+                createSearchCrumbs(app.current.search, document.getElementById('searchQueueStr'), document.getElementById('searchQueueCrumb'));
+            }
+            else if (document.getElementById('searchQueueStr').value === '' &&
+                app.current.search !== '')
+            {
+                document.getElementById('searchQueueStr').value = app.current.search;
+            }
+            if (app.current.search === '') {
+                document.getElementById('searchQueueStr').value = '';
+            }
+            if (features.featAdvqueue === true) {
+                if (app.current.sort.tag === '-') {
+                    app.current.sort.tag = 'Priority';
+                }
+                sendAPI("MYMPD_API_QUEUE_SEARCH_ADV", {
+                    "offset": app.current.offset,
+                    "limit": app.current.limit,
+                    "sort": app.current.sort.tag,
+                    "sortdesc": app.current.sort.desc,
+                    "expression": app.current.search,
+                    "cols": settings.colsSearchFetch
+                }, parseQueue, true);
+                if (app.current.filter === 'prio') {
+                    elShowId('priorityMatch');
+                    document.getElementById('searchQueueMatch').value = '>=';
+                }
+                else {
+                    if (getSelectValueId('searchQueueMatch') === '>=') {
+                        document.getElementById('searchQueueMatch').value = 'contains';
+                    }
+                    elHideId('priorityMatch');
+                }
+            }
+            else if (document.getElementById('searchQueueStr').value.length >= 2 ||
+                     document.getElementById('searchQueueCrumb').children.length > 0)
+            {
+                sendAPI("MYMPD_API_QUEUE_SEARCH", {
+                    "offset": app.current.offset,
+                    "limit": app.current.limit,
+                    "filter": app.current.filter,
+                    "searchstr": app.current.search,
+                    "cols": settings.colsSearchFetch
+                }, parseQueue, true);
+            }
+            else {
+                sendAPI("MYMPD_API_QUEUE_LIST", {
+                    "offset": app.current.offset,
+                    "limit": app.current.limit,
+                    "cols": settings.colsSearchFetch
+                }, parseQueue, true);
+            }
+            selectTag('searchQueueTags', 'searchQueueTagsDesc', app.current.filter);
             break;
         }
         case 'QueueLastPlayed': {
-            sendAPI("MYMPD_API_QUEUE_LAST_PLAYED", {
+            setFocusId('searchQueueLastPlayedStr');
+            sendAPI("MYMPD_API_LAST_PLAYED_LIST", {
                 "offset": app.current.offset,
                 "limit": app.current.limit,
                 "cols": settings.colsQueueLastPlayedFetch,
@@ -234,6 +288,7 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             break;
         }
         case 'QueueJukebox': {
+            setFocusId('searchQueueJukeboxStr');
             sendAPI("MYMPD_API_JUKEBOX_LIST", {
                 "offset": app.current.offset,
                 "limit": app.current.limit,
@@ -249,6 +304,7 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             break;
         }
         case 'BrowsePlaylistsList': {
+            setFocusId('searchPlaylistsListStr');
             sendAPI("MYMPD_API_PLAYLIST_LIST", {
                 "offset": app.current.offset,
                 "limit": app.current.limit,
@@ -264,6 +320,7 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             break;
         }
         case 'BrowsePlaylistsDetail': {
+            setFocusId('searchPlaylistsDetailStr');
             sendAPI("MYMPD_API_PLAYLIST_CONTENT_LIST", {
                 "offset": app.current.offset,
                 "limit": app.current.limit,
@@ -280,6 +337,7 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             break;
         }
         case 'BrowseFilesystem': {
+            setFocusId('searchFilesystemStr');
             if (app.current.tag === '-') {
                 //default type is dir
                 app.current.tag = 'dir';
@@ -329,46 +387,50 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             break;
         }
         case 'BrowseDatabaseList': {
+            setFocusId('searchDatabaseStr');
             selectTag('searchDatabaseTags', 'searchDatabaseTagsDesc', app.current.filter);
             selectTag('BrowseDatabaseByTagDropdown', 'btnBrowseDatabaseByTagDesc', app.current.tag);
-            let tsort = app.current.sort;
-            let sortdesc = false;
-            if (tsort.charAt(0) === '-') {
-                sortdesc = true;
-                tsort = tsort.substr(1);
-                toggleBtnChkId('databaseSortDesc', true);
-            }
-            else {
-                toggleBtnChkId('databaseSortDesc', false);
-            }
-            selectTag('databaseSortTags', undefined, tsort);
+            toggleBtnChkId('databaseSortDesc', app.current.sort.desc);
+            selectTag('databaseSortTags', undefined, app.current.sort.tag);
             if (app.current.tag === 'Album') {
                 createSearchCrumbs(app.current.search, document.getElementById('searchDatabaseStr'), document.getElementById('searchDatabaseCrumb'));
                 if (app.current.search === '') {
                     document.getElementById('searchDatabaseStr').value = '';
                 }
                 elShowId('searchDatabaseMatch');
-                elEnableId('btnDatabaseSortDropdown');
+                const sortBtns = document.getElementById('databaseSortTagsList').firstElementChild.getElementsByTagName('button');
+                for (const sortBtn of sortBtns) {
+                    elShow(sortBtn);
+                }
                 elEnableId('btnDatabaseSearchDropdown');
                 sendAPI("MYMPD_API_DATABASE_ALBUMS_GET", {
                     "offset": app.current.offset,
                     "limit": app.current.limit,
                     "expression": app.current.search,
-                    "sort": tsort,
-                    "sortdesc": sortdesc
+                    "sort": app.current.sort.tag,
+                    "sortdesc": app.current.sort.desc
                 }, parseDatabase, true);
             }
             else {
                 elHideId('searchDatabaseCrumb');
                 elHideId('searchDatabaseMatch');
-                elDisableId('btnDatabaseSortDropdown');
+                const sortBtns = document.getElementById('databaseSortTagsList').firstElementChild.getElementsByTagName('button');
+                for (const sortBtn of sortBtns) {
+                    if (sortBtn.getAttribute('data-tag') === app.current.tag) {
+                        elShow(sortBtn);
+                    }
+                    else {
+                        elHide(sortBtn);
+                    }
+                }
                 elDisableId('btnDatabaseSearchDropdown');
                 document.getElementById('searchDatabaseStr').value = app.current.search;
                 sendAPI("MYMPD_API_DATABASE_TAG_LIST", {
                     "offset": app.current.offset,
                     "limit": app.current.limit,
                     "searchstr": app.current.search,
-                    "tag": app.current.tag
+                    "tag": app.current.tag,
+                    "sortdesc": app.current.sort.desc
                 }, parseDatabase, true);
             }
             break;
@@ -385,6 +447,7 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             break;
         }
         case 'BrowseRadioFavorites': {
+            setFocusId('BrowseRadioFavoritesSearchStr');
             sendAPI("MYMPD_API_WEBRADIO_FAVORITE_LIST", {
                 "offset": app.current.offset,
                 "limit": app.current.limit,
@@ -393,6 +456,7 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             break;
         }
         case 'BrowseRadioWebradiodb': {
+            setFocusId('BrowseRadioWebradiodbSearchStr');
             if (webradioDb === null) {
                 //fetch webradiodb database
                 getWebradiodb();
@@ -404,14 +468,19 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             document.getElementById('filterWebradiodbCountry').value = app.current.filter.country;
             setDataId('filterWebradiodbLanguage', 'value', app.current.filter.language);
             document.getElementById('filterWebradiodbLanguage').value = app.current.filter.language;
+            setDataId('filterWebradiodbCodec', 'value', app.current.filter.codec);
+            document.getElementById('filterWebradiodbCodec').value = app.current.filter.codec;
+            setDataId('filterWebradiodbBitrate', 'value', app.current.filter.bitrate);
+            document.getElementById('filterWebradiodbBitrate').value = app.current.filter.bitrate;
 
             const result = searchWebradiodb(app.current.search, app.current.filter.genre,
-                app.current.filter.country, app.current.filter.language, app.current.sort,
-                app.current.offset, app.current.limit);
+                app.current.filter.country, app.current.filter.language, app.current.filter.codec,
+                app.current.filter.bitrate, app.current.sort, app.current.offset, app.current.limit);
             parseSearchWebradiodb(result);
             break;
         }
         case 'BrowseRadioRadiobrowser': {
+            setFocusId('BrowseRadioRadiobrowserSearchStr');
             document.getElementById('inputRadiobrowserTags').value = app.current.filter.tags;
             document.getElementById('inputRadiobrowserCountry').value = app.current.filter.country;
             document.getElementById('inputRadiobrowserLanguage').value = app.current.filter.language;
@@ -434,22 +503,22 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             break;
         }
         case 'Search': {
-            document.getElementById('searchstr').focus();
+            setFocusId('searchStr');
             if (features.featAdvsearch) {
-                createSearchCrumbs(app.current.search, document.getElementById('searchstr'), document.getElementById('searchCrumb'));
+                createSearchCrumbs(app.current.search, document.getElementById('searchStr'), document.getElementById('searchCrumb'));
             }
-            else if (document.getElementById('searchstr').value === '' &&
-                app.current.search !== '')
+            else if (document.getElementById('searchStr').value === '' &&
+                     app.current.search !== '')
             {
-                document.getElementById('searchstr').value = app.current.search;
+                document.getElementById('searchStr').value = app.current.search;
             }
             if (app.current.search === '') {
-                document.getElementById('searchstr').value = '';
+                document.getElementById('searchStr').value = '';
             }
-            if (document.getElementById('searchstr').value.length >= 2 ||
+            if (document.getElementById('searchStr').value.length >= 2 ||
                 document.getElementById('searchCrumb').children.length > 0)
             {
-                if (features.featAdvsearch) {
+                if (features.featAdvsearch === true) {
                     if (app.current.sort.tag === '-') {
                         app.current.sort.tag = settings.tagList.includes('Title') ? 'Title' : '-';
                     }
@@ -480,11 +549,19 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
                 document.getElementById('SearchList').classList.remove('opacity05');
                 setPagination(0, 0);
             }
-            selectTag('searchtags', 'searchtagsdesc', app.current.filter);
+            selectTag('searchTags', 'searchTagsDesc', app.current.filter);
             break;
         }
-        default:
-            appGoto("Home");
+        default: {
+            let initialStartupView = settings.webuiSettings.uiStartupView;
+            if (initialStartupView === undefined ||
+                initialStartupView === null)
+            {
+                initialStartupView = features.featHome === true ? 'Home' : 'Playback';
+            }
+            const path = initialStartupView.split('/');
+            appGoto(...path);
+        }
     }
 
     app.last.card = app.current.card;
@@ -503,7 +580,7 @@ function showAppInitAlert(text) {
     spa.appendChild(elCreateNode('p', {}, btn));
 }
 
-function clearAndReload() {
+function clearCache() {
     if ('serviceWorker' in navigator) {
         caches.keys().then(function(cacheNames) {
             cacheNames.forEach(function(cacheName) {
@@ -511,6 +588,10 @@ function clearAndReload() {
             });
         });
     }
+}
+
+function clearAndReload() {
+    clearCache();
     location.reload();
 }
 
@@ -556,14 +637,16 @@ function appInitStart() {
     //webapp manifest shortcuts
     const params = new URLSearchParams(window.location.search);
     const action = params.get('action');
-    if (action === 'clickPlay') {
-        clickPlay();
-    }
-    else if (action === 'clickStop') {
-        clickStop();
-    }
-    else if (action === 'clickNext') {
-        clickNext();
+    switch(action) {
+        case 'clickPlay':
+            clickPlay();
+            break;
+        case 'clickStop':
+            clickStop();
+            break;
+        case 'clickNext':
+            clickNext();
+            break;
     }
 
     //update table height on window resize
@@ -574,22 +657,7 @@ function appInitStart() {
         }
     }, false);
 
-    //set initial scale
-    if (isMobile === true) {
-        scale = localStorage.getItem('scale-ratio');
-        if (scale === null) {
-            scale = '1.0';
-        }
-        setViewport(false);
-        domCache.body.classList.add('mobile');
-    }
-    else {
-        const ms = document.getElementsByClassName('featMobile');
-        for (const m of ms) {
-            elHide(m);
-        }
-        domCache.body.classList.add('not-mobile');
-    }
+    setMobileView();
 
     subdir = window.location.pathname.replace('/index.html', '').replace(/\/$/, '');
     i18nHtml(document.getElementById('splashScreenAlert'));
@@ -598,21 +666,42 @@ function appInitStart() {
     if (debugMode === true) {
         settings.loglevel = 4;
     }
-    //register serviceworker
-    if ('serviceWorker' in navigator &&
-        window.location.protocol === 'https:' &&
-        debugMode === false)
-    {
-        window.addEventListener('load', function() {
-            navigator.serviceWorker.register('sw.js', {scope: subdir + '/'}).then(function(registration) {
-                //Registration was successful
-                logDebug('ServiceWorker registration successful.');
-                registration.update();
-            }, function(err) {
-                //Registration failed
-                logError('ServiceWorker registration failed: ' + err);
+
+    //serviceworker handling
+    if ('serviceWorker' in navigator) {
+        //add serviceworker
+        if (debugMode === false &&
+            window.location.protocol === 'https:')
+        {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('sw.js', {scope: subdir + '/'}).then(function(registration) {
+                    //Registration was successful
+                    logDebug('ServiceWorker registration successful.');
+                    registration.update();
+                }, function(err) {
+                    //Registration failed
+                    logError('ServiceWorker registration failed: ' + err);
+                });
             });
-        });
+        }
+        //debugMode - delete serviceworker
+        if (debugMode === true) {
+            let serviceWorkerExists = false;
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for (const registration of registrations) {
+                    registration.unregister();
+                    serviceWorkerExists = true;
+                }
+            }).catch(function(err) {
+                logError('Service Worker unregistration failed: ', err);
+            });
+            if (serviceWorkerExists === true) {
+                clearAndReload();
+            }
+            else {
+                clearCache();
+            }
+        }
     }
 
     //show splash screen
@@ -662,14 +751,14 @@ function appInit() {
     //align dropdowns
     const dropdowns = document.querySelectorAll('.dropdown-toggle');
     for (const dropdown of dropdowns) {
-        dropdown.parentNode.addEventListener('show.bs.dropdown', function () {
-            alignDropdown(this);
+        dropdown.parentNode.addEventListener('show.bs.dropdown', function (event) {
+            alignDropdown(event.target);
         });
     }
     //init links
     const hrefs = document.querySelectorAll('[data-href]');
     for (const href of hrefs) {
-        if (href.classList.contains('notclickable') === false) {
+        if (href.classList.contains('not-clickable') === false) {
             href.classList.add('clickable');
         }
         let parentInit = href.parentNode.classList.contains('noInitChilds') ? true : false;
@@ -707,6 +796,7 @@ function appInit() {
     initPlaylists();
     initOutputs();
     initWebradio();
+    initLocalPlayback();
     //init drag and drop
     for (const table of ['QueueCurrentList', 'BrowsePlaylistsDetailList']) {
         dragAndDropTable(table);
@@ -734,18 +824,24 @@ function appInit() {
     }, false);
     //global keymap
     document.addEventListener('keydown', function(event) {
-        if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT' ||
-            event.target.tagName === 'TEXTAREA' || event.ctrlKey || event.altKey || event.metaKey) {
+        if (event.target.tagName === 'INPUT' ||
+            event.target.tagName === 'SELECT' ||
+            event.target.tagName === 'TEXTAREA' ||
+            event.ctrlKey ||
+            event.altKey ||
+            event.metaKey)
+        {
             return;
         }
         const cmd = keymap[event.key];
         if (cmd && typeof window[cmd.cmd] === 'function') {
-            if (keymap[event.key].req === undefined || settings[keymap[event.key].req] === true) {
+            if (keymap[event.key].req === undefined ||
+                settings[keymap[event.key].req] === true)
+            {
                 parseCmd(event, cmd);
             }
             event.stopPropagation();
         }
-
     }, false);
     //contextmenu for tables
     const tables = ['BrowseFilesystemList', 'BrowseDatabaseDetailList', 'QueueCurrentList', 'QueueLastPlayedList',
@@ -807,7 +903,7 @@ function initGlobalModals() {
         tab.lastChild.appendChild(col);
     }
 
-    document.getElementById('modalAbout').addEventListener('shown.bs.modal', function () {
+    document.getElementById('modalAbout').addEventListener('show.bs.modal', function () {
         sendAPI("MYMPD_API_DATABASE_STATS", {}, parseStats);
         getServerinfo();
     }, false);
@@ -817,7 +913,7 @@ function initGlobalModals() {
     }, false);
 
     document.getElementById('modalEnterPin').addEventListener('shown.bs.modal', function() {
-        document.getElementById('inputPinModal').focus();
+        setFocusId('inputPinModal');
     }, false);
 
     document.getElementById('inputPinModal').addEventListener('keyup', function(event) {
@@ -829,7 +925,9 @@ function initGlobalModals() {
 
 function initPlayback() {
     document.getElementById('PlaybackColsDropdown').addEventListener('click', function(event) {
-        if (event.target.nodeName === 'BUTTON' && event.target.classList.contains('mi')) {
+        if (event.target.nodeName === 'BUTTON' &&
+            event.target.classList.contains('mi'))
+        {
             event.stopPropagation();
             event.preventDefault();
             toggleBtnChk(event.target);
@@ -846,10 +944,6 @@ function initPlayback() {
 }
 
 function initNavs() {
-    document.getElementById('volumeBar').addEventListener('change', function() {
-        sendAPI("MYMPD_API_PLAYER_VOLUME_SET", {"volume": Number(document.getElementById('volumeBar').value)});
-    }, false);
-
     domCache.progress.addEventListener('click', function(event) {
         if (currentState.currentSongId >= 0 &&
             currentState.totalTime > 0)
@@ -888,6 +982,9 @@ function initNavs() {
         }
         const target = event.target.nodeName === 'A' ? event.target : event.target.parentNode;
         const href = getData(target, 'href');
+        if (href === undefined) {
+            return;
+        }
         parseCmd(event, href);
     }, false);
 

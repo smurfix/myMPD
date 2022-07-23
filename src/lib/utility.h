@@ -8,26 +8,29 @@
 #define MYMPD_UTILITY_H
 
 #include <stdbool.h>
+#include <stdio.h>
+#include <time.h>
 
 #include "../../dist/sds/sds.h"
 
-enum testdir_status {
-    DIR_EXISTS = 0,
-    DIR_CREATED = 1,
-    DIR_CREATE_FAILED = 2,
-    DIR_NOT_EXISTS = 3
-};
-
-void ws_notify(sds message);
-bool is_virtual_cuedir(sds music_directory, sds filename);
-int testdir(const char *name, const char *dirname, bool create);
-void my_usleep(time_t usec);
 bool is_streamuri(const char *uri);
-bool write_data_to_file(sds filepath, const char *data, size_t data_len);
+bool is_virtual_cuedir(sds music_directory, sds filename);
+const char *get_extension_from_filename(const char *filename);
+void basename_uri(sds s);
+void strip_file_extension(sds s);
+sds replace_file_extension(sds s, const char *ext);
+void strip_slash(sds s);
+void sanitize_filename(sds s);
+
+const char *getenv_check(const char *env_var, size_t max_len);
+void my_msleep(long msec);
+
+sds get_mympd_host(sds mpd_host, sds http_host);
 
 //measure time
-#define MEASURE_START clock_t measure_start = clock();
-#define MEASURE_END clock_t measure_end = clock();
-#define MEASURE_PRINT(X) MYMPD_LOG_DEBUG("Execution time for %s: %lf", X, ((double) (measure_end - measure_start)) / CLOCKS_PER_SEC);
+#define MEASURE_INIT struct timespec tic, toc;
+#define MEASURE_START clock_gettime(CLOCK_MONOTONIC, &tic);
+#define MEASURE_END clock_gettime(CLOCK_MONOTONIC, &toc);
+#define MEASURE_PRINT(X) MYMPD_LOG_DEBUG("Execution time for %s: %lld ms", X, ((long long)(toc.tv_sec) * 1000 + toc.tv_nsec / 1000000) - ((long long)(tic.tv_sec) * 1000 + tic.tv_nsec / 1000000));
 
 #endif

@@ -13,16 +13,31 @@
 #include <stdio.h>
 #include <string.h>
 
+//global variables
 _Atomic int loglevel;
 bool log_to_syslog;
 bool log_on_tty;
 
-static const char *loglevel_names[] = {
-    "EMERG", "ALERT", "CRITICAL", "ERROR", "WARN", "NOTICE", "INFO", "DEBUG"
+static const char *loglevel_names[8] = {
+    [LOG_EMERG] = "EMERG",
+    [LOG_ALERT] = "ALERT",
+    [LOG_CRIT] = "CRITICAL",
+    [LOG_ERR] = "ERROR",
+    [LOG_WARNING] = "WARN",
+    [LOG_NOTICE] = "NOTICE",
+    [LOG_INFO] = "INFO",
+    [LOG_DEBUG] = "DEBUG"
 };
 
-static const char *loglevel_colors[] = {
-    "\033[0;31m", "\033[0;31m", "\033[0;31m", "\033[0;31m", "\033[0;33m", "", "", "\033[0;34m"
+static const char *loglevel_colors[8] = {
+    [LOG_EMERG] = "\033[0;31m",
+    [LOG_ALERT] = "\033[0;31m",
+    [LOG_CRIT] = "\033[0;31m",
+    [LOG_ERR] = "\033[0;31m",
+    [LOG_WARNING] = "\033[0;33m",
+    [LOG_NOTICE] = "",
+    [LOG_INFO] = "",
+    [LOG_DEBUG] = "\033[0;34m"
 };
 
 void set_loglevel(int level) {
@@ -60,12 +75,10 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
     }
 
     sds logline = sdsempty();
-    logline = sdsMakeRoomFor(logline, 200);
+    //preallocate some space for the logline to avoid continuous reallocations
+    logline = sdsMakeRoomFor(logline, 512);
     if (log_on_tty == true) {
         logline = sdscat(logline, loglevel_colors[level]);
-    }
-
-    if (log_on_tty == true) {
         time_t now = time(NULL);
         struct tm timeinfo;
         if (localtime_r(&now, &timeinfo) != NULL) {
@@ -87,17 +100,16 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
 
     if (sdslen(logline) > 1023) {
         sdsrange(logline, 0, 1020);
-        logline = sdscatlen(logline, "...\n", 4);
+        logline = sdscatlen(logline, "...", 3);
+    }
+
+    if (log_on_tty == true) {
+        logline = sdscat(logline, "\033[0m\n");
     }
     else {
         logline = sdscatlen(logline, "\n", 1);
     }
-    if (log_on_tty == true) {
-        logline = sdscat(logline, "\033[0m");
-    }
 
-    fputs(logline, stdout);
-    fflush(stdout);
-
+    (void) fputs(logline, stdout);
     FREE_SDS(logline);
 }

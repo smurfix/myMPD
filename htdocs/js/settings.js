@@ -53,11 +53,16 @@ function initSettings() {
             else if (value === 'album') {
                 elDisableId('inputJukeboxQueueLength');
                 elDisableId('selectJukeboxPlaylist');
+                elDisable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
+                elDisableId('inputJukeboxLastPlayed');
                 document.getElementById('selectJukeboxPlaylist').value = 'Database';
+                setDataId('selectJukeboxPlaylist', 'value', 'Database');
             }
             else if (value === 'song') {
                 elEnableId('inputJukeboxQueueLength');
                 elEnableId('selectJukeboxPlaylist');
+                elEnable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
+                elEnableId('inputJukeboxLastPlayed');
             }
             if (value !== 'off') {
                 toggleBtnChkId('btnConsume', true);
@@ -75,6 +80,44 @@ function initSettings() {
     initElements(document.getElementById('modalConnection'));
     initElements(document.getElementById('modalQueueSettings'));
     createSettingsFrm();
+}
+
+//eslint-disable-next-line no-unused-vars
+function togglePlaymode(option) {
+    let value;
+    let title;
+    switch(option) {
+        case 'consume':
+        case 'random':
+        case 'repeat':
+            if (settings[option] === true) {
+                value = false;
+                title = 'Disable ' + option;
+            }
+            else {
+                value = true;
+                title = 'Enable ' + option;
+            }
+            break;
+        case 'single':
+            if (settings.single === '0') {
+                value = 'oneshot';
+                title = 'Enable single oneshot';
+            }
+            else if (settings.single === 'oneshot') {
+                value = '1';
+                title = 'Enable single mode';
+            }
+            else if (settings.single === '1') {
+                value = '0';
+                title = 'Disable single mode';
+            }
+            break;
+    }
+    const params = {};
+    params[option] = value;
+    sendAPI("MYMPD_API_PLAYER_OPTIONS_SET", params);
+    showNotification(tn(title), '', 'queue', 'info');
 }
 
 //eslint-disable-next-line no-unused-vars
@@ -310,6 +353,9 @@ function parseSettings(obj) {
     //Navigation and footer
     setNavbarIcons();
 
+    //Mobile view
+    setMobileView();
+
     if (settings.webuiSettings.uiFooterQueueSettings === true) {
         elShowId('footerQueueSettings');
     }
@@ -323,6 +369,10 @@ function parseSettings(obj) {
     else {
         elHideId('btnStop');
     }
+    
+    if (settings.jukeboxMode !== 'off') {
+        document.getElementById('btnNext').removeAttribute('disabled');
+    }
 
     //parse mpd settings if connected
     if (settings.mpdConnected === true) {
@@ -333,8 +383,7 @@ function parseSettings(obj) {
     document.getElementById('mpdInfoHost').textContent = settings.mpdHost.indexOf('/') !== 0 ?
         settings.mpdHost + ':' + settings.mpdPort : settings.mpdHost;
 
-    document.documentElement.style.setProperty('--mympd-coverimagesize', settings.webuiSettings.uiCoverimageSize + "px");
-    document.documentElement.style.setProperty('--mympd-coverimagesizesmall', settings.webuiSettings.uiCoverimageSizeSmall + "px");
+    document.documentElement.style.setProperty('--mympd-thumbnail-size', settings.webuiSettings.uiThumbnailSize + "px");
     document.documentElement.style.setProperty('--mympd-highlightcolor', settings.webuiSettings.uiHighlightColor);
 
     //default limit for all cards
@@ -378,37 +427,41 @@ function parseSettings(obj) {
     document.getElementById('volumeBar').setAttribute('min', settings.volumeMin);
     document.getElementById('volumeBar').setAttribute('max', settings.volumeMax);
 
-    //update columns
-    if (app.id === 'QueueCurrent') {
-        getQueue();
-    }
-    else if (app.id === 'QueueLastPlayed' ||
-        app.id === 'QueueJukebox' ||
-        app.id === 'Search' ||
-        app.id === 'BrowseFilesystem' ||
-        app.id === 'BrowsePlaylistsDetail' ||
-        app.id === 'BrowseDatabase' ||
-        app.id === 'BrowseRadioWebradiodb' ||
-        app.id === 'BrowseRadioRadiobrowser')
-    {
-        appRoute();
-    }
+    //update columns and handle quick playback/remove buttons
+    pEl.actionTdMenu.firstChild.title = tn('Actions');
 
-    if (settings.mediaSession === true && 'mediaSession' in navigator) {
-        navigator.mediaSession.setActionHandler('play', clickPlay);
-        navigator.mediaSession.setActionHandler('pause', clickPlay);
-        navigator.mediaSession.setActionHandler('stop', clickStop);
-        navigator.mediaSession.setActionHandler('seekbackward', seekRelativeBackward);
-        navigator.mediaSession.setActionHandler('seekforward', seekRelativeForward);
-        navigator.mediaSession.setActionHandler('previoustrack', clickPrev);
-        navigator.mediaSession.setActionHandler('nexttrack', clickNext);
+    pEl.actionTdMenuPlay.firstChild.title = tn(webuiSettingsDefault.clickQuickPlay.validValues[settings.webuiSettings.clickQuickPlay]);
+    pEl.actionTdMenuPlay.lastChild.title = tn('Actions');
 
+    pEl.actionTdMenuRemove.firstChild.title = tn('Remove');
+    pEl.actionTdMenuRemove.lastChild.title = tn('Actions');
+
+    pEl.actionTd = settings.webuiSettings.uiQuickPlayButton === false ? pEl.actionTdMenu : pEl.actionTdMenuPlay;
+    pEl.actionQueueTd = settings.webuiSettings.uiQuickRemoveButton === false ? pEl.actionTdMenu : pEl.actionTdMenuRemove;
+    pEl.coverPlayBtn.title = tn(webuiSettingsDefault.clickQuickPlay.validValues[settings.webuiSettings.clickQuickPlay]);
+
+    appRoute();
+
+    //mediaSession support
+    if (checkMediaSessionSupport() === true) {
+        try {
+            navigator.mediaSession.setActionHandler('play', clickPlay);
+            navigator.mediaSession.setActionHandler('pause', clickPlay);
+            navigator.mediaSession.setActionHandler('stop', clickStop);
+            navigator.mediaSession.setActionHandler('seekbackward', seekRelativeBackward);
+            navigator.mediaSession.setActionHandler('seekforward', seekRelativeForward);
+            navigator.mediaSession.setActionHandler('previoustrack', clickPrev);
+            navigator.mediaSession.setActionHandler('nexttrack', clickNext);
+        }
+        catch(err) {
+            logWarn('mediaSession.setActionHandler not supported by browser: ' + err.message);
+        }
         if (!navigator.mediaSession.setPositionState) {
             logDebug('mediaSession.setPositionState not supported by browser');
         }
     }
     else {
-        logDebug('mediaSession not supported by browser');
+        logDebug('mediaSession not supported by browser or not enabled');
     }
 
     //finished parse setting, set ui state
@@ -439,13 +492,17 @@ function setCssVars(theme) {
 function setLocale(newLocale) {
     if (newLocale === 'default') {
         locale = navigator.language || navigator.userLanguage;
+        if (locale.length === 2) {
+            locale += '-';
+        }
     }
     else {
         locale = newLocale;
     }
     let localeFound = false;
     for (const l of locales) {
-        if (l.code === locale) {
+        if (l.code.indexOf(locale) === 0) {
+            locale = l.code;
             localeFound = true;
             break;
         }
@@ -472,11 +529,15 @@ function populateQueueSettingsFrm() {
     else if (settings.jukeboxMode === 'album') {
         elDisableId('inputJukeboxQueueLength');
         elDisableId('selectJukeboxPlaylist');
+        elDisableId('inputJukeboxLastPlayed');
+        elDisable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
         document.getElementById('selectJukeboxPlaylist').value = 'Database';
     }
     else if (settings.jukeboxMode === 'song') {
         elEnableId('inputJukeboxQueueLength');
         elEnableId('selectJukeboxPlaylist');
+        elEnable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
+        elEnableId('inputJukeboxLastPlayed');
     }
 
     document.getElementById('selectJukeboxPlaylist').filterInput.value = '';
@@ -505,7 +566,9 @@ function populateQueueSettingsFrm() {
         }
         else {
             elHideId('warnPlaybackStatistics');
-            elEnableId('inputJukeboxLastPlayed');
+            if (settings.jukeboxMode === 'song') {
+                elEnableId('inputJukeboxLastPlayed');
+            }
         }
     }
     checkConsume();
@@ -547,6 +610,9 @@ function populateConnectionFrm() {
 }
 
 function getBgImageText(value) {
+    if (value === '') {
+        return 'None';
+    }
     for (const key of bgImageValues) {
         if (key.value === value) {
             return key.text;
@@ -597,9 +663,8 @@ function populateSettingsFrm() {
         toggleBtnChk(btnNotifyWeb, false);
     }
 
-    if (isMobile === true) {
-        document.getElementById('inputScaleRatio').value = scale;
-    }
+    document.getElementById('inputScaleRatio').value = localSettings.scaleRatio;
+    toggleBtnChkId('btnEnforceMobile', localSettings.enforceMobile);
 
     //media session support
     const btnMediaSession = document.getElementById('inputWebUIsettingmediaSession');
@@ -615,7 +680,9 @@ function populateSettingsFrm() {
 
     document.getElementById('inputBookletName').value = settings.bookletName;
     document.getElementById('inputCoverimageNames').value = settings.coverimageNames;
+    document.getElementById('inputThumbnailNames').value = settings.thumbnailNames;
     document.getElementById('inputCovercacheKeepDays').value = settings.covercacheKeepDays;
+    document.getElementById('inputListenbrainzToken').value = settings.listenbrainzToken;
 
     //smart playlists
     if (settings.featSmartpls === true) {
@@ -639,20 +706,19 @@ function populateSettingsFrm() {
     }
     toggleBtnChkCollapseId('btnEnableLyrics', 'collapseEnableLyrics', settings.webuiSettings.enableLyrics);
 
-    const inputWebUIsettinguiBgCover = document.getElementById('inputWebUIsettinguiBgCover');
-    inputWebUIsettinguiBgCover.setAttribute('data-toggle', 'collapse');
-    inputWebUIsettinguiBgCover.setAttribute('data-target', '#bgCssFilterFrm');
-    if (uiElements.collapseuiBgCover !== undefined) {
-        uiElements.collapseuiBgCover.dispose();
-    }
-    uiElements.collapseuiBgCover = new BSN.Collapse(inputWebUIsettinguiBgCover);
-    toggleBtnChkCollapseId('inputWebUIsettinguiBgCover', 'bgCssFilterFrm', settings.webuiSettings.uiBgCover);
+    //local playback
+    toggleBtnChkCollapseId('btnEnableLocalPlayback', 'collapseEnableLocalPlayback', settings.webuiSettings.enableLocalPlayback);
+    toggleBtnChkId('btnEnableLocalPlaybackAutoplay', localSettings.localPlaybackAutoplay);
+
+    //albumart background css filter
+    toggleBtnChkId('inputWebUIsettinguiBgCover', settings.webuiSettings.uiBgCover);
 
     //tag multiselects
     initTagMultiSelect('inputEnabledTags', 'listEnabledTags', settings.tagListMpd, settings.tagList);
     initTagMultiSelect('inputSearchTags', 'listSearchTags', settings.tagList, settings.tagListSearch);
     initTagMultiSelect('inputBrowseTags', 'listBrowseTags', settings.tagList, settings.tagListBrowse);
     initTagMultiSelect('inputGeneratePlsTags', 'listGeneratePlsTags', settings.tagListBrowse, settings.smartplsGenerateTagList);
+
     //features - show or hide warnings - use settings object
     setFeatureBtnId('btnEnableLyrics', settings.featLibrary);
     setFeatureBtnId('inputWebUIsettingenableScripting', settings.featScripting);
@@ -778,8 +844,10 @@ function _createSettingsFrm(fields, defaults, prefix) {
         }
     }
 
-    for (const sel of ['inputWebUIsettingclickAlbumPlay', 'inputWebUIsettingclickFolder',
-            'inputWebUIsettingclickPlaylist', 'inputWebUIsettingclickSong'])
+    //set featWhence feature detection for default actions
+    for (const sel of ['inputWebUIsettingclickQuickPlay', 'inputWebUIsettingclickFilesystemPlaylist',
+        'inputWebUIsettingclickPlaylist', 'inputWebUIsettingclickSong',
+        'inputWebUIsettingclickRadioFavorites', 'inputWebUIsettingclickRadiobrowser'])
     {
         const options = document.getElementById(sel).getElementsByTagName('option');
         for (const opt of options) {
@@ -823,6 +891,7 @@ function setFeatures() {
         features.featFingerprint = settings.featFingerprint;
         features.featPlaylistRmRange = settings.featPlaylistRmRange;
         features.featWhence = settings.featWhence;
+        features.featAdvqueue = settings.featAdvqueue;
     }
 }
 
@@ -901,7 +970,15 @@ function parseMPDSettings() {
         const pbtl = document.getElementById('cardPlaybackTags');
         elClear(pbtl);
         for (let i = 0, j = settings.colsPlayback.length; i < j; i++) {
-            const div = elCreateNodes('div', {"id": "current" + settings.colsPlayback[i]}, [
+            let colWidth;
+            switch(settings.colsPlayback[i]) {
+                case 'Lyrics':
+                    colWidth = "col-xl-12";
+                    break;
+                default:
+                    colWidth = "col-xl-6";
+            }
+            const div = elCreateNodes('div', {"id": "current" + settings.colsPlayback[i],"class": [colWidth]}, [
                 elCreateText('small', {}, tn(settings.colsPlayback[i])),
                 elCreateEmpty('p', {})
             ]);
@@ -922,22 +999,26 @@ function parseMPDSettings() {
         app.cards.Search.sort.tag = 'Title';
     }
 
+    //fallback from AlbumArtist to Artist
     if (settings.tagList.includes('AlbumArtist')) {
         tagAlbumArtist = 'AlbumArtist';
     }
     else if (settings.tagList.includes('Artist')) {
         tagAlbumArtist = 'Artist';
-    }
-
-    if (!settings.tagList.includes('AlbumArtist') && app.cards.Browse.tabs.Database.views.List.filter === 'AlbumArtist') {
-        app.cards.Browse.tabs.Database.views.List.sort = 'Artist';
-    }
-
-    if (features.featAdvsearch === false && app.cards.Browse.active === 'Database') {
-        app.cards.Browse.active = 'Filesystem';
+        if (app.cards.Browse.tabs.Database.views.List.filter === 'AlbumArtist') {
+            app.cards.Browse.tabs.Database.views.List.filter = tagAlbumArtist;
+        }
+        if (app.cards.Browse.tabs.Database.views.List.sort.tag === 'AlbumArtist') {
+            app.cards.Browse.tabs.Database.views.List.sort.tag = tagAlbumArtist;
+        }
     }
 
     if (features.featAdvsearch === false) {
+        //disable tag based features
+        if (app.cards.Browse.active === 'Database') {
+            app.cards.Browse.active = 'Filesystem';
+        }
+
         const tagEls = document.getElementById('cardPlaybackTags').getElementsByTagName('p');
         for (let i = 0, j = tagEls.length; i < j; i++) {
             tagEls[i].classList.remove('clickable');
@@ -951,8 +1032,8 @@ function parseMPDSettings() {
     addTagList('BrowseNavWebradiodbDropdown', 'tagListBrowse');
     addTagList('BrowseNavRadiobrowserDropdown', 'tagListBrowse');
 
-    addTagList('searchqueuetags', 'tagListSearch');
-    addTagList('searchtags', 'tagListSearch');
+    addTagList('searchQueueTags', 'tagListSearch');
+    addTagList('searchTags', 'tagListSearch');
     addTagList('searchDatabaseTags', 'tagListBrowse');
     addTagList('databaseSortTagsList', 'tagListBrowse');
     addTagList('dropdownSortPlaylistTags', 'tagList');
@@ -971,9 +1052,9 @@ function saveSettings(closeModal) {
     cleanupModalId('modalSettings');
     let formOK = true;
 
-    for (const inputId of ['inputWebUIsettinguiCoverimageSize', 'inputWebUIsettinguiCoverimageSizeSmall',
-            'inputSettinglastPlayedCount', 'inputSmartplsInterval', 'inputSettingvolumeMax', 'inputSettingvolumeMin',
-            'inputSettingvolumeStep', 'inputCovercacheKeepDays'])
+    for (const inputId of ['inputWebUIsettinguiThumbnailSize', 'inputSettinglastPlayedCount',
+        'inputSmartplsInterval', 'inputSettingvolumeMax', 'inputSettingvolumeMin',
+        'inputSettingvolumeStep', 'inputCovercacheKeepDays'])
     {
         const inputEl = document.getElementById(inputId);
         if (!validateUint(inputEl)) {
@@ -985,50 +1066,73 @@ function saveSettings(closeModal) {
     if (!validateFilenameList(inputCoverimageNames)) {
         formOK = false;
     }
+    const inputThumbnailNames = document.getElementById('inputThumbnailNames');
+    if (!validateFilenameList(inputThumbnailNames)) {
+        formOK = false;
+    }
 
     const inputBookletName = document.getElementById('inputBookletName');
     if (!validateFilename(inputBookletName)) {
         formOK = false;
     }
 
-    if (isMobile === true) {
-        const inputScaleRatio = document.getElementById('inputScaleRatio');
+    const inputScaleRatio = document.getElementById('inputScaleRatio');
+    //handle scaleRatio only for mobile browsers
+    if (userAgentData.isMobile === true) {
         if (!validateFloat(inputScaleRatio)) {
             formOK = false;
         }
-        else {
-            scale = parseFloat(inputScaleRatio.value);
-            setViewport(true);
-        }
     }
-
-    //from hours to seconds
-    const smartplsInterval = Number(document.getElementById('inputSmartplsInterval').value) * 60 * 60;
-
-    const webuiSettings = {};
-    for (const key in webuiSettingsDefault) {
-        const el = document.getElementById('inputWebUIsetting' + r(key));
-        if (el) {
-            if (webuiSettingsDefault[key].inputType === 'select') {
-                webuiSettings[key] = webuiSettingsDefault[key].contentType === 'integer' ? Number(getSelectValue(el)) : getSelectValue(el);
-            }
-            else if (webuiSettingsDefault[key].inputType === 'mympd-select-search') {
-                webuiSettings[key] = webuiSettingsDefault[key].contentType === 'integer' ? Number(getData(el, 'value')) : getData(el, 'value');
-            }
-            else if (webuiSettingsDefault[key].inputType === 'checkbox') {
-                webuiSettings[key] = el.classList.contains('active') ? true : false;
-            }
-            else {
-                webuiSettings[key] = webuiSettingsDefault[key].contentType === 'integer' ? Number(el.value) : el.value;
-            }
-        }
-    }
-
-    webuiSettings.enableLyrics = (document.getElementById('btnEnableLyrics').classList.contains('active') ? true : false);
 
     if (formOK === true) {
+        //browser specific settings
+        localSettings.localPlaybackAutoplay = (document.getElementById('btnEnableLocalPlaybackAutoplay').classList.contains('active') ? true : false);
+        localSettings.enforceMobile = (document.getElementById('btnEnforceMobile').classList.contains('active') ? true : false);
+        setUserAgentData();
+
+        //use scaleRatio only for mobile browsers
+        localSettings.scaleRatio = userAgentData.isMobile === true ?
+            parseFloat(inputScaleRatio.value) : 1.0;
+        setViewport();
+
+        //save localSettings in browsers localStorage
+        try {
+            for (const key in localSettings) {
+                localStorage.setItem(key, localSettings[key]);
+            }
+        }
+        catch(err) {
+            logError('Can not save settings to localStorage: ' + err.message);
+        }
+
+        //from hours to seconds
+        const smartplsInterval = Number(document.getElementById('inputSmartplsInterval').value) * 60 * 60;
+
+        const webuiSettings = {};
+        for (const key in webuiSettingsDefault) {
+            const el = document.getElementById('inputWebUIsetting' + r(key));
+            if (el) {
+                if (webuiSettingsDefault[key].inputType === 'select') {
+                    webuiSettings[key] = webuiSettingsDefault[key].contentType === 'integer' ? Number(getSelectValue(el)) : getSelectValue(el);
+                }
+                else if (webuiSettingsDefault[key].inputType === 'mympd-select-search') {
+                    webuiSettings[key] = webuiSettingsDefault[key].contentType === 'integer' ? Number(getData(el, 'value')) : getData(el, 'value');
+                }
+                else if (webuiSettingsDefault[key].inputType === 'checkbox') {
+                    webuiSettings[key] = el.classList.contains('active') ? true : false;
+                }
+                else {
+                    webuiSettings[key] = webuiSettingsDefault[key].contentType === 'integer' ? Number(el.value) : el.value;
+                }
+            }
+        }
+
+        webuiSettings.enableLyrics = (document.getElementById('btnEnableLyrics').classList.contains('active') ? true : false);
+        webuiSettings.enableLocalPlayback = (document.getElementById('btnEnableLocalPlayback').classList.contains('active') ? true : false);
+
         const params = {
             "coverimageNames": inputCoverimageNames.value,
+            "thumbnailNames": inputThumbnailNames.value,
             "lastPlayedCount": Number(document.getElementById('inputSettinglastPlayedCount').value),
             "smartpls": (document.getElementById('btnSmartpls').classList.contains('active') ? true : false),
             "smartplsPrefix": document.getElementById('inputSmartplsPrefix').value,
@@ -1047,6 +1151,7 @@ function saveSettings(closeModal) {
             "lyricsVorbisUslt": document.getElementById('inputSettinglyricsVorbisUslt').value,
             "lyricsVorbisSylt": document.getElementById('inputSettinglyricsVorbisSylt').value,
             "covercacheKeepDays": Number(document.getElementById('inputCovercacheKeepDays').value),
+            "listenbrainzToken": document.getElementById('inputListenbrainzToken').value,
             "webuiSettings": webuiSettings
         };
 
@@ -1178,7 +1283,7 @@ function initTagMultiSelect(inputId, listId, allTags, enabledTags) {
             btn.textContent = 'radio_button_unchecked';
         }
         list.appendChild(
-            elCreateNodes('div', {"class": "form-check"}, [
+            elCreateNodes('div', {"class": ["form-check"]}, [
                 btn,
                 elCreateText('label', {"class": ["form-check-label"], "for": allTags[i]}, allTags[i])
             ])
@@ -1294,28 +1399,27 @@ function setNavbarIcons() {
     domCache.navbarBtnsLen = domCache.navbarBtns.length;
 }
 
-function getBgImageList(image) {
-    const list = document.getElementById('inputWebUIsettinguiBgImage').filterResult;
-    getImageList(list, image, bgImageValues, 'backgrounds');
+function getBgImageList() {
+    const list = document.getElementById('inputWebUIsettinguiBgImage');
+    getImageList(list, bgImageValues, 'backgrounds');
 }
 
 //eslint-disable-next-line no-unused-vars
-function getImageListId(selectId, value, addOptions, type) {
-    getImageList(document.getElementById(selectId), value, addOptions, type)
+function getImageListId(selectId, addOptions, type) {
+    getImageList(document.getElementById(selectId), addOptions, type)
 }
 
-function getImageList(sel, value, addOptions, type) {
+function getImageList(sel, addOptions, type) {
     sendAPI("MYMPD_API_PICTURE_LIST", {
         "type": type
     }, function(obj) {
-        elClear(sel);
+        elClear(sel.filterResult);
         for (const option of addOptions) {
-            sel.appendChild(elCreateText('option', {"value": option.value}, option.text));
+            sel.addFilterResult(option.text, option.value);
         }
         for (let i = 0; i < obj.result.returnedEntities; i++) {
-            sel.appendChild(elCreateText('option', {"value": obj.result.data[i]}, obj.result.data[i]));
+            sel.addFilterResult(obj.result.data[i], obj.result.data[i]);
         }
-        sel.value = value;
     });
 }
 
@@ -1323,13 +1427,14 @@ function getImageList(sel, value, addOptions, type) {
 function filterImageSelect(elId, searchstr) {
     const select = document.getElementById(elId).filterResult;
     searchstr = searchstr.toLowerCase();
-    for (const option of select.options) {
-        const value = option.value.toLowerCase();
+    const items = select.getElementsByTagName('li');
+    for (const item of items) {
+        const value = item.textContent.toLowerCase();
         if (value.indexOf(searchstr) >= 0) {
-            elShow(option);
+            elShow(item);
         }
         else {
-            elHide(option);
+            elHide(item);
         }
     }
 }

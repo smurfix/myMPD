@@ -12,6 +12,8 @@ myMPD supports local coverart for albums and streams.
 
 myMPD needs access to the MPD music_directory or a uptodate MPD.
 
+You can download albumart with the script from [https://github.com/jcorporation/musicdb-scripts](https://github.com/jcorporation/musicdb-scripts)
+
 ### Albumart in directories through direct music directory access
 
 1. If connected through the local MPD socket: myMPD gets the music_directory automatically, if music directory is set to auto.
@@ -20,8 +22,8 @@ myMPD needs access to the MPD music_directory or a uptodate MPD.
 Enable albumart support:
 
 1. To support albumart, songs must be arranged in folders per album.
-2. Put the pictures in the album folders, name it always the same, e.g. folder.jpg
-3. Configure the name in the settings, a comma separated list and basenames are also supported
+2. Put the pictures and thumbnails in the album folders, name it always the same, e.g. cover-sm.webp (thumbnail) and cover.webp (full image)
+3. Configure the name in the settings (albumart filenames and thumbnail names), a comma separated list of filenames and only basenames (filenames without extensions) are also supported
 
 ### Albumart in directories through MPD
 
@@ -36,16 +38,20 @@ myMPD can extract embedded albumart, if it can access the music files. If MPD >=
 
 myMPD caches extracted covers under `/var/cache/mympd/covercache`. Files in this directory can be safely deleted. myMPD houskeeps the covercache on startup and each two hours.
 
+You can disable the covercache by setting the `Covercache expiration` value to `0` days.
+
 ***
 
 # Streams
 
-1. Images must be named as the uri of the stream, replace the characters `<>/.:?&$!#\|` with `_`, e.g. `http___stream_laut_fm_nonpop.png` for uri `http://stream.laut.fm/nonpop`.
+1. Images must be named as the uri of the stream, replace the characters `<>/.:?&$!#\|;=` with `_`, e.g. `http___stream_laut_fm_nonpop.png` for uri `http://stream.laut.fm/nonpop`.
 2. Put these images in the `/var/lib/mympd/pics/thumbs` folder.
 
 # Pictures for other tags
 
 The "Browse Database" grid view can display pictures for other tags than album also. To enable this simply create a directory with the tagname in the `/var/lib/mympd/pics` directory and put pictures with filename equal the tag value in this directory.
+
+You can download artistart with the script from [https://github.com/jcorporation/musicdb-scripts](https://github.com/jcorporation/musicdb-scripts)
 
 ## Example
 
@@ -65,4 +71,4 @@ Background images must be saved in the `/var/lib/mympd/pics/backgrounds` folder.
 
 myMPD recognizes following file extensions:
 
-- png, jpg, jpeg, svg, webp, avif
+- webp, png, jpg, jpeg, svg, avif

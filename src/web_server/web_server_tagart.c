@@ -13,26 +13,29 @@
 #include "../lib/validate.h"
 
 bool webserver_tagart_handler(struct mg_connection *nc, struct mg_http_message *hm,
-                   struct t_mg_user_data *mg_user_data)
+        struct t_mg_user_data *mg_user_data)
 {
     struct t_config *config = mg_user_data->config;
+    sds query = sdsnewlen(hm->query.ptr, hm->query.len);
+    //remove uri=
+    sdsrange(query, 4, -1);
     //decode uri
-    sds uri_decoded = sds_urldecode(sdsempty(), hm->uri.ptr, (int)hm->uri.len, 0);
+    sds uri_decoded = sds_urldecode(sdsempty(), query, sdslen(query), false);
+    FREE_SDS(query);
     if (sdslen(uri_decoded) == 0) {
         MYMPD_LOG_ERROR("Failed to decode uri");
-        webserver_serve_na_image(nc, hm);
+        webserver_serve_na_image(nc);
         FREE_SDS(uri_decoded);
         return true;
     }
     if (vcb_isfilepath(uri_decoded) == false) {
         MYMPD_LOG_ERROR("Invalid URI: %s", uri_decoded);
-        webserver_serve_na_image(nc, hm);
+        webserver_serve_na_image(nc);
         FREE_SDS(uri_decoded);
         return true;
     }
     MYMPD_LOG_DEBUG("Handle tagart for uri \"%s\"", uri_decoded);
     //create absolute file
-    sdsrange(uri_decoded, 8, -1);
     sds mediafile = sdscatfmt(sdsempty(), "%S/pics/%S", config->workdir, uri_decoded);
     MYMPD_LOG_DEBUG("Absolut media_file: %s", mediafile);
     mediafile = webserver_find_image_file(mediafile);
@@ -47,7 +50,7 @@ bool webserver_tagart_handler(struct mg_connection *nc, struct mg_http_message *
     }
     else {
         MYMPD_LOG_DEBUG("No image for tag found");
-        webserver_serve_na_image(nc, hm);
+        webserver_serve_na_image(nc);
     }
     FREE_SDS(mediafile);
     FREE_SDS(uri_decoded);

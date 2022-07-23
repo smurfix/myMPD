@@ -15,6 +15,11 @@ body.theme-light .nav-link {
   color: var(--bs-gray-800);
 }
 
+body.theme-light .list-group-item-action:hover,
+body.theme-light .list-group-item-action:focus {
+  background-color: var(--bs-gray-400);
+}
+
 body.theme-light .btn-secondary,
 body.theme-light .bg-secondary {
   color: var(--bs-gray-800);
@@ -105,7 +110,7 @@ body.theme-light .table-hover > tbody > tr:hover > * {
 
 body.theme-light .toast-header,
 body.theme-light .toast {
-  background-color: rgba(206, 212, 218, 0.85);
+  background-color: rgba(206, 212, 218, 85%);
   color: var(--bs-gray-800);
 }
 
@@ -145,4 +150,8 @@ body.theme-light .btn {
 body.theme-light .btn-danger,
 body.theme-light .btn-success {
   color: var(--mympd-highlightcolor-contrast);
+}
+
+body.theme-light .album-cover {
+  border-color: var(--bs-gray-400);
 }

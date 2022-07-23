@@ -1,56 +1,88 @@
-import Alert from '../components/alert-native.js';
-import Button from '../components/button-native.js';
-import Carousel from '../components/carousel-native.js';
-import Collapse from '../components/collapse-native.js';
-import Dropdown from '../components/dropdown-native.js';
-import Modal from '../components/modal-native.js';
-import Offcanvas from '../components/offcanvas-native.js';
-import Popover from '../components/popover-native.js';
-import Tab from '../components/tab-native.js';
-import Toast from '../components/toast-native.js';
+import Data from '@thednp/shorty/src/misc/data';
+import ObjectKeys from '@thednp/shorty/src/misc/ObjectKeys';
+import getElementsByTagName from '@thednp/shorty/src/selectors/getElementsByTagName';
+import matches from '@thednp/shorty/src/selectors/matches';
 
-const componentsInit = {
-  Alert: Alert.init,
-  Button: Button.init,
-  Carousel: Carousel.init,
-  Collapse: Collapse.init,
-  Dropdown: Dropdown.init,
-  Modal: Modal.init,
-  Offcanvas: Offcanvas.init,
-  Popover: Popover.init,
-  Tab: Tab.init,
-  Toast: Toast.init,
+import { addListener } from '@thednp/event-listener/src/event-listener';
+
+import Alert from '../components/alert-native';
+import Button from '../components/button-native';
+import Carousel from '../components/carousel-native';
+import Collapse from '../components/collapse-native';
+import Dropdown from '../components/dropdown-native';
+import Modal from '../components/modal-native';
+import Offcanvas from '../components/offcanvas-native';
+import Popover from '../components/popover-native';
+import Tab from '../components/tab-native';
+import Toast from '../components/toast-native';
+
+/** @type {Record<string, any>} */
+const componentsList = {
+  Alert,
+  Button,
+  Carousel,
+  Collapse,
+  Dropdown,
+  Modal,
+  Offcanvas,
+  Popover,
+  Tab,
+  Toast,
 };
 
-function initializeDataAPI(Konstructor, collection) {
-  Array.from(collection).forEach((x) => new Konstructor(x));
-}
-function removeElementDataAPI(component, collection) {
-  Array.from(collection).forEach((x) => {
-    if (x[component]) x[component].dispose();
-  });
+/**
+ * Initialize all matched `Element`s for one component.
+ * @param {BSN.InitCallback<any>} callback
+ * @param {NodeList | Node[]} collection
+ */
+ function initComponentDataAPI(callback, collection) {
+  [...collection].forEach((x) => callback(x));
 }
 
+/**
+ * Remove one component from a target container element or all in the page.
+ * @param {string} component the component name
+ * @param {ParentNode} context parent `Node`
+ */
+function removeComponentDataAPI(component, context) {
+  const compData = Data.getAllFor(component);
+
+  if (compData) {
+    [...compData].forEach((x) => {
+      const [element, instance] = x;
+      if (context.contains(element)) instance.dispose();
+    });
+  }
+}
+
+/**
+ * Initialize all BSN components for a target container.
+ * @param {ParentNode=} context parent `Node`
+ */
 export function initCallback(context) {
-  const lookUp = context instanceof Element ? context : document;
+  const lookUp = context && context.nodeName ? context : document;
+  const elemCollection = [...getElementsByTagName('*', lookUp)];
 
-  Object.keys(componentsInit).forEach((comp) => {
-    const { constructor, selector } = componentsInit[comp];
-    initializeDataAPI(constructor, lookUp.querySelectorAll(selector));
+  ObjectKeys(componentsList).forEach((comp) => {
+    const { init, selector } = componentsList[comp];
+    initComponentDataAPI(init, elemCollection.filter((item) => matches(item, selector)));
   });
 }
 
+/**
+ * Remove all BSN components for a target container.
+ * @param {ParentNode=} context parent `Node`
+ */
 export function removeDataAPI(context) {
-  const lookUp = context instanceof Element ? context : document;
+  const lookUp = context && context.nodeName ? context : document;
 
-  Object.keys(componentsInit).forEach((comp) => {
-    const { component, selector } = componentsInit[comp];
-    removeElementDataAPI(component, lookUp.querySelectorAll(selector));
+  ObjectKeys(componentsList).forEach((comp) => {
+    removeComponentDataAPI(comp, lookUp);
   });
 }
 
 // bulk initialize all components
 if (document.body) initCallback();
 else {
-  document.addEventListener('DOMContentLoaded', () => initCallback(), { once: true });
+  addListener(document, 'DOMContentLoaded', () => initCallback(), { once: true });
 }

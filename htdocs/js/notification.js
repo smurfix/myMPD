@@ -52,20 +52,20 @@ const severities = {
 };
 
 const facilities = {
-    "player": "Player",
-    "queue": "Queue",
-    "general": "General",
     "database": "Database",
+    "general":  "General",
+    "home":     "Home",
+    "jukebox":  "Jukebox",
+    "lyrics":   "Lyrics",
+    "mpd":      "MPD",
     "playlist": "Playlist",
-    "mpd": "MPD",
-    "lyrics": "Lyrics",
-    "jukebox": "Jukebox",
-    "trigger": "Trigger",
-    "script": "Script",
-    "sticker": "Sticker",
-    "home": "Home",
-    "timer": "Timer",
-    "session": "Session"
+    "player":   "Player",
+    "queue":    "Queue",
+    "session":  "Session",
+    "script":   "Script",
+    "sticker":  "Sticker",
+    "timer":    "Timer",
+    "trigger":  "Trigger"
 };
 
 function getSeverityIcon(severity) {
@@ -171,21 +171,23 @@ function notificationsSupported() {
     return "Notification" in window;
 }
 
-function setElsState(tag, state, type) {
-    const els = type === 'tag' ? document.getElementsByTagName(tag) : document.getElementsByClassName(tag);
+function setElsState(selector, state) {
+    const els = document.querySelectorAll(selector);
     for (const el of els) {
         if (el.classList.contains('close')) {
             continue;
         }
         if (state === 'disabled') {
             if (el.classList.contains('alwaysEnabled') === false &&
-                el.getAttribute('disabled') === null)
+                el.getAttribute('disabled') !== 'disabled')
             {
+                //disable only elements that are not already disabled
                 elDisable(el);
                 el.classList.add('disabled');
             }
         }
         else if (el.classList.contains('disabled')) {
+            //enable only elements that are disabled through this function
             elEnable(el);
             el.classList.remove('disabled');
         }
@@ -194,7 +196,9 @@ function setElsState(tag, state, type) {
 
 function toggleUI() {
     let state = 'disabled';
-    if (websocketConnected === true && settings.mpdConnected === true) {
+    if (websocketConnected === true &&
+        settings.mpdConnected === true)
+    {
         state = 'enabled';
     }
     const enabled = state === 'disabled' ? false : true;
@@ -205,7 +209,12 @@ function toggleUI() {
         setElsState('select', state, 'tag');
         setElsState('button', state, 'tag');
         setElsState('textarea', state, 'tag');
-        setElsState('clickable', state, 'class');
+        if (enabled === false) {
+            setElsState('.clickable', state, 'class');
+        }
+        else {
+            setElsState('.not-clickable', state, 'class');
+        }
         uiEnabled = enabled;
     }
 
@@ -231,14 +240,12 @@ function toggleUI() {
 
 function toggleTopAlert() {
     const topAlert = document.getElementById('top-alerts');
-    if (uiEnabled === false || (currentState !== undefined && currentState.lastError !== '')) {
-        let topPadding = 0;
-        if (window.innerWidth < window.innerHeight) {
-            topPadding = document.getElementById('header').offsetHeight;
-        }
-        topAlert.style.paddingTop = topPadding + 'px';
+    if (uiEnabled === false ||
+        (currentState !== undefined && currentState.lastError !== '')
+    ) {
         elShow(topAlert);
-        const mt = topAlert.offsetHeight - parseInt(topAlert.style.paddingTop);
+        const topPadding = window.innerWidth < window.innerHeight ? document.getElementById('header').offsetHeight : 0;
+        const mt = topAlert.offsetHeight - topPadding;
         document.getElementsByTagName('main')[0].style.marginTop = mt + 'px';
     }
     else {

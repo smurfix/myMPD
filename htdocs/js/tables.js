@@ -80,10 +80,10 @@ function dragAndDropTable(table) {
             tr[i].classList.remove('dragover');
         }
         document.getElementById(table).classList.add('opacity05');
-        if (app.current.card === 'Queue' && app.current.tab === 'Current') {
+        if (app.id === 'QueueCurrent') {
             sendAPI("MYMPD_API_QUEUE_MOVE_SONG", {"from": oldSongpos, "to": newSongpos});
         }
-        else if (app.current.card === 'Browse' && app.current.tab === 'Playlists' && app.current.view === 'Detail') {
+        else if (app.id === 'BrowsePlaylistsDetail') {
             playlistMoveSong(oldSongpos, newSongpos);
         }
     }, false);
@@ -163,7 +163,7 @@ function dragAndDropTableHeader(table) {
 
 function setColTags(table) {
     if (table === 'BrowseRadioWebradiodb') {
-        return ["Country", "Description", "Genre", "Homepage", "Language", "Name", "StreamUri"];
+        return ["Country", "Description", "Genre", "Homepage", "Language", "Name", "StreamUri", "Codec", "Bitrate"];
     }
     else if (table === 'BrowseRadioRadiobrowser') {
         return ["clickcount", "country", "homepage", "language", "lastchangetime", "lastcheckok", "tags", "url_resolved", "votes"];
@@ -237,7 +237,9 @@ function setColsChecklist(table, menu) {
 }
 
 function setCols(table) {
-    if (table === 'Search' && app.cards.Search.sort.tag === 'Title') {
+    if (table === 'Search' &&
+        app.cards.Search.sort.tag === 'Title')
+    {
         if (settings.tagList.includes('Title')) {
             app.cards.Search.sort.tag = 'Title';
         }
@@ -274,7 +276,7 @@ function setCols(table) {
     const th = elCreateEmpty('th', {"data-col": "Action"});
     if (features.featTags === true) {
         th.appendChild(
-            elCreateText('a', {"href": "#", "data-popover": "columns", "class": ["align-middle", "mi", "mi-small", "clickable"], "data-title-phrase": "Columns", "title": tn('Columns')}, 'settings')
+            elCreateText('a', {"href": "#", "data-action": "popover", "data-popover": "columns", "class": ["align-middle", "mi", "mi-small", "clickable"], "data-title-phrase": "Columns", "title": tn('Columns')}, 'settings')
         );
     }
     thead.appendChild(th);
@@ -397,7 +399,7 @@ function addDiscRow(disc, album, albumartist, colspan) {
             elCreateText('span', {"class": ["mi"]}, 'album')
         ),
         elCreateText('td', {"colspan": (colspan - 1)}, tn('Disc') + ' ' + disc),
-        elCreateNode('td', {},
+        elCreateNode('td', {"data-col": "Action"},
             elCreateText('a', {"data-popover": "disc", "href": "#", "class": ["mi", "color-darkgrey"], "title": tn('Actions')}, ligatureMore)
         )
     ]);
@@ -415,7 +417,14 @@ function updateTable(obj, list, perRowCallback, createRowCellsCallback) {
 
     const nrItems = obj.result.returnedEntities;
     const tr = tbody.getElementsByTagName('tr');
-    const smallWidth = window.innerWidth < 576 ? true : false;
+    const smallWidth = uiSmallWidthTagRows();
+
+    if (smallWidth === true) {
+        table.classList.add('smallWidth');
+    }
+    else {
+        table.classList.remove('smallWidth');
+    }
 
     //disc handling for album view
     let z = 0;
@@ -496,6 +505,7 @@ function updateTable(obj, list, perRowCallback, createRowCellsCallback) {
         tbody.appendChild(emptyRow(colspan + 1));
     }
     table.classList.remove('opacity05');
+    scrollToPosY(table.parentNode, app.current.scrollPos);
 }
 
 function tableRow(row, data, list, colspan, smallWidth) {
@@ -509,7 +519,9 @@ function tableRow(row, data, list, colspan, smallWidth) {
                 td.appendChild(
                     elCreateNodes('div', {"class": ["row"]}, [
                         elCreateText('small', {"class": ["col-3"]}, tn(settings['cols' + list][c])),
-                        elCreateNode('span', {"data-col": settings['cols' + list][c], "class": ["col-9"]}, printValue(settings['cols' + list][c], data[settings['cols' + list][c]]))
+                        elCreateNode('span', {"data-col": settings['cols' + list][c], "class": ["col-9"]},
+                            printValue(settings['cols' + list][c], data[settings['cols' + list][c]])
+                        )
                     ])
                 );
             }
@@ -524,11 +536,18 @@ function tableRow(row, data, list, colspan, smallWidth) {
                 );
             }
         }
-        row.appendChild(
-            elCreateNode('td', {},
-                elCreateText('a', {"data-col": "Action", "href": "#", "class": ["mi", "color-darkgrey"], "title": tn('Actions')}, ligatureMore)
-            )
-        );
+        switch(app.id) {
+            case 'QueueCurrent':
+            case 'BrowsePlaylistsDetail':
+                row.appendChild(
+                    pEl.actionQueueTd.cloneNode(true)
+                );
+                break;
+            default:
+                row.appendChild(
+                    pEl.actionTd.cloneNode(true)
+                );
+        }
     }
 }
 
@@ -594,4 +613,26 @@ function checkResult(obj, tbody) {
         return false;
     }
     return true;
+}
+
+function uiSmallWidthTagRows() {
+    if (settings.webuiSettings.uiSmallWidthTagRows === true) {
+        return window.innerWidth < 576 ? true : false;
+    }
+    return false;
+}
+
+function handleActionTdClick(event) {
+    event.preventDefault();
+    switch(event.target.getAttribute('data-action')) {
+        case 'popover':
+            showPopover(event);
+            break;
+        case 'quickPlay':
+            clickQuickPlay(event.target);
+            break;
+        case 'quickRemove':
+            clickQuickRemove(event.target);
+            break;
+    }
 }

@@ -25,7 +25,7 @@ static const char *invalid_filepath_chars = "\a\b\f\n\r\t\v";
 
 static const char *mympd_cols[]={"Pos", "Duration", "Type", "Priority", "LastPlayed", "Filename", "Filetype", "AudioFormat", "LastModified",
     "Lyrics", "stickerPlayCount", "stickerSkipCount", "stickerLastPlayed", "stickerLastSkipped", "stickerLike",
-    "Country", "Description", "Genre", "Homepage", "Language", "Name", "StreamUri", //Columns for webradiodb
+    "Country", "Description", "Genre", "Homepage", "Language", "Name", "StreamUri", "Codec", "Bitrate", //Columns for webradiodb
     "clickcount", "country", "homepage", "language", "lastchangetime", "lastcheckok", "tags", "url_resolved", "votes", //Columns for radiobrowser
     0};
 
@@ -232,7 +232,9 @@ bool vcb_ismpdtag(sds data) {
 }
 
 bool vcb_ismpdtag_or_any(sds data) {
-    if (strcmp(data, "any") == 0) {
+    if (strcmp(data, "any") == 0 ||
+        strcmp(data, "filename") == 0)
+    {
         return true;
     }
     return vcb_ismpdtag(data);
@@ -244,7 +246,8 @@ bool vcb_ismpdsort(sds data) {
         strcmp(data, "filename") != 0 &&
         strcmp(data, "shuffle") != 0 &&
         strcmp(data, "LastModified") != 0 &&
-        strcmp(data, "Date") != 0)
+        strcmp(data, "Date") != 0 &&
+        strcmp(data, "Priority") != 0)
     {
         MYMPD_LOG_WARN("Unknown tag \"%s\"", data);
         return false;

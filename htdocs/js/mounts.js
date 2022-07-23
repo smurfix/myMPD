@@ -97,7 +97,7 @@ function updateMount(el, uri) {
     }
     const spinner = elCreateEmpty('div', {"id": "spinnerUpdateProgress", "class": ["spinner-border", "spinner-border-sm"]});
     el.parentNode.insertBefore(spinner, el);
-    updateDB(uri, false);
+    updateDB(uri, false, false, false);
 }
 
 //eslint-disable-next-line no-unused-vars
@@ -118,7 +118,7 @@ function showEditMount(uri, storage) {
         document.getElementById('inputMountUrl').value = '';
         document.getElementById('inputMountPoint').value = '';
     }
-    document.getElementById('inputMountPoint').focus();
+    setFocusId('inputMountPoint');
 }
 
 function showListMounts() {
@@ -138,7 +138,6 @@ function parseListMounts(obj) {
         return;
     }
 
-    let activeRow = 0;
     for (let i = 0; i < obj.result.returnedEntities; i++) {
         const td1 = elCreateEmpty('td', {});
         if (obj.result.data[i].mountPoint === '') {
@@ -147,19 +146,19 @@ function parseListMounts(obj) {
         else {
             td1.textContent = obj.result.data[i].mountPoint;
         }
-        const actionTd = elCreateEmpty('td', {"data-col": "Action"});
+        const mountActionTd = elCreateEmpty('td', {"data-col": "Action"});
         if (obj.result.data[i].mountPoint !== '') {
-            actionTd.appendChild(
+            mountActionTd.appendChild(
                 elCreateText('a', {"href": "#", "title": tn('Unmount'), "data-action": "unmount", "class": ["mi", "color-darkgrey"]}, 'delete')
             );
-            actionTd.appendChild(
+            mountActionTd.appendChild(
                 elCreateText('a', {"href": "#", "title": tn('Update'), "data-action": "update", "class": ["mi", "color-darkgrey"]}, 'refresh')
             );
         }
         const row = elCreateNodes('tr', {}, [
             td1,
             elCreateText('td', {}, obj.result.data[i].mountUrl),
-            actionTd
+            mountActionTd
 
         ]);
         setData(row, 'url', obj.result.data[i].mountUrl);
@@ -169,7 +168,7 @@ function parseListMounts(obj) {
         }
 
         if (i < tr.length) {
-            activeRow = replaceTblRow(tr[i], row) === true ? i : activeRow;
+            replaceTblRow(tr[i], row);
         }
         else {
             tbody.append(row);
@@ -209,7 +208,7 @@ function parseNeighbors(obj) {
 }
 
 function getUrlhandlers() {
-    sendAPI("MYMPD_API_URLHANDLERS", {}, function(obj) {
+    sendAPI("MYMPD_API_MOUNT_URLHANDLER_LIST", {}, function(obj) {
         const selectMountUrlhandler = document.getElementById('selectMountUrlhandler');
         elClear(selectMountUrlhandler);
         for (let i = 0; i < obj.result.returnedEntities; i++) {

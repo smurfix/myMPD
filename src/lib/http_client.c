@@ -8,6 +8,7 @@
 #include "http_client.h"
 
 #include "../../dist/mongoose/mongoose.h"
+#include "filehandler.h"
 #include "log.h"
 #include "sds_extras.h"
 
@@ -18,6 +19,12 @@ static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_d
     void *fn_data);
 
 //public functions
+
+
+/**
+ * Reads the dns server from resolv.conf
+ * @return newly allocated sds string with first nameserver
+ */
 sds get_dnsserver(void) {
     //read resolv.conf directly - musl does not support res_init
     sds buffer = sdsempty();
@@ -30,15 +37,18 @@ sds get_dnsserver(void) {
     }
     sds line = sdsempty();
     sds nameserver = sdsempty();
-    while (sds_getline(&line, fp, 1000) == 0) {
-        if (sdslen(line) > 10 && strncmp(line, "nameserver", 10) == 0 && isspace(line[10])) {
+    while (sds_getline(&line, fp, LINE_LENGTH_MAX) == 0) {
+        if (sdslen(line) > 10 &&
+            strncmp(line, "nameserver", 10) == 0 &&
+            isspace(line[10]))
+        {
             char *p;
             char *z;
             for (p = line + 11; isspace(*p); p++) {
                 //skip blank chars
             }
             for (z = p; *z != '\0' && (isdigit(*z) || *z == '.'); z++) {
-                nameserver = sdscatfmt(nameserver, "%c", *z);
+                nameserver = sds_catchar(nameserver, *z);
             }
             struct sockaddr_in sa;
             if (inet_pton(AF_INET, nameserver, &(sa.sin_addr)) == 1) {
@@ -50,9 +60,9 @@ sds get_dnsserver(void) {
         }
     }
     FREE_SDS(line);
-    fclose(fp);
+    (void) fclose(fp);
     if (sdslen(nameserver) > 0) {
-        buffer = sdscatfmt(buffer, "udp://%s:53", nameserver);
+        buffer = sdscatfmt(buffer, "udp://%S:53", nameserver);
     }
     else {
         MYMPD_LOG_WARN("No valid nameserver found");
@@ -62,6 +72,11 @@ sds get_dnsserver(void) {
     return buffer;
 }
 
+/**
+ * Makes a http request
+ * @param mg_client_request pointer to mg_client_request_t struct
+ * @param mg_client_response pointer to mg_client_response_t struct to populate
+ */
 void http_client_request(struct mg_client_request_t *mg_client_request,
     struct mg_client_response_t *mg_client_response)
 {
@@ -86,6 +101,14 @@ void http_client_request(struct mg_client_request_t *mg_client_request,
 }
 
 //private functions
+
+/**
+ * Event handler for the http request made by http_client_request
+ * @param nc mongoose network connection
+ * @param ev event id
+ * @param ev_data event data (http response)
+ * @param fn_data struct mg_client_response
+ */
 static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data,
     void *fn_data)
 {
@@ -150,8 +173,7 @@ static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_d
                 break;
             }
             if (isprint(hm->message.ptr[i])) {
-                mg_client_response->response = sdscatfmt(mg_client_response->response,
-                    "%c", hm->message.ptr[i]);
+                mg_client_response->response = sds_catchar(mg_client_response->response, hm->message.ptr[i]);
             }
         }
         //set response code

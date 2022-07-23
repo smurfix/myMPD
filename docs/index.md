@@ -8,7 +8,7 @@ title: Index
 
 myMPD is a standalone and mobile friendly web-based MPD client with a tiny footprint and advanced features.
 
-- [Repository](https://github.com/jcorporation/myMPD)
+- [GitHub Repository](https://github.com/jcorporation/myMPD)
 - [Help to improve myMPD](https://github.com/jcorporation/myMPD/issues/167)
 - [Q&A](https://github.com/jcorporation/myMPD/discussions/categories/q-a)
 
@@ -38,8 +38,8 @@ This documentation is for myMPD version {% include version %}.
   - [Custom navbar icons]({{ site.baseurl }}/references/custom-navbar-icons)
   - [Feature matrix]({{ site.baseurl }}/references/feature-matrix)
   - [Filesystem Hierarchy]({{ site.baseurl }}/references/filesystem-hierarchy)
-  - [Keyboard-Shortcuts]({{ site.baseurl }}/references/keyboard-shortcuts)
   - [Local playback]({{ site.baseurl }}/references/local-playback)
+  - [Lyrics]({{ site.baseurl }}/references/lyrics)
   - [Pictures]({{ site.baseurl }}/references/pictures)
   - [Published directories]({{ site.baseurl }}/references/published-directories)
   - [Smart playlists]({{ site.baseurl }}/references/smart-playlists)
@@ -53,5 +53,6 @@ This documentation is for myMPD version {% include version %}.
   - [Multiple myMPD instances on same host]({{ site.baseurl }}/additional-topics/multiple-myMPD-instances-on-same-host)
   - [Recommended MPD configuration]({{ site.baseurl }}/additional-topics/recommended-mpd-configuration)
   - [Scrobble to ListenBrainz]({{ site.baseurl }}/additional-topics/scrobble-to-listenbrainz)
+  - [ListenBrainz Feedback]({{ site.baseurl }}/additional-topics/listenbrainz-feedback)
 - [Known issues]({{ site.baseurl }}/known-issues)
 - [Security]({{ site.baseurl }}/security)

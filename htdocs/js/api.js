@@ -39,7 +39,7 @@ function createEnterPinFooter(footers, method, params, callback, onerror) {
         footer.classList.add('d-none');
     }
     footers[0].parentNode.appendChild(newFooter);
-    input.focus();
+    setFocus(input);
     btn.addEventListener('click', function() {
         sendAPI('MYMPD_API_SESSION_LOGIN', {"pin": input.value}, function(obj) {
             input.value = '';
@@ -208,13 +208,13 @@ function sendAPI(method, params, callback, onerror) {
             ajaxRequest.responseText === '' ||
             ajaxRequest.responseText.length > 1000000)
         {
-            logError('Illegal response for request: ' + JSON.stringify(request));
+            logError('Invalid response for request: ' + JSON.stringify(request));
             logError('Response code: ' + ajaxRequest.status);
             logError('Response length: ' + ajaxRequest.responseText.length);
             if (onerror === true) {
                 if (callback !== undefined && typeof(callback) === 'function') {
                     logDebug('Got empty API response calling ' + callback.name);
-                    callback({"error": {"message": "Illegal response"}});
+                    callback({"error": {"message": "Invalid response"}});
                 }
             }
             return;
@@ -351,38 +351,35 @@ function webSocketConnect() {
                 case 'welcome':
                     websocketConnected = true;
                     showNotification(tn('Connected to myMPD'), wsUrl, 'general', 'info');
-                    //appRoute();
                     sendAPI('MYMPD_API_PLAYER_STATE', {}, parseState, true);
                     if (session.token !== '') {
                         validateSession();
                     }
                     break;
+                case 'update_queue':
                 case 'update_state':
                     //rename param to result
                     obj.result = obj.params;
                     delete obj.params;
+                    if (app.id === 'QueueCurrent' &&
+                        obj.method === 'update_queue')
+                    {
+                        getQueue(document.getElementById('searchQueueStr').value);
+                    }
                     parseState(obj);
                     break;
                 case 'mpd_disconnected':
                     if (progressTimer) {
                         clearTimeout(progressTimer);
                     }
-                    getSettings(true);
+                    settings.mpdConnected = false;
+                    toggleUI();
                     break;
                 case 'mpd_connected':
                     //MPD connection established get state and settings
                     showNotification(tn('Connected to MPD'), '', 'general', 'info');
                     sendAPI('MYMPD_API_PLAYER_STATE', {}, parseState);
                     getSettings(true);
-                    break;
-                case 'update_queue':
-                    if (app.id === 'QueueCurrent') {
-                        getQueue();
-                    }
-                    //rename param to result
-                    obj.result = obj.params;
-                    delete obj.params;
-                    parseUpdateQueue(obj);
                     break;
                 case 'update_options':
                     getSettings();
@@ -393,7 +390,7 @@ function webSocketConnect() {
                     }, parseOutputs);
                     break;
                 case 'update_started':
-                    updateDBstarted(false);
+                    updateDBstarted(false, true);
                     break;
                 case 'update_database':
                 case 'update_finished':
@@ -424,9 +421,9 @@ function webSocketConnect() {
                         }, parsePlaylistsDetail);
                     }
                     break;
-                case 'update_lastplayed':
+                case 'update_last_played':
                     if (app.id === 'QueueLastPlayed') {
-                        sendAPI('MYMPD_API_QUEUE_LAST_PLAYED', {
+                        sendAPI('MYMPD_API_LAST_PLAYED_LIST', {
                             "offset": app.current.offset,
                             "limit": app.current.limit,
                             "cols": settings.colsQueueLastPlayedFetch,
@@ -442,6 +439,19 @@ function webSocketConnect() {
                             "cols": settings.colsQueueJukeboxFetch,
                             "searchstr": app.current.search
                         }, parseJukeboxList);
+                    }
+                    break;
+                case 'update_album_cache':
+                    if (app.id === 'BrowseDatabaseList' &&
+                        app.current.tag === 'Album')
+                    {
+                        sendAPI("MYMPD_API_DATABASE_ALBUMS_GET", {
+                            "offset": app.current.offset,
+                            "limit": app.current.limit,
+                            "expression": app.current.search,
+                            "sort": app.current.sort.tag,
+                            "sortdesc": app.current.sort.desc
+                        }, parseDatabase, true);
                     }
                     break;
                 case 'notify':

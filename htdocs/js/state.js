@@ -27,13 +27,11 @@ function parseStats(obj) {
     mpdInfoVersionEl.appendChild(document.createTextNode(obj.result.mpdProtocolVersion));
 
     const mpdProtocolVersion = obj.result.mpdProtocolVersion.match(/(\d+)\.(\d+)\.(\d+)/);
-    if (mpdProtocolVersion[1] >= mpdVersion.major &&
-        mpdProtocolVersion[2] >= mpdVersion.minor &&
-        mpdProtocolVersion[3] >= mpdVersion.patch)
+    if ((mpdProtocolVersion[1] < mpdVersion.major) ||
+        (mpdProtocolVersion[1] <= mpdVersion.major && mpdProtocolVersion[2] < mpdVersion.minor) ||
+        (mpdProtocolVersion[1] <= mpdVersion.major && mpdProtocolVersion[2] <= mpdVersion.minor && mpdProtocolVersion[3] < mpdVersion.patch)
+       )
     {
-        //up2date mpd version
-    }
-    else {
         mpdInfoVersionEl.appendChild(
             elCreateText('div', {"class": ["alert", "alert-warning", "mt-2", "mb-1"], "data-phrase": 'MPD version is outdated'}, tn('MPD version is outdated'))
         );
@@ -41,22 +39,9 @@ function parseStats(obj) {
 }
 
 function getServerinfo() {
-    const ajaxRequest = new XMLHttpRequest();
-    ajaxRequest.open('GET', subdir + '/api/serverinfo', true);
-    ajaxRequest.onreadystatechange = function() {
-        if (ajaxRequest.readyState === 4) {
-            let obj;
-            try {
-                obj = JSON.parse(ajaxRequest.responseText);
-            }
-            catch(error) {
-                showNotification(tn('Can not parse response to json object'), '', 'general', 'error');
-                logError('Can not parse response to json object:' + ajaxRequest.responseText);
-            }
-            document.getElementById('wsIP').textContent = obj.result.ip;
-        }
-    };
-    ajaxRequest.send();
+    httpGet(subdir + '/api/serverinfo', function(obj) {
+        document.getElementById('wsIP').textContent = obj.result.ip;
+    }, true);
 }
 
 function getCounterText() {
@@ -92,7 +77,7 @@ function setCounter() {
     const playingRow = document.getElementById('queueTrackId' + currentState.currentSongId);
     if (playingRow !== null) {
         //progressbar and counter in queue card
-        setQueueCounter(playingRow, counterText)
+        setQueueCounter(playingRow, counterText);
     }
 
     //synced lyrics
@@ -127,17 +112,73 @@ function setCounter() {
 }
 
 function parseState(obj) {
+    if (obj.result === undefined) {
+        logError('State is undefined');
+        return;
+    }
     //Get current song if songid has changed
     //Get current song if queueVersion has changed - updates stream titles
     if (currentState.currentSongId !== obj.result.currentSongId ||
         currentState.queueVersion !== obj.result.queueVersion)
     {
-        sendAPI("MYMPD_API_PLAYER_CURRENT_SONG", {}, songChange);
+        sendAPI("MYMPD_API_PLAYER_CURRENT_SONG", {}, parseCurrentSong);
     }
     //save state
     currentState = obj.result;
-    //Set play and queue state
-    parseUpdateQueue(obj);
+    //Set playback buttons
+    if (obj.result.state === 'stop') {
+        document.getElementById('btnPlay').textContent = 'play_arrow';
+        domCache.progressBar.style.transition = 'none';
+        elReflow(domCache.progressBar);
+        domCache.progressBar.style.width = '0';
+        elReflow(domCache.progressBar);
+        domCache.progressBar.style.transition = progressBarTransition;
+        elReflow(domCache.progressBar);
+    }
+    else if (obj.result.state === 'play') {
+        document.getElementById('btnPlay').textContent =
+            settings.webuiSettings.uiFooterPlaybackControls === 'stop' ? 'stop' : 'pause';
+    }
+    else {
+        //pause
+        document.getElementById('btnPlay').textContent = 'play_arrow';
+    }
+    if (app.id === 'QueueCurrent') {
+        setPlayingRow();
+    }
+
+    if (obj.result.queueLength === 0) {
+        elDisableId('btnPlay');
+    }
+    else {
+        elEnableId('btnPlay');
+    }
+
+    if (obj.result.nextSongPos === -1 &&
+        settings.jukeboxMode === 'off')
+    {
+        elDisableId('btnNext');
+    }
+    else {
+        elEnableId('btnNext');
+    }
+
+    if (obj.result.songPos < 0) {
+        elDisableId('btnPrev');
+    }
+    else {
+        elEnableId('btnPrev');
+    }
+    //media session
+    mediaSessionSetState();
+    mediaSessionSetPositionState(obj.result.totalTime, obj.result.elapsedTime);
+    //local playback
+    controlLocalPlayback(currentState.state);
+    //queue badge in navbar
+    const badgeQueueItemsEl = document.getElementById('badgeQueueItems');
+    if (badgeQueueItemsEl) {
+        badgeQueueItemsEl.textContent = obj.result.queueLength;
+    }
     //Set volume
     parseVolume(obj);
     //Set play counters
@@ -174,12 +215,22 @@ function parseState(obj) {
     }
     toggleTopAlert();
 
+    //check if we need to get settings
+    let getNewSettings = false;
+    if (settings.partition !== obj.result.partition) {
+        //partition has changed, fetch new settings
+        getNewSettings = true;
+    }
     //refresh settings if mpd is not connected or ui is disabled
     //ui is disabled at startup
     if (settings.mpdConnected === false ||
         uiEnabled === false)
     {
         logDebug((settings.mpdConnected === false ? 'MPD disconnected' : 'UI disabled') + ' - refreshing settings');
+        getNewSettings = true;
+    }
+
+    if (getNewSettings === true) {
         getSettings(true);
     }
 }
@@ -189,7 +240,7 @@ function setBackgroundImage(el, url) {
         clearBackgroundImage(el);
         return;
     }
-    const bgImageUrl = 'url("' + subdir + '/albumart/' + myEncodeURI(url) + '")';
+    const bgImageUrl = subdir + '/albumart?offset=0&uri=' + myEncodeURIComponent(url);
     const old = el.parentNode.querySelectorAll(el.tagName + '> div.albumartbg');
     //do not update if url is the same
     if (old[0] &&
@@ -206,7 +257,6 @@ function setBackgroundImage(el, url) {
         }
         else {
             old[i].style.zIndex = '-10';
-            old[i].style.opacity = '0';
         }
     }
     //add new cover and let it fade in
@@ -214,17 +264,27 @@ function setBackgroundImage(el, url) {
     if (el.tagName === 'BODY') {
         div.style.filter = settings.webuiSettings.uiBgCssFilter;
     }
-    div.style.backgroundImage = bgImageUrl;
+    div.style.backgroundImage = 'url("' + bgImageUrl + '")';
     div.style.opacity = 0;
     setData(div, 'uri', bgImageUrl);
     el.insertBefore(div, el.firstChild);
-    //create dummy img element to handle onload for bgimage
+    //create dummy img element for preloading and fade-in
     const img = new Image();
     setData(img, 'div', div);
     img.onload = function(event) {
+        //fade-in current cover
         getData(event.target, 'div').style.opacity = 1;
+        //fade-out old cover with some overlap
+        setTimeout(function() {
+            const bgImages = el.parentNode.querySelectorAll(el.tagName + '> div.albumartbg');
+            for (let i = 0, j = bgImages.length; i < j; i++) {
+                if (bgImages[i].style.zIndex === '-10') {
+                    bgImages[i].style.opacity = 0;
+                }
+            }
+        }, 800);
     };
-    img.src = subdir + '/albumart/' + myEncodeURI(url);
+    img.src = bgImageUrl;
 }
 
 function clearBackgroundImage(el) {
@@ -256,7 +316,11 @@ function clearCurrentCover() {
     }
 }
 
-function songChange(obj) {
+function parseCurrentSong(obj) {
+    const list = document.getElementById('PlaybackList');
+    list.classList.remove('opacity05');
+    setScrollViewHeight(list);
+
     //check for song change
     //use title to detect stream changes
     const newSong = obj.result.uri + ':' + obj.result.Title + ':' + obj.result.currentSongId;
@@ -274,68 +338,73 @@ function songChange(obj) {
         document.getElementById(elName).classList.remove('clickable');
     }
 
+    const footerArtistEl = document.getElementById('footerArtist');
     if (obj.result.Artist !== undefined &&
         obj.result.Artist[0] !== '-')
     {
         textNotification += joinArray(obj.result.Artist);
         pageTitle += obj.result.Artist.join(', ') + smallSpace + nDash + smallSpace;
-        document.getElementById('footerArtist').textContent = obj.result.Artist;
-        setDataId('footerArtist', 'name', obj.result.Artist);
+        footerArtistEl.textContent = obj.result.Artist;
+        setData(footerArtistEl, 'name', obj.result.Artist);
         if (features.featAdvsearch === true) {
-            document.getElementById('footerArtist').classList.add('clickable');
+            footerArtistEl.classList.add('clickable');
         }
     }
     else {
-        document.getElementById('footerArtist').textContent = '';
-        setDataId('footerArtist', 'name', ['']);
+        footerArtistEl.textContent = '';
+        setData(footerArtistEl, 'name', ['']);
     }
 
+    const footerAlbumEl = document.getElementById('footerAlbum');
     if (obj.result.Album !== undefined &&
         obj.result.Album !== '-')
     {
         textNotification += ' - ' + obj.result.Album;
-        document.getElementById('footerAlbum').textContent = obj.result.Album;
-        setDataId('footerAlbum', 'name', obj.result.Album);
-        setDataId('footerAlbum', 'AlbumArtist', obj.result[tagAlbumArtist]);
+        footerAlbumEl.textContent = obj.result.Album;
+        setData(footerAlbumEl, 'name', obj.result.Album);
+        setData(footerAlbumEl, 'AlbumArtist', obj.result[tagAlbumArtist]);
         if (features.featAdvsearch === true) {
-            document.getElementById('footerAlbum').classList.add('clickable');
+            footerAlbumEl.classList.add('clickable');
         }
     }
     else {
-        document.getElementById('footerAlbum').textContent = '';
-        setDataId('footerAlbum', 'name', '');
-        setDataId('footerAlbum', 'AlbumArtist', ['']);
+        footerAlbumEl.textContent = '';
+        setData(footerAlbumEl, 'name', '');
+        setData(footerAlbumEl, 'AlbumArtist', ['']);
     }
 
+    const footerTitleEl = document.getElementById('footerTitle');
+    const footerCoverEl = document.getElementById('footerCover');
+    const currentTitleEl = document.getElementById('currentTitle');
     if (obj.result.Title !== undefined &&
         obj.result.Title !== '-')
     {
         pageTitle += obj.result.Title;
-        document.getElementById('currentTitle').textContent = obj.result.Title;
-        setDataId('currentTitle', 'uri', obj.result.uri);
-        document.getElementById('footerTitle').textContent = obj.result.Title;
-        document.getElementById('footerCover').classList.add('clickable');
+        currentTitleEl.textContent = obj.result.Title;
+        setData(currentTitleEl, 'uri', obj.result.uri);
+        footerTitleEl.textContent = obj.result.Title;
+        footerCoverEl.classList.add('clickable');
     }
     else {
         document.getElementById('currentTitle').textContent = '';
-        setDataId('currentTitle', 'uri', '');
-        document.getElementById('footerTitle').textContent = '';
-        document.getElementById('currentTitle').classList.remove('clickable');
-        document.getElementById('footerTitle').classList.remove('clickable');
-        document.getElementById('footerCover').classList.remove('clickable');
+        setData(currentTitleEl, 'uri', '');
+        footerTitleEl.textContent = '';
+        currentTitleEl.classList.remove('clickable');
+        footerTitleEl.classList.remove('clickable');
+        footerCoverEl.classList.remove('clickable');
     }
     document.title = 'myMPD: ' + pageTitle;
-    document.getElementById('footerCover').title = pageTitle;
+    footerCoverEl.title = pageTitle;
 
     if (isValidUri(obj.result.uri) === true &&
         isStreamUri(obj.result.uri) === false)
     {
-        document.getElementById('footerTitle').classList.add('clickable');
-        document.getElementById('currentTitle').classList.add('clickable');
+        footerTitleEl.classList.add('clickable');
+        currentTitleEl.classList.add('clickable');
     }
     else {
-        document.getElementById('footerTitle').classList.remove('clickable');
-        document.getElementById('currentTitle').classList.remove('clickable');
+        footerTitleEl.classList.remove('clickable');
+        currentTitleEl.classList.remove('clickable');
     }
 
     if (obj.result.uri !== undefined) {
@@ -360,8 +429,8 @@ function songChange(obj) {
         features.featLibrary === true)
     {
         bookletEl.appendChild(elCreateText('span', {"class": ["mi", "me-2"]}, 'description'));
-        bookletEl.appendChild(elCreateText('a', {"target": "_blank", "href": subdir + '/browse/music/' +
-            myEncodeURI(obj.result.bookletPath)}, tn('Download booklet')));
+        bookletEl.appendChild(elCreateText('a', {"target": "_blank", "href": myEncodeURI(subdir + obj.result.bookletPath)},
+            tn('Download booklet')));
     }
 
     //update queue card
@@ -439,38 +508,50 @@ function setPlaybackCardTags(songObj) {
             parseCmd(event, getData(event.target, 'href'));
         }, false);
         elReplaceChild(cardPlaybackWebradio,
-            elCreateNodes('div', {}, [
+            elCreateNodes('div', {"class": ["col-xl-6"]}, [
                 elCreateText('small', {}, tn('Webradio')),
                 webradioName
             ])
         );
         cardPlaybackWebradio.appendChild(
-            elCreateNodes('div', {}, [
+            elCreateNodes('div', {"class": ["col-xl-6"]}, [
                 elCreateText('small', {}, tn('Genre')),
                 elCreateText('p', {}, songObj.webradio.Genre)
             ])
         );
         cardPlaybackWebradio.appendChild(
-            elCreateNodes('div', {}, [
+            elCreateNodes('div', {"class": ["col-xl-6"]}, [
                 elCreateText('small', {}, tn('Country')),
                 elCreateText('p', {}, songObj.webradio.Country + smallSpace + nDash + smallSpace + songObj.webradio.Language)
             ])
         );
         if (songObj.webradio.Homepage !== '') {
             cardPlaybackWebradio.appendChild(
-                elCreateNodes('div', {}, [
+                elCreateNodes('div', {"class": ["col-xl-6"]}, [
                     elCreateText('small', {}, tn('Homepage')),
                     elCreateNode('p', {}, 
                         elCreateText('a', {"class": ["text-success", "external"],
                             "href": myEncodeURIhost(songObj.webradio.Homepage),
+                            "rel": "noreferrer",
                             "target": "_blank"}, songObj.webradio.Homepage)
                     )
                 ])
             );
         }
+        if (songObj.webradio.Codec !== '' &&
+            songObj.webradio.Codec !== undefined)
+        {
+            cardPlaybackWebradio.appendChild(
+                elCreateNodes('div', {"class": ["col-xl-6"]}, [
+                    elCreateText('small', {}, tn('Format')),
+                    elCreateText('p', {}, songObj.webradio.Codec + 
+                        (songObj.webradio.Bitrate !== '' ? ' / ' + songObj.webradio.Bitrate + ' ' + tn('kbit') : ''))
+                ])
+            );
+        }
         if (songObj.webradio.Description !== '') {
             cardPlaybackWebradio.appendChild(
-                elCreateNodes('div', {}, [
+                elCreateNodes('div', {"class": ["col-xl-6"]}, [
                     elCreateText('small', {}, tn('Description')),
                     elCreateText('p', {}, songObj.webradio.Description)
                 ])
@@ -513,7 +594,9 @@ function mediaSessionSetState() {
     if (checkMediaSessionSupport() === false) {
         return;
     }
-    navigator.mediaSession.playbackState = currentState.state === 'play' ? 'playing' : 'paused';
+    const state = currentState.state === 'play' ? 'playing' : 'paused';
+    logDebug('Set mediaSession.playbackState to ' + state);
+    navigator.mediaSession.playbackState = state;
 }
 
 function mediaSessionSetMetadata(title, artist, album, url) {
@@ -521,7 +604,7 @@ function mediaSessionSetMetadata(title, artist, album, url) {
         return;
     }
     const artwork = window.location.protocol + '//' + window.location.hostname +
-        (window.location.port !== '' ? ':' + window.location.port : '') + subdir + '/albumart/' + myEncodeURI(url);
+        (window.location.port !== '' ? ':' + window.location.port : '') + subdir + '/albumart-thumb?offset=0&uri=' + myEncodeURIComponent(url);
     navigator.mediaSession.metadata = new MediaMetadata({
         title: title,
         artist: artist,

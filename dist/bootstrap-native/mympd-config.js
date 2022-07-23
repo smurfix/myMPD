@@ -1,18 +1,20 @@
-import Alert from './components/alert-native.js';
-import Button from './components/button-native.js';
-import Carousel from './components/carousel-native.js';
-import Collapse from './components/collapse-native.js';
-import Dropdown from './components/dropdown-native.js';
-import Modal from './components/modal-native.js';
-import Offcanvas from './components/offcanvas-native.js';
-import Popover from './components/popover-native.js';
-import Tab from './components/tab-native.js';
-import Toast from './components/toast-native.js';
+import EventListener from '@thednp/event-listener';
 
-import { version as Version } from '../package.json';
-import { initCallback } from './util/mympd-init.js';
+import Alert from './components/alert-native';
+import Button from './components/button-native';
+import Carousel from './components/carousel-native';
+import Collapse from './components/collapse-native';
+import Dropdown from './components/dropdown-native';
+import Modal from './components/modal-native';
+import Offcanvas from './components/offcanvas-native';
+import Popover from './components/popover-native';
+import Tab from './components/tab-native';
+import Toast from './components/toast-native';
 
-export default {
+import Version from './version';
+import { initCallback, removeDataAPI } from './util/mympd-init.js';
+
+const BSN = {
   Alert,
   Button,
   Carousel,
@@ -23,6 +25,11 @@ export default {
   Popover,
   Tab,
   Toast,
+
   initCallback,
+  removeDataAPI,
   Version,
+  EventListener,
 };
+
+export default BSN;

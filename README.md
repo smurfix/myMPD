@@ -13,7 +13,7 @@ myMPD also integrates extended features like an advanced jukebox mode, timers, t
 
 ## Screenshots
 
-![image](https://jcorporation.github.io/assets/myMDPv6.8.3.gif)
+![image](https://jcorporation.github.io/myMPD/assets/myMDPv9.3.0.gif)
 
 ## Features
 
@@ -33,18 +33,19 @@ myMPD also integrates extended features like an advanced jukebox mode, timers, t
 - [Smart playlists and saved searches](https://jcorporation.github.io/myMPD/references/smart-playlists)
 - Playback statistics and song voting
 - [Albumart: embedded and image per folder](https://jcorporation.github.io/myMPD/references/pictures)
-- [Unsynchronized and synchronized Lyrics](https://jcorporation.github.io/myMPD/references/tags)
+- [Unsynchronized and synchronized Lyrics](https://jcorporation.github.io/myMPD/references/lyrics)
 - Local booklet support (per album folder)
 - HTTP stream support
 - [Local playback of mpd http stream](https://jcorporation.github.io/myMPD/references/local-playback)
 - Timers and Triggers
 - [Lua scripting](https://jcorporation.github.io/myMPD/scripting/)
-- Embedded Webserver (mongoose)
+- Embedded Webserver ([mongoose](https://github.com/cesanta/mongoose))
 - [Localized user interface](https://jcorporation.github.io/myMPD/references/translating)
 - Themeing
 - [Publishing of mpd and myMPD directories via http](https://jcorporation.github.io/myMPD/references/published-directories)
 - Progressiv Web App enabled
 - Support of Media Session API
+- ListenBrainz and MusicBrainz integration
 
 To use all myMPD functions you should use the latest stable MPD version.
 
@@ -73,9 +74,10 @@ myMPD should run on all current linux distributions. There are four ways to inst
 On the first startup myMPD reads some environments variables and tries to autodetect the MPD connection configuration.
 
 - [Configuration](https://jcorporation.github.io/myMPD/configuration/)
+- [Running](https://jcorporation.github.io/myMPD/running)
 
 ``
-Usage: ./mympd
+Usage: mympd -h
 ``
 
 ## Documentation

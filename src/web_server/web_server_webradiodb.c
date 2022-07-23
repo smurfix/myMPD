@@ -7,10 +7,10 @@
 #include "mympd_config_defs.h"
 #include "web_server_webradiodb.h"
 
+#include "../lib/filehandler.h"
 #include "../lib/jsonrpc.h"
 #include "../lib/log.h"
 #include "../lib/sds_extras.h"
-#include "../lib/utility.h"
 #include "web_server_proxy.h"
 #include "web_server_utility.h"
 
@@ -51,13 +51,13 @@ void webradiodb_api(struct mg_connection *nc, struct mg_connection *backend_nc,
         FREE_SDS(response);
     }
     else if (data != NULL) {
-        sds result = sdsempty();
-        result = jsonrpc_result_start(result, cmd, 0);
-        result = sdscat(result, "\"data\":");
-        result = sdscatsds(result, data);
-        result = jsonrpc_result_end(result);
-        webserver_send_data(nc, result, sdslen(result), "Content-Type: application/json\r\n");
-        sdsfree(result);
+        sds response = sdsempty();
+        response = jsonrpc_respond_start(response, cmd, 0);
+        response = sdscat(response, "\"data\":");
+        response = sdscatsds(response, data);
+        response = jsonrpc_respond_end(response);
+        webserver_send_data(nc, response, sdslen(response), "Content-Type: application/json\r\n");
+        FREE_SDS(response);
     }
     else {
         bool rc = webradiodb_send(nc, backend_nc, cmd_id, uri);
@@ -82,12 +82,8 @@ static sds webradiodb_cache_check(sds cachedir, const char *cache_file) {
         //cache it one day
         time_t expire_time = time(NULL) - (long)(24 * 60 * 60);
         if (status.st_mtime < expire_time) {
-            MYMPD_LOG_DEBUG("Cache outdated file \"%s\": %ld", filepath, status.st_mtime);
-            errno = 0;
-            if (unlink(filepath) != 0) {
-                MYMPD_LOG_ERROR("Error removing file \"%s\"", filepath);
-                MYMPD_LOG_ERRNO(errno);
-            }
+            MYMPD_LOG_DEBUG("Expiring cache file \"%s\": %lld", filepath, (long long)status.st_mtime);
+            rm_file(filepath);
         }
         else {
             FILE *fp = fopen(filepath, OPEN_FLAGS_READ);
@@ -97,31 +93,30 @@ static sds webradiodb_cache_check(sds cachedir, const char *cache_file) {
                 return NULL;
             }
             sds data = sdsempty();
-            sds_getfile(&data, fp, 1000000);
-            fclose(fp);
+            sds_getfile(&data, fp, WEBRADIODB_SIZE_MAX, true);
+            (void) fclose(fp);
             MYMPD_LOG_DEBUG("Found cached file \"%s\"", filepath);
-            sdsfree(filepath);
+            FREE_SDS(filepath);
             return data;
         }
     }
-    sdsfree(filepath);
+    FREE_SDS(filepath);
     return NULL;
 }
 
 static bool webradiodb_cache_write(sds cachedir, const char *cache_file, const char *data, size_t data_len) {
     sds filepath = sdscatfmt(sdsempty(), "%S/webradiodb/%s", cachedir, cache_file);
     bool rc = write_data_to_file(filepath, data, data_len);
-    sdsfree(filepath);
+    FREE_SDS(filepath);
     return rc;
 }
 
 static bool webradiodb_send(struct mg_connection *nc, struct mg_connection *backend_nc,
         enum mympd_cmd_ids cmd_id, const char *request)
 {
-    const char *host = WEBRADIODB_HOST;
-    sds uri = sdscatfmt(sdsempty(), "https://%s%s", host, request);
-    backend_nc = create_http_backend_connection(nc, backend_nc, uri, webradiodb_handler);
-    sdsfree(uri);
+    sds uri = sdscatfmt(sdsempty(), "https://%s%s", WEBRADIODB_HOST, request);
+    backend_nc = create_backend_connection(nc, backend_nc, uri, webradiodb_handler);
+    FREE_SDS(uri);
     if (backend_nc != NULL) {
         struct backend_nc_data_t *backend_nc_data = (struct backend_nc_data_t *)backend_nc->fn_data;
         backend_nc_data->cmd_id = cmd_id;
@@ -136,22 +131,7 @@ static void webradiodb_handler(struct mg_connection *nc, int ev, void *ev_data, 
     struct t_config *config = mg_user_data->config;
     switch(ev) {
         case MG_EV_CONNECT: {
-            MYMPD_LOG_INFO("Backend HTTP connection \"%lu\" connected", nc->id);
-            struct mg_str host = mg_url_host(backend_nc_data->uri);
-            struct mg_tls_opts tls_opts = {
-                .srvname = host
-            };
-            mg_tls_init(nc, &tls_opts);
-            mg_printf(nc, "GET %s HTTP/1.1\r\n"
-                "Host: %.*s\r\n"
-                "User-Agent: myMPD/%s\r\n"
-                "Connection: close\r\n"
-                "\r\n",
-                mg_url_uri(backend_nc_data->uri),
-                host.len, host.ptr,
-                MYMPD_VERSION
-            );
-            mg_user_data->connection_count++;
+            send_backend_request(nc, fn_data);
             break;
         }
         case MG_EV_ERROR:
@@ -159,39 +139,30 @@ static void webradiodb_handler(struct mg_connection *nc, int ev, void *ev_data, 
             break;
         case MG_EV_HTTP_MSG: {
             struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-            MYMPD_LOG_DEBUG("Got response from connection \"%lu\": %d bytes", nc->id, hm->body.len);
+            MYMPD_LOG_DEBUG("Got response from connection \"%lu\": %lu bytes", nc->id, (unsigned long)hm->body.len);
             const char *cmd = get_cmd_id_method_name(backend_nc_data->cmd_id);
-            sds result = sdsempty();
+            sds response = sdsempty();
             if (hm->body.len > 0) {
-                result = jsonrpc_result_start(result, cmd, 0);
-                result = sdscat(result, "\"data\":");
-                result = sdscatlen(result, hm->body.ptr, hm->body.len);
-                result = jsonrpc_result_end(result);
+                response = jsonrpc_respond_start(response, cmd, 0);
+                response = sdscat(response, "\"data\":");
+                response = sdscatlen(response, hm->body.ptr, hm->body.len);
+                response = jsonrpc_respond_end(response);
             }
             else {
-                result = jsonrpc_respond_message(result, cmd, 0, true,
+                response = jsonrpc_respond_message(response, cmd, 0, true,
                     "database", "error", "Empty response from webradiodb backend");
             }
-            webserver_send_data(backend_nc_data->frontend_nc, result, sdslen(result), "Content-Type: application/json\r\n");
-            sdsfree(result);
+            if (backend_nc_data->frontend_nc != NULL) {
+                webserver_send_data(backend_nc_data->frontend_nc, response, sdslen(response), "Content-Type: application/json\r\n");
+            }
+            FREE_SDS(response);
             if (backend_nc_data->cmd_id == MYMPD_API_CLOUD_WEBRADIODB_COMBINED_GET) {
                 webradiodb_cache_write(config->cachedir, "webradiodb-combined.min.json", hm->body.ptr, hm->body.len);
             }
             break;
         }
         case MG_EV_CLOSE: {
-            //print end of jsonrpc message
-            MYMPD_LOG_INFO("Backend HTTP connection \"%lu\" closed", nc->id);
-            mg_user_data->connection_count--;
-            if (backend_nc_data->frontend_nc != NULL) {
-                //remove backend connection pointer from frontend connection
-                backend_nc_data->frontend_nc->fn_data = NULL;
-                //close frontend connection
-                backend_nc_data->frontend_nc->is_draining = 1;
-                //free backend_nc_data
-                free_backend_nc_data(backend_nc_data);
-                free(fn_data);
-            }
+            handle_backend_close(nc, backend_nc_data);
             break;
         }
     }

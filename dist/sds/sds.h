@@ -1,4 +1,4 @@
-/* SDSLib 2.1 -- A C dynamic strings library
+/* SDSLib 2.2 -- A C dynamic strings library
  *
  * Copyright (c) 2006-2015, Salvatore Sanfilippo <antirez at gmail dot com>
  * Copyright (c) 2015, Oran Agra
@@ -32,6 +32,8 @@
 
 #ifndef __SDS_H
 #define __SDS_H
+
+#pragma GCC system_header
 
 #define SDS_MAX_PREALLOC (1024*1024)
 extern const char *SDS_NOINIT;
@@ -236,7 +238,7 @@ sds sdscatprintf(sds s, const char *fmt, ...);
 #endif
 
 sds sdscatfmt(sds s, char const *fmt, ...);
-sds sdstrim(sds s, const char *cset);
+void sdstrim(sds s, const char *cset);
 void sdssubstr(sds s, size_t start, size_t len);
 void sdsrange(sds s, ssize_t start, ssize_t end);
 void sdsupdatelen(sds s);
@@ -252,11 +254,13 @@ sds *sdssplitargs(const char *line, int *argc);
 sds sdsmapchars(sds s, const char *from, const char *to, size_t setlen);
 sds sdsjoin(char **argv, int argc, char *sep);
 sds sdsjoinsds(sds *argv, int argc, const char *sep, size_t seplen);
+int sdsneedsrepr(const sds s);
 
 /* Low level functions exposed to the user API */
 sds sdsMakeRoomFor(sds s, size_t addlen);
 void sdsIncrLen(sds s, ssize_t incr);
 sds sdsRemoveFreeSpace(sds s);
+sds sdsResize(sds s, size_t size);
 size_t sdsAllocSize(sds s);
 void *sdsAllocPtr(sds s);
 

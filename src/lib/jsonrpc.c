@@ -8,6 +8,7 @@
 #include "jsonrpc.h"
 
 #include "../../dist/mjson/mjson.h"
+#include "api.h"
 #include "log.h"
 #include "sds_extras.h"
 #include "utility.h"
@@ -19,37 +20,123 @@
 static bool _icb_json_get_tag(sds key, sds value, int vtype, validate_callback vcb, void *userdata, sds *error);
 static bool _json_get_string(sds s, const char *path, size_t min, size_t max, sds *result, validate_callback vcb, sds *error);
 static void _set_parse_error(sds *error, const char *fmt, ...);
+static const char *jsonrpc_facility_name(enum jsonrpc_facilities facility);
+static const char *jsonrpc_severity_name(enum jsonrpc_severities severity);
+static const char *jsonrpc_event_name(enum jsonrpc_events event);
+
+static const char *jsonrpc_severity_names[JSONRPC_SEVERITY_MAX] = {
+    [JSONRPC_SEVERITY_INFO] = "info",
+    [JSONRPC_SEVERITY_WARN] = "warn",
+    [JSONRPC_SEVERITY_ERROR] = "error"
+};
+
+static const char *jsonrpc_facility_names[JSONRPC_FACILITY_MAX] = {
+    [JSONRPC_FACILITY_DATABASE] = "database",
+    [JSONRPC_FACILITY_GENERAL] = "general",
+    [JSONRPC_FACILITY_HOME] = "home",
+    [JSONRPC_FACILITY_JUKEBOX] = "jukebox",
+    [JSONRPC_FACILITY_LYRICS] = "lyrics",
+    [JSONRPC_FACILITY_MPD] = "mpd",
+    [JSONRPC_FACILITY_PLAYLIST] = "playlist",
+    [JSONRPC_FACILITY_PLAYER] = "player",
+    [JSONRPC_FACILITY_QUEUE] = "queue",
+    [JSONRPC_FACILITY_SESSION] = "session",
+    [JSONRPC_FACILITY_SCRIPT] = "script",
+    [JSONRPC_FACILITY_STICKER] = "sticker",
+    [JSONRPC_FACILITY_TIMER] = "timer",
+    [JSONRPC_FACILITY_TRIGGER] = "trigger"
+};
+
+static const char *jsonrpc_event_names[JSONRPC_EVENT_MAX] = {
+    [JSONRPC_EVENT_MPD_CONNECTED] = "mpd_connected",
+    [JSONRPC_EVENT_MPD_DISCONNECTED] = "mpd_disconnected",
+    [JSONRPC_EVENT_NOTIFY] = "notify",
+    [JSONRPC_EVENT_UPDATE_ALBUM_CACHE] = "update_album_cache",
+    [JSONRPC_EVENT_UPDATE_DATABASE] = "update_database",
+    [JSONRPC_EVENT_UPDATE_FINISHED] = "update_finished",
+    [JSONRPC_EVENT_UPDATE_JUKEBOX] = "update_jukebox",
+    [JSONRPC_EVENT_UPDATE_LAST_PLAYED] = "update_last_played",
+    [JSONRPC_EVENT_UPDATE_OPTIONS] = "update_options",
+    [JSONRPC_EVENT_UPDATE_OUTPUTS] = "update_outputs",
+    [JSONRPC_EVENT_UPDATE_QUEUE] = "update_queue",
+    [JSONRPC_EVENT_UPDATE_STARTED] = "update_started",
+    [JSONRPC_EVENT_UPDATE_STATE] = "update_state",
+    [JSONRPC_EVENT_UPDATE_STORED_PLAYLIST] = "update_stored_playlist",
+    [JSONRPC_EVENT_UPDATE_VOLUME] = "update_volume",
+    [JSONRPC_EVENT_WELCOME] = "welcome"
+};
 
 //public functions
 
-void send_jsonrpc_notify(const char *facility, const char *severity, const char *message) {
+/**
+ * Creates and sends a jsonrpc notify to all connected websockets
+ * @param facility one of enum jsonrpc_facilities
+ * @param severity one of enum jsonrpc_severities
+ * @param message the message to send
+ */
+void send_jsonrpc_notify(enum jsonrpc_facilities facility, enum jsonrpc_severities severity, const char *message) {
     sds buffer = jsonrpc_notify(sdsempty(), facility, severity, message);
     ws_notify(buffer);
     FREE_SDS(buffer);
 }
 
-void send_jsonrpc_event(const char *event) {
+/**
+ * Creates and sends a jsonrpc event to all connected websockets
+ * @param event the event to send
+ */
+void send_jsonrpc_event(enum jsonrpc_events event) {
     sds buffer = jsonrpc_event(sdsempty(), event);
     ws_notify(buffer);
     FREE_SDS(buffer);
 }
 
-sds jsonrpc_event(sds buffer, const char *event) {
+/**
+ * Creates a simple jsonrpc notification with the event as method
+ * @param buffer pointer to alreay allocated sds string
+ * @param event the event to use
+ * @return pointer to buffer with jsonrpc string
+ */
+sds jsonrpc_event(sds buffer, enum jsonrpc_events event) {
+    const char *event_name = jsonrpc_event_name(event);
     sdsclear(buffer);
     buffer = sdscat(buffer, "{\"jsonrpc\":\"2.0\",");
-    buffer = tojson_char(buffer, "method", event, false);
+    buffer = tojson_char(buffer, "method", event_name, false);
     buffer = sdscatlen(buffer, "}", 1);
     return buffer;
 }
 
-sds jsonrpc_notify(sds buffer, const char *facility, const char *severity, const char *message) {
+/**
+ * Creates a jsonrpc notification with facility, severity and a message
+ * @param buffer pointer to alreay allocated sds string
+ * @param facility one of enum jsonrpc_facilities
+ * @param severity one of enum jsonrpc_severities
+ * @param message the message to send
+ * @return pointer to buffer with jsonrpc string
+ */
+sds jsonrpc_notify(sds buffer, enum jsonrpc_facilities facility, enum jsonrpc_severities severity, const char *message) {
     return jsonrpc_notify_phrase(buffer, facility, severity, message, 0);
 }
 
-sds jsonrpc_notify_phrase(sds buffer, const char *facility, const char *severity, const char *message, int count, ...) {
-    buffer = jsonrpc_notify_start(buffer, "notify");
-    buffer = tojson_char(buffer, "facility", facility, true);
-    buffer = tojson_char(buffer, "severity", severity, true);
+/**
+ * Creates a jsonrpc notification with facility, severity and a message phrase.
+ * A message phrase can include %{key} placeholders that are replaced on the client side
+ * with the value. Key/value pairs are variadic arguments.
+ * @param buffer pointer to alreay allocated sds string
+ * @param facility one of enum jsonrpc_facilities
+ * @param severity one of enum jsonrpc_severities
+ * @param message the message to send
+ * @param count number of following variadic arguments
+ * @param variadic key/value pairs for the phrase
+ * @return pointer to buffer with jsonrpc string
+ */
+sds jsonrpc_notify_phrase(sds buffer, enum jsonrpc_facilities facility, enum jsonrpc_severities severity,
+        const char *message, int count, ...)
+{
+    buffer = jsonrpc_notify_start(buffer, JSONRPC_EVENT_NOTIFY);
+    const char *facility_name = jsonrpc_facility_name(facility);
+    const char *severity_name = jsonrpc_severity_name(severity);
+    buffer = tojson_char(buffer, "facility", facility_name, true);
+    buffer = tojson_char(buffer, "severity", severity_name, true);
     buffer = tojson_char(buffer, "message", message, true);
     buffer = sdscat(buffer, "\"data\":{");
     va_list args;
@@ -57,13 +144,15 @@ sds jsonrpc_notify_phrase(sds buffer, const char *facility, const char *severity
     for (int i = 0; i < count; i++) {
         const char *v = va_arg(args, char *);
         if (i % 2 == 0) {
+            //key
             if (i > 0) {
-                buffer = sdscat(buffer, ",");
+                buffer = sdscatlen(buffer, ",", 1);
             }
             buffer = sds_catjson(buffer, v, strlen(v));
-            buffer = sdscat(buffer,":");
+            buffer = sdscatlen(buffer,":", 1);
         }
         else {
+            //value
             buffer = sds_catjson(buffer, v, strlen(v));
         }
     }
@@ -72,44 +161,100 @@ sds jsonrpc_notify_phrase(sds buffer, const char *facility, const char *severity
     return buffer;
 }
 
-sds jsonrpc_notify_start(sds buffer, const char *method) {
+/**
+ * Creates the start of a jsonrpc notification.
+ * @param buffer pointer to alreay allocated sds string
+ * @param event the event to use
+ * @return pointer to buffer with jsonrpc string
+ */
+sds jsonrpc_notify_start(sds buffer, enum jsonrpc_events event) {
+    const char *event_name = jsonrpc_event_name(event);
     sdsclear(buffer);
     buffer = sdscat(buffer, "{\"jsonrpc\":\"2.0\",");
-    buffer = tojson_char(buffer, "method", method, true);
+    buffer = tojson_char(buffer, "method", event_name, true);
     buffer = sdscat(buffer, "\"params\":{");
     return buffer;
 }
 
-sds jsonrpc_result_start(sds buffer, const char *method, long id) {
+/**
+ * Creates the start of a jsonrpc response.
+ * @param buffer pointer to alreay allocated sds string
+ * @param cmd_id enum mympd_cmd_ids
+ * @param id id of the jsonrpc request to answer
+ * @return pointer to buffer with jsonrpc string
+ */
+sds jsonrpc_respond_start(sds buffer, enum mympd_cmd_ids cmd_id, long id) {
+    const char *method = get_cmd_id_method_name(cmd_id);
     sdsclear(buffer);
     buffer = sdscatfmt(buffer, "{\"jsonrpc\":\"2.0\",\"id\":%l,\"result\":{", id);
     buffer = tojson_char(buffer, "method", method, true);
     return buffer;
 }
 
-sds jsonrpc_result_end(sds buffer) {
+/**
+ * Creates the end of a jsonrpc response
+ * @param buffer pointer to alreay allocated sds string
+ * @return pointer to buffer with jsonrpc string
+ */
+sds jsonrpc_respond_end(sds buffer) {
     return sdscatlen(buffer, "}}", 2);
 }
 
-sds jsonrpc_respond_ok(sds buffer, const char *method, long id, const char *facility) {
-    return jsonrpc_respond_message(buffer, method, id, false, facility, "info", "ok");
+/**
+ * Creates a simple jsonrpc response with "ok" as message
+ * @param buffer pointer to alreay allocated sds string
+ * @param cmd_id enum mympd_cmd_ids
+ * @param id id of the jsonrpc request to answer
+ * @param facility one of enum jsonrpc_facilities
+ * @return pointer to buffer with jsonrpc string
+ */
+sds jsonrpc_respond_ok(sds buffer, enum mympd_cmd_ids cmd_id, long id, enum jsonrpc_facilities facility) {
+    return jsonrpc_respond_message_phrase(buffer, cmd_id, id, facility, JSONRPC_SEVERITY_INFO, "ok", 0);
 }
 
-sds jsonrpc_respond_message(sds buffer, const char *method, long id, bool error,
-                            const char *facility, const char *severity, const char *message)
+/**
+ * Creates a simple jsonrpc response with a custom message
+ * @param buffer pointer to alreay allocated sds string
+ * @param cmd_id enum mympd_cmd_ids
+ * @param id id of the jsonrpc request to answer
+ * @param facility one of enum jsonrpc_facilities
+ * @param severity one of enum jsonrpc_severities
+ * @param message the response message
+ * @return pointer to buffer with jsonrpc string
+ */
+sds jsonrpc_respond_message(sds buffer, enum mympd_cmd_ids cmd_id, long id,
+        enum jsonrpc_facilities facility, enum jsonrpc_severities severity, const char *message)
 {
-    return jsonrpc_respond_message_phrase(buffer, method, id, error, facility, severity, message, 0);
+    return jsonrpc_respond_message_phrase(buffer, cmd_id, id, facility, severity, message, 0);
 }
 
-sds jsonrpc_respond_message_phrase(sds buffer, const char *method, long id, bool error,
-                            const char *facility, const char *severity, const char *message, int count, ...)
+/**
+ * Creates a jsonrpc response with facility, severity and a message phrase.
+ * A message phrase can include %{key} placeholders that are replaced on the client side
+ * with the value. Key/value pairs are variadic arguments.
+ * @param buffer pointer to alreay allocated sds string
+ * @param cmd_id enum mympd_cmd_ids
+ * @param id id of the jsonrpc request to answer
+ * @param facility one of enum jsonrpc_facilities
+ * @param severity one of enum jsonrpc_severities
+ * @param message the message to send
+ * @param count number of following variadic arguments
+ * @param variadic key/value pairs for the phrase
+ * @return pointer to buffer with jsonrpc string
+ */
+sds jsonrpc_respond_message_phrase(sds buffer, enum mympd_cmd_ids cmd_id, long id,
+        enum jsonrpc_facilities facility, enum jsonrpc_severities severity,
+        const char *message, int count, ...)
 {
+    const char *method = get_cmd_id_method_name(cmd_id);
+    const char *facility_name = jsonrpc_facility_name(facility);
+    const char *severity_name = jsonrpc_severity_name(severity);
     sdsclear(buffer);
     buffer = sdscatfmt(buffer, "{\"jsonrpc\":\"2.0\",\"id\":%l,\"%s\":{",
-        id, (error == true ? "error" : "result"));
+        id, (severity == JSONRPC_SEVERITY_INFO ? "result" : "error"));
     buffer = tojson_char(buffer, "method", method, true);
-    buffer = tojson_char(buffer, "facility", facility, true);
-    buffer = tojson_char(buffer, "severity", severity, true);
+    buffer = tojson_char(buffer, "facility", facility_name, true);
+    buffer = tojson_char(buffer, "severity", severity_name, true);
     buffer = tojson_char(buffer, "message", message, true);
     buffer = sdscat(buffer, "\"data\":{");
     va_list args;
@@ -271,18 +416,12 @@ bool json_get_int_max(sds s, const char *path, int *result, sds *error) {
 }
 
 bool json_get_int(sds s, const char *path, int min, int max, int *result, sds *error) {
-    double value;
-    if (mjson_get_number(s, (int)sdslen(s), path, &value) != 0) {
-        if (value >= min && value <= max) {
-            *result = (int)value;
-            return true;
-        }
-        _set_parse_error(error, "Number out of range for JSON path \"%s\"", path);
+    long result_long;
+    bool rc = json_get_long(s, path, min, max, &result_long, error);
+    if (rc == true) {
+        *result = (int)result_long;
     }
-    else {
-        _set_parse_error(error, "JSON path \"%s\" not found", path);
-    }
-    return false;
+    return rc;
 }
 
 bool json_get_long_max(sds s, const char *path, long *result, sds *error) {
@@ -386,7 +525,7 @@ bool json_iterate_object(sds s, const char *path, iterate_callback icb, void *ic
             return false;
         }
         if (klen > 2) {
-            if (sds_json_unescape(p + koff + 1, klen - 2, &key) == false ||
+            if (sds_json_unescape(p + koff + 1, (size_t)(klen - 2), &key) == false ||
                 vcb_isalnum(value) == false)
             {
                 _set_parse_error(error, "Validation of key in path \"%s\" has failed. Key must be alphanumeric.", path);
@@ -404,7 +543,7 @@ bool json_iterate_object(sds s, const char *path, iterate_callback icb, void *ic
         switch(vtype) {
             case MJSON_TOK_STRING:
                 if (vlen > 2) {
-                    if (sds_json_unescape(p + voff + 1, vlen - 2, &value) == false) {
+                    if (sds_json_unescape(p + voff + 1, (size_t)(vlen - 2), &value) == false) {
                         _set_parse_error(error, "JSON unescape error for value for key \"%s\" in JSON path \"%s\" has failed", key, path);
                         FREE_SDS(value);
                         FREE_SDS(key);
@@ -419,7 +558,7 @@ bool json_iterate_object(sds s, const char *path, iterate_callback icb, void *ic
                 FREE_SDS(key);
                 return false;
             default:
-                value = sdscatlen(value, p + voff, vlen);
+                value = sdscatlen(value, p + voff, (size_t)vlen);
                 break;
         }
 
@@ -488,7 +627,7 @@ bool json_find_key(sds s, const char *path) {
     return vtype == MJSON_TOK_INVALID ? false : true;
 }
 
-const char *get_mjson_toktype_name(unsigned vtype) {
+const char *get_mjson_toktype_name(int vtype) {
     switch(vtype) {
         case MJSON_TOK_INVALID: return "MJSON_TOK_INVALID";
         case MJSON_TOK_KEY:     return "MJSON_TOK_KEY";
@@ -504,6 +643,42 @@ const char *get_mjson_toktype_name(unsigned vtype) {
 }
 
 //private functions
+
+/**
+ * Returns the facility name
+ * @param facility enum jsonrpc_facilities
+ * @return name of the facility
+ */
+static const char *jsonrpc_facility_name(enum jsonrpc_facilities facility) {
+    if ((unsigned)facility >= JSONRPC_FACILITY_MAX) {
+        return "unknown";
+    }
+    return jsonrpc_facility_names[facility];
+}
+
+/**
+ * Returns the severity name
+ * @param severity enum jsonrpc_severities
+ * @return name of the severity
+ */
+static const char *jsonrpc_severity_name(enum jsonrpc_severities severity) {
+    if ((unsigned)severity >= JSONRPC_SEVERITY_MAX) {
+        return "unknown";
+    }
+    return jsonrpc_severity_names[severity];
+}
+
+/**
+ * Returns the event name
+ * @param event enum jsonrpc_events
+ * @return name of the event
+ */
+static const char *jsonrpc_event_name(enum jsonrpc_events event) {
+    if ((unsigned)event >= JSONRPC_EVENT_MAX) {
+        return "unknown";
+    }
+    return jsonrpc_event_names[event];
+}
 
 static bool _icb_json_get_tag(sds key, sds value, int vtype, validate_callback vcb, void *userdata, sds *error) {
     (void) vcb;
@@ -557,6 +732,7 @@ static bool _json_get_string(sds s, const char *path, size_t min, size_t max, sd
             return true;
         }
         _set_parse_error(error, "Value length for JSON path \"%s\" is too short", path);
+        FREE_SDS(*result);
         return false;
     }
 
@@ -564,23 +740,21 @@ static bool _json_get_string(sds s, const char *path, size_t min, size_t max, sd
     n = n - 2;
     p++;
 
-    if ((sds_json_unescape(p, n, result) == false) ||
+    if ((sds_json_unescape(p, (size_t)n, result) == false) ||
         (sdslen(*result) < min || sdslen(*result) > max))
     {
         _set_parse_error(error, "Value length %lu for JSON path \"%s\" is out of bounds", sdslen(*result), path);
-        sdsclear(*result);
+        FREE_SDS(*result);
         return false;
     }
 
     if (vcb != NULL) {
         if (vcb(*result) == false) {
             _set_parse_error(error, "Validation of value for JSON path \"%s\" has failed", path);
-            sdsclear(*result);
+            FREE_SDS(*result);
             return false;
         }
     }
 
     return true;
 }
-
-

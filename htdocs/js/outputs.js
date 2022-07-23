@@ -11,6 +11,10 @@ function initOutputs() {
         }, false);
     }
 
+    document.getElementById('volumeBar').addEventListener('change', function() {
+        sendAPI("MYMPD_API_PLAYER_VOLUME_SET", {"volume": Number(document.getElementById('volumeBar').value)});
+    }, false);
+
     document.getElementById('volumeMenu').parentNode.addEventListener('show.bs.dropdown', function () {
         sendAPI("MYMPD_API_PLAYER_OUTPUT_LIST", {
             "partition": ""
@@ -20,7 +24,7 @@ function initOutputs() {
     document.getElementById('outputs').addEventListener('click', function(event) {
         if (event.target.nodeName === 'A') {
             event.preventDefault();
-            document.getElementById('volumeMenu').Dropdown.toggle();
+            BSN.Dropdown.getInstance(document.getElementById('volumeMenu')).toggle();
             showListOutputAttributes(getData(event.target.parentNode, 'output-name'));
         }
         else {
@@ -41,13 +45,13 @@ function parseOutputs(obj) {
     elClear(outputList);
     if (obj.error) {
         outputList.appendChild(
-            elCreateEmpty('div', {"class": ["list-group-item", "alert", "alert-danger"]}, tn(obj.error.message))
+            elCreateText('div', {"class": ["list-group-item", "alert", "alert-danger"]}, tn(obj.error.message))
         );
         return;
     }
     if (obj.result.numOutputs === 0) {
         outputList.appendChild(
-            elCreateEmpty('div', {"class": ["list-group-item", "alert", "alert-secondary"]}, tn('Empty list'))
+            elCreateText('div', {"class": ["list-group-item", "alert", "alert-secondary"]}, tn('No outputs found'))
         );
         return;
     }
@@ -68,6 +72,15 @@ function parseOutputs(obj) {
             btn.classList.add('active');
         }
         outputList.appendChild(btn);
+    }
+    //prevent overflow of dropup
+    const outputsEl = document.getElementById('outputs');
+    const posY = getYpos(document.getElementById('outputsDropdown'));
+    if (posY < 0) {
+        outputsEl.style.maxHeight = (outputsEl.offsetHeight + posY) + 'px';
+    }
+    else {
+        outputsEl.style.maxHeight = 'none';
     }
 }
 

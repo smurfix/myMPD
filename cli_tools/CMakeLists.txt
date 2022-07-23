@@ -7,7 +7,6 @@
 project (cli_tools C)
 
 include_directories(${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
-configure_file(mympd_config_defs.h.in ${PROJECT_BINARY_DIR}/mympd_config_defs.h)
 
 #mympd-script utility
 if (LUA_FOUND)
@@ -16,14 +15,19 @@ if (LUA_FOUND)
     log.c
     ../dist/mongoose/mongoose.c
     ../dist/sds/sds.c
+    ../src/lib/filehandler.c
     ../src/lib/sds_extras.c
     ../src/lib/http_client.c
   )
 
   #compiler flags for mongoose
-  set_property(SOURCE ../dist/mongoose/mongoose.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral")
+  #-Wno-stringop-overflow: gcc 11.2.0 bug
+  #-Wno-stringop-overread: gcc 12.0.1 bug
+  set_property(SOURCE ../dist/mongoose/mongoose.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-stringop-overflow \
+    -Wno-stringop-overread -Wno-conversion")
   #compiler flags for sds
-  set_property(SOURCE ../dist/sds/sds.c PROPERTY COMPILE_FLAGS "-Wno-shadow -Wno-format-nonliteral")
+  #-Wno-stringop-overflow: gcc 11.2.0 bug
+  set_property(SOURCE ../dist/sds/sds.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-stringop-overflow -Wno-conversion")
 
   add_executable(mympd-script ${MYMPD_SCRIPT_SOURCES})
   target_link_libraries(mympd-script)

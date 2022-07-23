@@ -31,7 +31,7 @@ const APIparams = {
     },
     "expression": {
         "type": "text",
-        "example": "((any contains 'tabula'))",
+        "example": "((any contains 'piraten'))",
         "desc": "MPD search expression"
     },
     "searchstr": {
@@ -41,7 +41,7 @@ const APIparams = {
     },
     "uri": {
         "type": "text",
-        "example": "Testfiles/Sp.mp3",
+        "example": "Testfiles/Piratenlied.flac",
         "desc": "relativ song uri"
     },
     "filter": {
@@ -122,7 +122,7 @@ const APIparams = {
 };
 
 const APImethods = {
-    "MYMPD_API_DATABASE_SEARCH_ADV": {
+    "MYMPD_API_DATABASE_SEARCH": {
         "desc": "Searches for songs in the database.",
         "params": {
             "offset": APIparams.offset,
@@ -130,16 +130,6 @@ const APImethods = {
             "expression": APIparams.expression,
             "sort": APIparams.sort,
             "sortdesc": APIparams.sortdesc,
-            "cols": APIparams.cols
-        }
-    },
-    "MYMPD_API_DATABASE_SEARCH": {
-        "desc": "Searches for songs in the database (deprecated interface).",
-        "params": {
-            "offset": APIparams.offset,
-            "limit": APIparams.limit,
-            "filter": APIparams.filter,
-            "searchstr": APIparams.searchstr,
             "cols": APIparams.cols
         }
     },
@@ -202,7 +192,8 @@ const APImethods = {
                 "type": "text",
                 "example": "Genre",
                 "desc": "Tag to display"
-            }
+            },
+            "sortdesc": APIparams.sortdesc
         }
     },
     "MYMPD_API_DATABASE_TAG_ALBUM_TITLE_LIST": {
@@ -225,19 +216,19 @@ const APImethods = {
         "desc": "Shows MPD database statistics.",
         "params": {}
     },
-    "MYMPD_API_DATABASE_SONGDETAILS": {
+    "MYMPD_API_SONG_DETAILS": {
         "desc": "Shows all details of a song.",
         "params": {
             "uri": APIparams.uri
         }
     },
-    "MYMPD_API_DATABASE_COMMENTS": {
+    "MYMPD_API_SONG_COMMENTS": {
         "desc": "Shows comments of uri.",
         "params": {
             "uri": APIparams.uri
         }
     },
-    "MYMPD_API_DATABASE_FINGERPRINT": {
+    "MYMPD_API_SONG_FINGERPRINT": {
         "desc": "Calculates the chromaprint fingerprint",
         "params": {
             "uri": APIparams.uri
@@ -296,10 +287,21 @@ const APImethods = {
     "MYMPD_API_QUEUE_SEARCH": {
         "desc": "Searches the queue.",
         "params": {
-            "offset": APIparams.offset,
-            "limit": APIparams.limit,
             "filter": APIparams.filter,
             "searchstr": APIparams.searchstr,
+            "offset": APIparams.offset,
+            "limit": APIparams.limit,
+            "cols": APIparams.cols
+        }
+    },
+    "MYMPD_API_QUEUE_SEARCH_ADV": {
+        "desc": "Searches the queue.",
+        "params": {
+            "expression": APIparams.expression,
+            "sort": APIparams.sort,
+            "sortdesc": APIparams.sortdesc,
+            "offset": APIparams.offset,
+            "limit": APIparams.limit,
             "cols": APIparams.cols
         }
     },
@@ -421,7 +423,7 @@ const APImethods = {
             "songId": APIparams.songId
         }
     },
-    "MYMPD_API_QUEUE_LAST_PLAYED": {
+    "MYMPD_API_LAST_PLAYED_LIST": {
         "desc": "Lists the last played songs.",
         "params": {
             "offset": APIparams.offset,
@@ -796,7 +798,7 @@ const APImethods = {
             }
         }
     },
-    "MYMPD_API_URLHANDLERS": {
+    "MYMPD_API_MOUNT_URLHANDLER_LIST": {
         "desc": "Lists all known url handlers of MPD.",
         "params": {}
     },
@@ -838,7 +840,7 @@ const APImethods = {
             },
             "mpdTimeout": {
                 "type": "uint",
-                "example": 10000,
+                "example": 120000,
                 "desc": "MPD timeout in ms"
             }
         }
@@ -951,27 +953,37 @@ const APImethods = {
                     "clickSong": {
                         "type": "text",
                         "example": "append",
-                        "desc": "Action on click on song: append, replace, view"
+                        "desc": "Action for click on song: append, appendPlay, replace, replacePlay,insertAfterCurrent, view"
+                    },
+                    "clickRadiobrowser": {
+                        "type": "text",
+                        "example": "view",
+                        "desc": "Action for click on playlist: append, appendPlay, replace, replacePlay,insertAfterCurrent, add"
+                    },
+                    "clickRadioFavorites": {
+                        "type": "text",
+                        "example": "view",
+                        "desc": "Action for click on playlist: append, appendPlay, replace, replacePlay,insertAfterCurrent, edit"
                     },
                     "clickQueueSong": {
                         "type": "text",
                         "example": "play",
-                        "desc": "Action on click on song in queue: play, view"
+                        "desc": "Action for click on song in queue: play, view"
                     },
                     "clickPlaylist": {
                         "type": "text",
                         "example": "view",
-                        "desc": "Action on click on playlist: append, replace, view"
+                        "desc": "Action for click on playlist: append, appendPlay, replace, replacePlay,insertAfterCurrent, view"
                     },
-                    "clickFolder": {
+                    "clickFilesystemPlaylist": {
                         "type": "text",
                         "example": "view",
-                        "desc": "Action on click on folder: append, replace, view"
+                        "desc": "Action for click on playlist in filesystem view: append, appendPlay, replace, replacePlay,insertAfterCurrent, view"
                     },
-                    "clickAlbumPlay": {
+                    "clickQuickPlay": {
                         "type": "text",
                         "example": "replace",
-                        "desc": "Action on click on album: append, replace"
+                        "desc": "Action for click on quick play button: append, appendPlay, replace, replacePlay,insertAfterCurrent,"
                     },
                     "notificationPlayer": {
                         "type": "bool",
@@ -1083,15 +1095,10 @@ const APImethods = {
                         "example": "#28a745",
                         "desc": "Highlight color"
                     },
-                    "uiCoverimageSize": {
-                        "type": "int",
-                        "example": 250,
-                        "desc": "Size for coverimages"
-                    },
-                    "uiCoverimageSizeSmall": {
+                    "uiThumbnailSize": {
                         "type": "int",
                         "example": 175,
-                        "desc": "Size for small cover images"
+                        "desc": "Size for thumbnails"
                     },
                     "uiBgColor": {
                         "type": "text",
@@ -1116,7 +1123,7 @@ const APImethods = {
                     "uiLocale": {
                         "type": "text",
                         "example": "de-DE",
-                        "desc": "Language code or \"auto\" for browser default"
+                        "desc": "Language code or \"auto\" for browser default."
                     }
                 }
             }
@@ -1126,14 +1133,14 @@ const APImethods = {
         "desc": "Sets MPD and jukebox options.",
         "params":{
             "consume": {
-                "type": "uint",
-                "example": 1,
-                "desc": "MPD consume mode: 1=enabled, 0=disabled"
+                "type": "bool",
+                "example": true,
+                "desc": "MPD consume mode."
             },
             "random": {
-                "type": "uint",
-                "example": 0,
-                "desc": "MPD randome mode: 1=enabled, 0=disabled"
+                "type": "bool",
+                "example": false,
+                "desc": "MPD randome mode."
             },
             "single": {
                 "type": "text",
@@ -1141,9 +1148,9 @@ const APImethods = {
                 "desc": "MPD single mode: 0, 1, oneshot"
             },
             "repeat": {
-                "type": "uint",
-                "example": 1,
-                "desc": "MPD repeat mode: 1=enabled, 0=disabled"
+                "type": "bool",
+                "example": false,
+                "desc": "MPD repeat mode."
             },
             "replaygain": {
                 "type": "text",
@@ -1393,10 +1400,10 @@ const APImethods = {
         "desc": "Moves this output to current MPD partition",
         "protected": true,
         "params": {
-            "name": {
-                "tye": "text",
-                "example": "output1",
-                "desc": "output name"
+            "outputs": {
+                "type": "array",
+                "example": "[\"output1\", \"output2\"]",
+                "desc": "Outputs to move to current partition"
             }
         }
     },
@@ -1456,7 +1463,7 @@ const APImethods = {
             }
         }
     },
-    "MYMPD_API_HOME_LIST": {
+    "MYMPD_API_HOME_ICON_LIST": {
         "desc": "Lists all home icons",
         "params": {}
     },
@@ -1545,7 +1552,7 @@ const APImethods = {
         "params": {
             "type": {
                 "type": "text",
-                "example": "streams",
+                "example": "thumbs",
                 "desc": "Subfolder of pics directory."
             }
         }
@@ -1609,7 +1616,7 @@ const APImethods = {
         "params": {
             "loglevel": {
                 "type": "uint",
-                "example": 5,
+                "example": 7,
                 "desc": "https://jcorporation.github.io/myMPD/configuration/logging"
             }
         }
@@ -1633,9 +1640,14 @@ const APImethods = {
             "streamUri": {
                 "type": "string",
                 "example": "https://liveradio.swr.de/sw282p3/swr1bw/play.mp3",
-                "desc": "URI of the webradio stream."
+                "desc": "New URI of the webradio stream."
             },
-            "picture": {
+            "streamUriOld": {
+                "type": "string",
+                "example": "https://liveradio.swr.de/sw282p3/swr1bw/play.mp3",
+                "desc": "Old URI of the webradio stream."
+            },
+            "image": {
                 "type": "string",
                 "example": "http://www.swr.de/streampic.jpg",
                 "desc": "Picture for the webradio."
@@ -1650,12 +1662,31 @@ const APImethods = {
                 "example": "http://swr1.de",
                 "desc": "Webradio homepage"
             },
+            "country": {
+                "type": "string",
+                "example": "Germany",
+                "desc": "Country"
+            },
+            "language": {
+                "type": "string",
+                "example": "German",
+                "desc": "Language"
+            },
             "description": {
                 "type": "string",
                 "example": "Short description",
                 "desc": "Short description"
             },
-            "RADIOBROWSERUUID": APIparams.radiobrowserUUID
+            "codec": {
+                "type": "string",
+                "example": "MP3",
+                "desc": "Codec of the stream."
+            },
+            "bitrate": {
+                "type": "uint",
+                "example": 128,
+                "desc": "Bitrate of the stream in kbit."
+            }
         }
     },
     "MYMPD_API_WEBRADIO_FAVORITE_GET": {

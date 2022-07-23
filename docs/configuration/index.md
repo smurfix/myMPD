@@ -10,32 +10,37 @@ myMPD has no single configuration file. Most of the options are configureable th
 
 You can set some basic options with command line options. All these options have sane default values and should not be changed for default usage.
 
-The `workdir` option is useful if you want to run more then one instance of myMPD on the same host.
+The `workdir` and `cachedir` options are useful if you want to run more then one instance of myMPD on the same host.
 
 | OPTION | DESCRIPTION |
 | ------ | ----------- |
-| -c, --config | creates config and exits (default directory: `/var/lib/mympd/config/`) |
-| -h, --help | displays this help |
-| -v, --version | displays this help |
-| -u, --user `<username>`| username to drop privileges to (default: `mympd`) |
-| -s, --syslog | enable syslog logging (facility: daemon) |
-| -w, --workdir `<path>` | working directory (default: `/var/lib/mympd`) |
-| -a, --cachedir `<path>` | cache directory (default: `/var/cache/mympd`) |
-| -p, --pin | sets a pin for myMPD settings |
+| `-c`, `--config` | creates config and exits (default directory: `/var/lib/mympd/config/`) |
+| `-h`, `--help` | displays this help |
+| `-v`, `--version` | displays this help |
+| `-u`, `--user <username>`| username to drop privileges to (default: `mympd`) |
+| `-s`, `--syslog` | enable syslog logging (facility: daemon) |
+| `-w`, `--workdir <path>` | working directory (default: `/var/lib/mympd`) |
+| `-a`, `--cachedir <path>` | cache directory (default: `/var/cache/mympd`) |
+| `-p`, `--pin` | sets a pin for myMPD settings |
 {: .table .table-sm }
 
 - Setting a pin is only supported with compiled in ssl support
 
 ## Configuration files
 
-At first startup (if there is no ẁorking directory) myMPD tries to autodetect the MPD connection and reads some environment variables.
+At the first start (if there is no config folder in the working folder) myMPD tries to autodetect the MPD connection and reads some environment variables.
 
-After first startup all environment variables are ignored and the files in the directory `/var/lib/mympd/config/` should be edited.
+<div class="alert alert-warning">
+After the first start all environment variables are ignored, except loglevel.
+</div>
+
+To change these settings afterwards, you must edit the files in the folder `/var/lib/mympd/config/` and restart myMPD.
+
 
 | FILE | TYPE | ENVIRONMENT | DEFAULT | DESCRIPTION |
 | ---- | ---- | ----------- | ------- | ----------- |
 | acl | string | MYMPD_ACL | | ACL to access the myMPD webserver: [ACL]({{ site.baseurl }}/configuration/acl), allows all hosts in the default configuration |
-| http_host | string | MYMPD_HTTP_HOST | 0.0.0.0 | IP address to listen on |
+| http_host | string | MYMPD_HTTP_HOST | 0.0.0.0 | IP address to listen on, use [::] to listen on IPv6 |
 | http_port | number | MYMPD_HTTP_PORT | 80 | Port to listen on. Redirects to `ssl_port` if `ssl` is set to `true` |
 | loglevel | number | MYMPD_LOGLEVEL | 5 | [Logging]({{ site.baseurl }}/configuration/logging) - this environment variable is always used |
 | lualibs | string | MYMPD_LUALIBS | all | [Scripting]({{ site.baseurl }}/references/scripting) |
@@ -55,16 +60,20 @@ You can use `mympd -c` to create the initial configuration in the `/var/lib/mymp
 
 ### MPD autodetection
 
-myMPD tries to autodetect the mpd connection at first startup.
+myMPD tries to autodetect the mpd connection only at first start. Afterwards you should change the mpd connection settings through the web-ui.
 
-1. Searches for a valid `mpd.conf` file and reads all interesting settings
-2. Uses the default MPD environment variables
-3. Tries `/run/mpd/socket` and `/var/run/mpd/socket`
+1. Uses the default MPD environment variables
+2. Searches for a mpd socket
+  - `$XDG_RUNTIME_DIR/mpd/socket`
+  - `/run/mpd/socket`
+  - `/var/run/mpd/socket`
+  - `/var/lib/mpd/socket`
 
 | ENVIRONMENT | DEFAULT | DESCRIPTION |
 | ----------- | ------- | ----------- |
 | MPD_HOST | `/run/mpd/socket` | MPD host or path to mpd socket |
 | MPD_PORT | 6600 | MPD port |
+| MPD_TIMEOUT | 30 | MPD timeout |
 {: .table .table-sm}
 
 This is done after droping privileges to the mympd user.

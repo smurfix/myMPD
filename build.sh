@@ -62,6 +62,11 @@ then
   fi
 fi
 
+if [ -z "${ENABLE_IPV6+x}" ]
+then
+  export ENABLE_IPV6="ON"
+fi
+
 if [ -z "${EXTRA_CMAKE_OPTIONS+x}" ]
 then
   export EXTRA_CMAKE_OPTIONS=""
@@ -91,6 +96,7 @@ CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-easily-swappable-parameters"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-macro-parentheses"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-reserved-identifier,-cert-dcl37-c,-cert-dcl51-cpp"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-signal-handler,-cert-sig30-c"
+CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-integer-division"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-clang-diagnostic-invalid-command-line-argument"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-concurrency-mt-unsafe"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-cppcoreguidelines*"
@@ -99,10 +105,12 @@ CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-llvm-header-guard"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-llvm-include-order"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-llvmlibc-restrict-system-libc-headers"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-misc-misplaced-const"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-avoid-const-params-in-decls"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-function-cognitive-complexity,-google-readability-function-size,-readability-function-size"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-magic-numbers"
+CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-avoid-const-params-in-decls"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-non-const-parameter"
+CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-isolate-declaration"
+CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-identifier-length"
 
 #save startpath
 STARTPATH=$(pwd)
@@ -141,9 +149,8 @@ check_cmd_silent() {
 if [ "$ACTION" != "installdeps" ] && [ "$ACTION" != "" ]
 then
   check_cmd gzip perl
-
-  GZIP="gzip -n -f -v -9"
-  GZIPCAT="gzip -n -v -9 -c"
+  ZIP="gzip -n -f -v -9"
+  ZIPCAT="gzip -n -v -9 -c"
 fi
 
 setversion() {
@@ -268,10 +275,10 @@ createassets() {
   #shellcheck disable=SC2086
   #shellcheck disable=SC2002
   cat $JSFILES >> "$MYMPD_BUILDDIR/htdocs/js/combined.js"
-  $GZIP "$MYMPD_BUILDDIR/htdocs/js/combined.js"
+  $ZIP "$MYMPD_BUILDDIR/htdocs/js/combined.js"
 
   #serviceworker
-  $GZIPCAT "$MYMPD_BUILDDIR/htdocs/sw.min.js" > "$MYMPD_BUILDDIR/htdocs/sw.js.gz"
+  $ZIPCAT "$MYMPD_BUILDDIR/htdocs/sw.min.js" > "$MYMPD_BUILDDIR/htdocs/sw.js.gz"
 
   echo "Minifying stylesheets"
   for F in htdocs/css/*.css
@@ -286,17 +293,25 @@ createassets() {
   CSSFILES="dist/bootstrap/compiled/custom.css $MYMPD_BUILDDIR/htdocs/css/*.min.css"
   #shellcheck disable=SC2086
   cat $CSSFILES > "$MYMPD_BUILDDIR/htdocs/css/combined.css"
-  $GZIP "$MYMPD_BUILDDIR/htdocs/css/combined.css"
+  $ZIP "$MYMPD_BUILDDIR/htdocs/css/combined.css"
+
+  echo "Compressing fonts"
+  FONTFILES="dist/material-icons/MaterialIcons-Regular.woff2"
+  for FONT in $FONTFILES
+  do
+    DST=$(basename "${FONT}")
+    $ZIPCAT "$FONT" > "$MYMPD_BUILDDIR/htdocs/assets/${DST}.gz"
+  done
 
   echo "Minifying and compressing html"
   minify html htdocs/index.html "$MYMPD_BUILDDIR/htdocs/index.html"
-  $GZIPCAT "$MYMPD_BUILDDIR/htdocs/index.html" > "$MYMPD_BUILDDIR/htdocs/index.html.gz"
+  $ZIPCAT "$MYMPD_BUILDDIR/htdocs/index.html" > "$MYMPD_BUILDDIR/htdocs/index.html.gz"
 
   echo "Creating other compressed assets"
   ASSETS="htdocs/mympd.webmanifest htdocs/assets/*.svg"
   for ASSET in $ASSETS
   do
-    $GZIPCAT "$ASSET" > "$MYMPD_BUILDDIR/${ASSET}.gz"
+    $ZIPCAT "$ASSET" > "$MYMPD_BUILDDIR/${ASSET}.gz"
   done
   return 0
 }
@@ -319,7 +334,7 @@ buildrelease() {
   	-DENABLE_SSL="$ENABLE_SSL" -DENABLE_LIBID3TAG="$ENABLE_LIBID3TAG" \
   	-DENABLE_FLAC="$ENABLE_FLAC" -DENABLE_LUA="$ENABLE_LUA" \
     -DEMBEDDED_ASSETS="$EMBEDDED_ASSETS" -DENABLE_LIBASAN="$ENABLE_LIBASAN" \
-    $EXTRA_CMAKE_OPTIONS ..
+    -DENABLE_IPV6="$ENABLE_IPV6" $EXTRA_CMAKE_OPTIONS ..
   make
 }
 
@@ -390,21 +405,23 @@ builddebug() {
   cd debug || exit 1
   #shellcheck disable=SC2086
   cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_BUILD_TYPE=DEBUG \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   	-DENABLE_SSL="$ENABLE_SSL" -DENABLE_LIBID3TAG="$ENABLE_LIBID3TAG" \
     -DENABLE_FLAC="$ENABLE_FLAC" -DENABLE_LUA="$ENABLE_LUA" \
     -DEMBEDDED_ASSETS="$EMBEDDED_ASSETS" -DENABLE_LIBASAN="$ENABLE_LIBASAN" \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $EXTRA_CMAKE_OPTIONS ..
+    -DENABLE_IPV6="$ENABLE_IPV6" $EXTRA_CMAKE_OPTIONS ..
   make VERBOSE=1
   echo "Linking compilation database"
   sed -e 's/\\t/ /g' -e 's/-Wformat-truncation//g' -e 's/-Wformat-overflow=2//g' -e 's/-fsanitize=bounds-strict//g' \
-    -e 's/-static-libasan//g' compile_commands.json > ../src/compile_commands.json
+    -e 's/-static-libasan//g' -e 's/-Wno-stringop-overread//g' -e 's/-fstack-clash-protection//g' \
+    compile_commands.json > ../src/compile_commands.json
 }
 
 buildtest() {
   install -d test/build
   cd test/build || exit 1
   #shellcheck disable=SC2086
-  cmake $EXTRA_CMAKE_OPTIONS ..
+  cmake -DCMAKE_BUILD_TYPE=DEBUG $EXTRA_CMAKE_OPTIONS ..
   make VERBOSE=1
   ./test
 }
@@ -437,10 +454,15 @@ cleanuposc() {
 }
 
 check_docs() {
+  rc=0
   grep -v '//' src/lib/api.h | grep 'X(MYMPD' | cut -d\( -f2 | cut -d\) -f1 | \
   while IFS= read -r METHOD
   do
-    grep -q "$METHOD" htdocs/js/apidoc.js || echo_warn "API $METHOD not documented"
+    if ! grep -q "$METHOD" htdocs/js/apidoc.js
+    then
+      echo_warn "API $METHOD not documented"
+      rc=1
+    fi
   done
   O=$(md5sum htdocs/js/apidoc.js | awk '{print $1}')
   C=$(md5sum docs/assets/apidoc.js | awk '{print $1}')
@@ -448,15 +470,19 @@ check_docs() {
   then
   	echo_warn "apidoc.js in docs differs"
     cp htdocs/js/apidoc.js docs/assets/apidoc.js
+    rc=1
   fi
+  return "$rc"
 }
 
 check_includes() {
+  rc=0
   find src/ -name \*.c | while IFS= read -r FILE
   do
     if ! grep -m1 "#include" "$FILE" | grep -q "mympd_config_defs.h"
     then
       echo_warn "First include is not mympd_config_defs.h: $FILE"
+      rc=1
     fi
     SRCDIR=$(dirname "$FILE")
 
@@ -466,8 +492,10 @@ check_includes() {
       if ! realpath "$SRCDIR/$INCLUDE" > /dev/null 2>&1
       then
         echo_error "Wrong include path in $FILE for $INCLUDE"
+        rc=1
       fi
     done
+    return "$rc"
   done
 }
 
@@ -517,18 +545,27 @@ check() {
   then
     echo "Running cppcheck"
     [ -z "${CPPCHECKOPTS+z}" ] && CPPCHECKOPTS="-q --force --enable=warning"
-    #shellcheck disable=SC2086
-    cppcheck $CPPCHECKOPTS src/*.c src/*.h
-    #shellcheck disable=SC2086
-    cppcheck $CPPCHECKOPTS src/mpd_client/*.c src/mpd_client/*.h
-    #shellcheck disable=SC2086
-    cppcheck $CPPCHECKOPTS src/mympd_api/*.c src/mympd_api/*.h
-    #shellcheck disable=SC2086
-    cppcheck $CPPCHECKOPTS src/web_server/*.c src/web_server/*.h
-    #shellcheck disable=SC2086
-    cppcheck $CPPCHECKOPTS cli_tools/*.c
+    find ./src/ -name \*.c | while read -r FILE
+    do
+      [ "$FILE" = "./src/mympd_api/mympd_api_scripts_lualibs.c" ] && continue
+      [ "$FILE" = "./src/web_server/web_server_embedded_files.c" ] && continue
+      #shellcheck disable=SC2086
+      if ! cppcheck $CPPCHECKOPTS --error-exitcode=1 "$FILE"
+      then
+        return 1
+      fi
+    done
+    find ./src/ -name \*.h | while read -r FILE
+    do
+      #shellcheck disable=SC2086
+      if ! cppcheck $CPPCHECKOPTS --error-exitcode=1 "$FILE"
+      then
+        return 1
+      fi
+    done
   else
     echo_warn "cppcheck not found"
+    return 1
   fi
 
   if check_cmd flawfinder
@@ -536,18 +573,25 @@ check() {
     echo "Running flawfinder"
     [ -z "${FLAWFINDEROPTS+z}" ] && FLAWFINDEROPTS="-m3 --quiet --dataonly"
     #shellcheck disable=SC2086
-    flawfinder $FLAWFINDEROPTS src
+    if ! flawfinder $FLAWFINDEROPTS --error-level=3 src
+    then
+      return 1
+    fi
     #shellcheck disable=SC2086
-    flawfinder $FLAWFINDEROPTS cli_tools
+    if ! flawfinder $FLAWFINDEROPTS --error-level=3 cli_tools
+    then
+      return 1
+    fi
   else
     echo_warn "flawfinder not found"
+    return 1
   fi
 
   if [ ! -f src/compile_commands.json ]
   then
     echo "src/compile_commands.json not found"
     echo "run: ./build.sh debug"
-    exit 1
+    return 1
   fi
 
   if check_cmd clang-tidy
@@ -557,13 +601,27 @@ check() {
     cd src || exit 1
     find ./ -name '*.c' -exec clang-tidy \
     	--checks="$CLANG_TIDY_CHECKS" {} \; >> ../clang-tidy.out 2>/dev/null
-    grep -v -E "(/usr/include/|memset|memcpy|\^)" ../clang-tidy.out
+    ERRORS=$(grep -v -E "(/usr/include/|memset|memcpy|\^)" ../clang-tidy.out)
+    if [ -n "$ERRORS" ]
+    then
+      echo "$ERRORS"
+      return 1
+    fi
+    cd .. || return 1
   else
     echo_warn "clang-tidy not found"
+    return 1
   fi
-  cd .. || exit 1
-  check_docs
-  check_includes
+
+  if ! check_docs
+  then
+    return 1
+  fi
+  if ! check_includes
+  then
+    return 1
+  fi
+  return 0
 }
 
 prepare() {
@@ -702,7 +760,7 @@ pkgarch() {
   if [ -n "${SIGN+x}" ] && [ "$SIGN" = "TRUE" ]
   then
     KEYARG=""
-    [ -z "${GPGKEYID+x}" ] || KEYARG="--key $PGPGKEYID"
+    [ -z "${GPGKEYID+x}" ] || KEYARG="--key $GPGKEYID"
     #shellcheck disable=SC2086
     makepkg --sign $KEYARG mympd-*.pkg.tar.xz
   fi
@@ -771,30 +829,30 @@ installdeps() {
   echo "Platform: $(uname -m)"
   if [ -f /etc/debian_version ]
   then
-    #debian
+    #we install lua5.3 but lua 5.4 works also
     apt-get update
     apt-get install -y --no-install-recommends \
 	    gcc cmake perl libssl-dev libid3tag0-dev libflac-dev \
-	    build-essential liblua5.3-dev pkg-config libpcre2-dev jq
+	    build-essential liblua5.3-dev pkg-config libpcre2-dev jq gzip
   elif [ -f /etc/arch-release ]
   then
     #arch
-    pacman -S gcc cmake perl openssl libid3tag flac lua pkgconf pcre2 jq
+    pacman -S gcc cmake perl openssl libid3tag flac lua pkgconf pcre2 jq gzip
   elif [ -f /etc/alpine-release ]
   then
     #alpine
     apk add cmake perl openssl-dev libid3tag-dev flac-dev lua5.4-dev \
-    	alpine-sdk linux-headers pkgconf pcre2-dev jq
+    	alpine-sdk linux-headers pkgconf pcre2-dev jq gzip
   elif [ -f /etc/SuSE-release ]
   then
     #suse
     zypper install gcc cmake pkgconfig perl openssl-devel libid3tag-devel flac-devel \
-	    lua-devel unzip pcre2-devel jq
+	    lua-devel unzip pcre2-devel jq gzip
   elif [ -f /etc/redhat-release ]
   then
     #fedora
     yum install gcc cmake pkgconfig perl openssl-devel libid3tag-devel flac-devel \
-	    lua-devel unzip pcre2-devel jq
+	    lua-devel unzip pcre2-devel jq gzip
   else
     echo_warn "Unsupported distribution detected."
     echo "You should manually install:"
@@ -805,7 +863,7 @@ installdeps() {
     echo "  - openssl (devel)"
     echo "  - flac (devel)"
     echo "  - libid3tag (devel)"
-    echo "  - lua53 (devel)"
+    echo "  - liblua5.3 or liblua5.4 (devel)"
     echo "  - libpcre2 (devel)"
   fi
 }
@@ -868,13 +926,14 @@ updatebootstrapnative() {
 updatebootstrap() {
   check_cmd npm
   cd dist/bootstrap || exit 1
-  npm i
+  [ -z "${BOOTSTRAP_VERSION+x}" ] && BOOTSTRAP_VERSION=""
+  npm install "$BOOTSTRAP_VERSION"
   npm run build
   sed -i '$ d' compiled/custom.css
   rm compiled/custom.css.map
   if [ -d ../../debug ]
   then
-  	cp compiled/custom.css ../../htdocs/css/bootstrap.css
+  	cp -v compiled/custom.css ../../htdocs/css/bootstrap.css
   fi
 }
 
@@ -958,7 +1017,11 @@ createi18n() {
   PRETTY=$2
   cd src/i18n || exit 1
   echo "Creating i18n json"
-  perl ./tojson.pl "$PRETTY" > "$DST"
+  if ! perl ./tojson.pl "$PRETTY" > "$DST"
+  then
+    echo "Error creating translation files"
+    exit 1
+  fi
   cd ../.. || exit 1
 }
 
@@ -1017,9 +1080,7 @@ materialicons() {
   done
   echo "};"  >> "ligatures.js"
   cp ligatures.js "$STARTPATH/htdocs/js/"
-  cp MaterialIcons-Regular.woff2 "$STARTPATH/htdocs/assets/"
   cp MaterialIcons-Regular.woff2 "$STARTPATH/dist/material-icons/"
-  $GZIPCAT "$STARTPATH/dist/material-icons/MaterialIcons-Regular.woff2" > "$STARTPATH/dist/material-icons/MaterialIcons-Regular.woff2.gz"
   cd "$STARTPATH"
   rm -fr "$TMPDIR"
 }
@@ -1032,11 +1093,12 @@ sbuild_chroots() {
   	exit 1
   fi
   [ -z "${WORKDIR+x}" ] && WORKDIR="$STARTPATH/builder"
-  [ -z "${DISTROS+x}" ] && DISTROS="buster stretch"
+  [ -z "${DISTROS+x}" ] && DISTROS="bullseye buster"
   [ -z "${TARGETS+x}" ] && TARGETS="armhf armel"
   [ -z "${DEBIAN_MIRROR+x}" ] && DEBIAN_MIRROR="http://ftp.de.debian.org/debian"
+  [ -z "${DEBOOTSTRAP+x}" ] && DEBOOTSTRAP="debootstrap"
 
-  check_cmd sbuild qemu-debootstrap
+  check_cmd sbuild "$DEBOOTSTRAP"
 
   mkdir -p "${WORKDIR}/chroot"
   mkdir -p "${WORKDIR}/cache"
@@ -1052,7 +1114,7 @@ sbuild_chroots() {
         echo "chroot ${CHROOT} already exists... skipping."
         continue
       fi
-      qemu-debootstrap --arch="${ARCH}" --variant=buildd --cache-dir="${WORKDIR}/cache" \
+      $DEBOOTSTRAP --arch="${ARCH}" --variant=buildd --cache-dir="${WORKDIR}/cache" \
         --include=fakeroot,build-essential "${DIST}" "${WORKDIR}/chroot/${CHROOT}/" "${DEBIAN_MIRROR}"
 
       grep "${CHROOT}" /etc/schroot/schroot.conf || cat << EOF >> /etc/schroot/schroot.conf
@@ -1074,10 +1136,10 @@ sbuild_build() {
   	exit 1
   fi
   [ -z "${WORKDIR+x}" ] && WORKDIR="$STARTPATH/builder"
-  [ -z "${DISTROS+x}" ] && DISTROS="buster stretch"
+  [ -z "${DISTROS+x}" ] && DISTROS="bullseye buster"
   [ -z "${TARGETS+x}" ] && TARGETS="armhf armel"
 
-  check_cmd sbuild qemu-debootstrap
+  check_cmd sbuild
 
   prepare
   cp -a contrib/packaging/debian .
@@ -1111,18 +1173,28 @@ sbuild_cleanup() {
 }
 
 run_eslint() {
-  check_cmd eslint
+  if ! check_cmd npx
+  then
+    return 1
+  fi
   createassets
+  rc=0
   echo ""
   for F in htdocs/sw.js release/htdocs/js/mympd.js
   do
     echo "Linting $F"
-    eslint $F
+    if ! npx eslint $F
+    then
+      rc=1
+    fi
   done
   for F in release/htdocs/sw.min.js release/htdocs/js/mympd.min.js release/htdocs/js/i18n.min.js
   do
     echo "Linting $F"
-    eslint -c .eslintrc-min.json $F
+    if ! npx eslint -c .eslintrc-min.json $F
+    then
+      rc=1
+    fi
   done
   echo "Check for forbidden js functions"
   FORBIDDEN_CMDS="innerHTML outerHTML insertAdjacentHTML innerText"
@@ -1131,23 +1203,56 @@ run_eslint() {
   	if grep -q "$F" release/htdocs/js/mympd.min.js
   	then
   		echo_error "Found $F usage"
+      rc=1
   	fi
   done
+  return "$rc"
 }
 
 run_stylelint() {
-  check_cmd npx
+  if ! check_cmd npx
+  then
+    return 1
+  fi
+  rc=0
   for F in mympd.css theme-light.css
   do
     echo "Linting $F"
-    npx stylelint "htdocs/css/$F"
+    if ! npx stylelint "htdocs/css/$F"
+    then
+      rc=1
+    fi
   done
+  return "$rc"
 }
 
 run_htmlhint() {
-  check_cmd htmlhint
+  if ! check_cmd npx
+  then
+    return 1
+  fi
   echo "Linting htdocs/index.html"
-  htmlhint htdocs/index.html
+  if ! npx htmlhint htdocs/index.html
+  then
+    return 1
+  fi
+  return 0
+}
+
+luascript_index() {
+  rm -f "docs/scripting/scripts/index.json"
+  exec 3<> "docs/scripting/scripts/index.json"
+  printf "{\"scripts\":[" >&3
+  I=0
+  for F in docs/scripting/scripts/*.lua
+  do
+    [ "$I" -gt 0 ] &&  printf "," >&3
+    SCRIPTNAME=$(basename "$F")
+    printf "\"%s\"" "$SCRIPTNAME" >&3
+    I=$((I+1))
+  done
+  printf "]}\n" >&3
+  exec 3>&-
 }
 
 case "$ACTION" in
@@ -1179,7 +1284,10 @@ case "$ACTION" in
 	  cleanuposc
 	;;
 	check)
-	  check
+	  if ! check
+    then
+      exit 1
+    fi
 	;;
   check_file)
     if [ -z "${2+x}" ]
@@ -1259,10 +1367,25 @@ case "$ACTION" in
 	;;
 	sbuild_cleanup)
 	  sbuild_cleanup
-	  exit 0
 	;;
+  lint)
+    if ! run_htmlhint
+    then
+      exit 1
+    fi
+    pwd
+    if ! run_eslint
+    then
+      exit 1
+    fi
+    pwd
+    if ! run_stylelint
+    then
+      exit 1
+    fi
+  ;;
 	eslint)
-	  run_eslint
+    run_eslint
 	;;
 	stylelint)
 	  run_stylelint
@@ -1270,6 +1393,9 @@ case "$ACTION" in
 	htmlhint)
 	  run_htmlhint
 	;;
+  luascript_index)
+    luascript_index
+  ;;
 	*)
     echo "Usage: $0 <option>"
     echo "Version: ${VERSION}"
@@ -1302,6 +1428,7 @@ case "$ACTION" in
     echo "  check_file:       same as check, but for one file, second arg must be the file"
     echo "  check_docs        checks the documentation for missing API methods"
     echo "  check_includes:   checks for valid include paths"
+    echo "  lint:             runs eslint, stylelint and htmlhint"
     echo "  eslint:           combines javascript files and runs eslint"
     echo "  stylelint:        runs stylelint (lints css files)"
     echo "  htmlhint:         runs htmlhint (lints html files)"
@@ -1344,6 +1471,7 @@ case "$ACTION" in
     echo "                      - DISTROS=\"buster stretch\""
     echo "                      - TARGETS=\"armhf armel\""
     echo "                      - DEBIAN_MIRROR=\"http://ftp.de.debian.org/debian\""
+    echo "                      - DEBOOTSTRAP=\"debootstrap"
     echo "  sbuild_build:     builds the packages for targets and distros"
     echo "                    must be run as root"
     echo "                    following environment variables are respected"
@@ -1357,6 +1485,7 @@ case "$ACTION" in
     echo ""
     echo "Misc options:"
     echo "  addmympduser:     adds mympd group and user"
+    echo "  luascript_index:  creates the json index of lua scripts"
     echo ""
     echo "Source update options:"
     echo "  bootstrap:        updates bootstrap"
@@ -1365,16 +1494,17 @@ case "$ACTION" in
     echo "  materialicons:    updates the materialicons json"
     echo "  setversion:       sets version and date in packaging files from CMakeLists.txt"
     echo ""
-    echo "Environment variables for building"
-    echo "  - MYMPD_INSTALL_PREFIX=\"/usr\""
-    echo "  - ENABLE_SSL=\"ON\""
-    echo "  - ENABLE_LIBID3TAG=\"ON\""
-    echo "  - ENABLE_FLAC=\"ON\""
-    echo "  - ENABLE_LUA=\"ON\""
+    echo "Environment variables (with defaults) for building"
     echo "  - EMBEDDED_ASSETS=\"ON\""
-    echo "  - MANPAGES=\"ON\""
+    echo "  - ENABLE_FLAC=\"ON\""
+    echo "  - ENABLE_IPV6=\"ON\""
     echo "  - ENABLE_LIBASAN=\"OFF\""
+    echo "  - ENABLE_LIBID3TAG=\"ON\""
+    echo "  - ENABLE_LUA=\"ON\""
+    echo "  - ENABLE_SSL=\"ON\""
     echo "  - EXTRA_CMAKE_OPTIONS=\"\""
+    echo "  - MANPAGES=\"ON\""
+    echo "  - MYMPD_INSTALL_PREFIX=\"/usr\""
     echo ""
     exit 1
 	;;

@@ -9,6 +9,7 @@
 
 #include "../dist/rax/rax.h"
 #include "../dist/sds/sds.h"
+#include "mympd_configuration.h"
 #include "list.h"
 
 #include <mpd/client.h>
@@ -27,6 +28,7 @@ enum trigger_events {
     TRIGGER_MYMPD_STOP = -3,
     TRIGGER_MYMPD_CONNECTED = -4,
     TRIGGER_MYMPD_DISCONNECTED = -5,
+    TRIGGER_MYMPD_FEEDBACK = -6,
     TRIGGER_MPD_DATABASE = 0x1,
     TRIGGER_MPD_STORED_PLAYLIST = 0x2,
     TRIGGER_MPD_PLAYLIST = 0x4,
@@ -57,13 +59,13 @@ enum mpd_conn_states {
 struct t_sticker {
     long playCount;
     long skipCount;
-    long lastPlayed;
-    long lastSkipped;
+    time_t lastPlayed;
+    time_t lastSkipped;
     long like;
 };
 
 struct t_tags {
-    int len;
+    size_t len;
     enum mpd_tag_type tags[64];
 };
 
@@ -78,7 +80,7 @@ struct t_mpd_state {
     //connection configuration
     enum mpd_state state;
     sds mpd_host;
-    int mpd_port;
+    unsigned mpd_port;
     sds mpd_pass;
     unsigned mpd_binarylimit;
     //connection states
@@ -103,18 +105,16 @@ struct t_mpd_state {
     sds tag_list;
     struct t_tags tag_types_mympd;
     struct t_tags tag_types_mpd;
-    unsigned tag_albumartist;
+    enum mpd_tag_type tag_albumartist;
     //Feats
     const unsigned* protocol;
     bool feat_mpd_library;
     bool feat_mpd_tags;
-    bool feat_mpd_advsearch;
     bool feat_mpd_stickers;
     bool feat_mpd_playlists;
     bool feat_mpd_fingerprint;
     bool feat_mpd_albumart;
     bool feat_mpd_readpicture;
-    bool feat_mpd_single_oneshot;
     bool feat_mpd_mount;
     bool feat_mpd_neighbor;
     bool feat_mpd_partitions;
@@ -122,6 +122,7 @@ struct t_mpd_state {
     bool feat_mpd_smartpls;
     bool feat_mpd_playlist_rm_range;
     bool feat_mpd_whence;
+    bool feat_mpd_advqueue;
 };
 
 struct t_timer_definition {
@@ -138,13 +139,12 @@ struct t_timer_definition {
     struct t_list arguments;
 };
 
-typedef void (*time_handler)(struct t_timer_definition *definition, void *user_data);
+typedef void (*timer_handler)(int timer_id, struct t_timer_definition *definition);
 
 struct t_timer_node {
     int fd;
-    time_handler callback;
+    timer_handler callback;
     struct t_timer_definition *definition;
-    void *user_data;
     time_t timeout;
     int interval;
     int timer_id;
@@ -158,6 +158,18 @@ struct t_timer_list {
     struct t_timer_node *list;
 };
 
+struct t_cache {
+    bool building;
+    rax *cache;
+};
+
+struct t_lyrics {
+    sds uslt_ext;
+    sds sylt_ext;
+    sds vorbis_uslt;
+    sds vorbis_sylt;
+};
+
 struct t_mympd_state {
     //static config
     struct t_config *config;
@@ -166,16 +178,14 @@ struct t_mympd_state {
     //lists
     struct t_timer_list timer_list;
     struct t_list home_list;
-    struct t_list triggers;
+    struct t_list trigger_list;
     struct t_list last_played;
     struct t_list jukebox_queue;
     struct t_list jukebox_queue_tmp;
     //caches
-    rax *sticker_cache;
+    struct t_cache album_cache;
+    struct t_cache sticker_cache;
     struct t_list sticker_queue;
-    bool sticker_cache_building;
-    rax *album_cache;
-    bool album_cache_building;
     //states - configurable with webui
     sds tag_list_search;
     sds tag_list_browse;
@@ -206,23 +216,31 @@ struct t_mympd_state {
     sds cols_browse_radio_webradiodb;
     sds cols_browse_radio_radiobrowser;
     bool localplayer;
-    int mpd_stream_port;
+    unsigned mpd_stream_port;
     sds music_directory;
     sds music_directory_value;
     sds playlist_directory;
     sds booklet_name;
     sds navbar_icons;
     sds coverimage_names;
+    sds thumbnail_names;
     unsigned volume_min;
     unsigned volume_max;
     unsigned volume_step;
-    sds lyrics_uslt_ext;
-    sds lyrics_sylt_ext;
-    sds lyrics_vorbis_uslt;
-    sds lyrics_vorbis_sylt;
+    struct t_lyrics lyrics;
     int covercache_keep_days;
+    sds listenbrainz_token;
     //settings only for webui
     sds webui_settings;
 };
+
+void mympd_state_default(struct t_mympd_state *mympd_state);
+void *mympd_state_free(struct t_mympd_state *mympd_state);
+
+void mympd_state_default_mpd_state(struct t_mpd_state *mpd_state);
+void *mympd_state_free_mpd_state(struct t_mpd_state *mpd_state);
+
+void copy_tag_types(struct t_tags *src_tag_list, struct t_tags *dst_tag_list);
+void reset_t_tags(struct t_tags *tags);
 
 #endif

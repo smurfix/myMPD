@@ -11,9 +11,17 @@
 
 tinymt32_t tinymt;
 
-//generates random number in range (inclusive lower and upper bounds)
+/**
+ * Generates random number in range (inclusive lower and upper bounds)
+ * This functions uses Mersenne Twister to generate random numbers
+ * @param lower lower boundary
+ * @param upper upper boundary
+ * @return random number
+ */
 long randrange(long lower, long upper) {
+    uint32_t lower_u = (uint32_t)lower;
+    uint32_t upper_u = (uint32_t)upper;
     uint32_t r = tinymt32_generate_uint32(&tinymt);
-    unsigned rand = lower + r / (UINT32_MAX / (upper - lower + 1) + 1);
-    return rand;
+    uint32_t rand = lower_u + r / (UINT32_MAX / (upper_u - lower_u + 1) + 1);
+    return (long)rand;
 }
