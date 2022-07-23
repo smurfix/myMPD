@@ -36,14 +36,8 @@ About
 Local playback
 Lokale Wiedergabe
 
-Connecting to stream...
-Verbinde...
-
 Error loading stream
 Fehler beim Laden des Streams
-
-JavaScript is disabled
-JavaScript ist deaktiviert
 
 Apply
 Anwenden
@@ -80,6 +74,12 @@ Alle Tags
 
 Filename
 Dateiname
+
+Filenames
+Dateinamen
+
+Thumbnail names
+Thumbnail Namen
 
 Filetype
 Dateityp
@@ -390,9 +390,6 @@ Highlight Farbe
 CSS filter
 CSS Filter
 
-Invalid CSS filter
-Ungültiger CSS Filter
-
 Locale
 Sprache
 
@@ -599,6 +596,9 @@ Wiedergabelisten anzeigen
 
 Show browse filesystem
 Dateisystem anzeigen
+
+Show browse webradio
+Webradios anzeigen
 
 Show search
 Suche anzeigen
@@ -840,11 +840,8 @@ Absteigend
 Sort by
 Sortieren
 
-Size normal
-Normale Größe
-
-Size small
-Kleine Größe
+Thumbnail size
+Thumbnail Größe
 
 Dark
 Dunkel
@@ -966,8 +963,11 @@ Mischen
 Playlist is too small to shuffle
 Wiedergabeliste ist zu klein um sie zu mischen
 
-Playlist is too small to sort
-Wiedergabeliste ist zu klein um sie zu sortieren
+Shuffling playlist failed
+Fehler beim Mischen der Wiedergabeliste
+
+Sorting playlist failed
+Fehler beim Sortieren der Wiedergabeliste
 
 Shuffle playlist
 Wiedergabeliste mischen
@@ -1324,7 +1324,7 @@ Picture
 Bild
 
 Homescreen welcome
-Du hast noch keine Icons hinzugefügt. Du kannst einzelne Ansichten, Wiedergabelisten und Skripte hinzufügen.
+Du hast noch keine Homeicons hinzugefügt. Homeicons können über das Kontextmenü und folgende Icons hinzugefügt werden:
 
 Can not open directory pics
 Konnte Verzeichnis pics nicht öffnen
@@ -1396,7 +1396,7 @@ Invalid volume level
 Ungültige Lautstärke
 
 MaintainEnableTagsText
-Folgende Tags sollten gepflegt und aktiviert sein: Artist, AlbumArtist, Album, Track, Disc and Genre
+Folgende Tags sollten gepflegt und aktiviert sein: AlbumArtist, Album, Artist, Disc, Genre, Name, Title, Track
 
 Failed to set like, unknown error
 Like konnte nicht gesetzt werden - unbekannter Fehler
@@ -1417,7 +1417,7 @@ Failed to set song priority
 Priorität des Liedes konnte nicht gesetzt werden
 
 Lookup at musicbrainz
-Bei Musicbraonz nachschlagen
+Bei Musicbrainz nachschlagen
 
 Play after current playing song
 Nach aktuellem Lied abspielen
@@ -1455,6 +1455,9 @@ Klick auf Verzeichnis
 Click playlist
 Klick auf Wiedergabeliste
 
+Click filesystem playlist
+Klick auf Wiedergabeliste im Dateisystem
+
 Click song in queue
 Klick auf Lied in Warteschlange
 
@@ -1466,15 +1469,6 @@ Abspielen
 
 Homescreen
 Startbildschirm
-
-Homescreen help view
-Gehe zur Ansicht und klicke auf:
-
-Homescreen help playlist
-Öffne das Contextmenü einer Wiedergabeliste und wähle "Zum Startbildschirm hinzufügen"
-
-Homescreen help script
-Öffne die Skriptverwaltung und klicke auf:
 
 Help to improve myMPD
 Hilf mit myMPD zu verbessern
@@ -1511,6 +1505,9 @@ Willst du wirklich die Wiedergabeliste "%{playlist}" löschen?
 
 Do you really want to delete the script?
 Willst du wirklich das Skript "%{script}" löschen?
+
+Do you really want to delete the partition?
+Willst du wirklich die Partition "%{partition}" löschen?
 
 Yes, delete it
 Ja, löschen
@@ -1722,7 +1719,7 @@ Partitionen verwalten
 Jukebox is disabled
 Jukebox ist deaktiviert
 
-Database update already startet
+Database update already started
 Datenbankaktualisierung läuft bereits
 
 Error getting MPD status
@@ -1755,7 +1752,7 @@ Authentifizierung erforderlich
 Enter
 Abschicken
 
-Enter Pin
+Enter pin
 Pin eingeben
 
 Invalid pin
@@ -1779,9 +1776,6 @@ Session wurde gelöscht
 Session successfully created
 Session wurde erfolgreich erstellt
 
-Enter pin
-Pin eingeben
-
 Invalid script content
 Ungültige Zeichen im Skript
 
@@ -1792,7 +1786,7 @@ Error in cropping covercache
 Fehler beim Abschneides des Covercaches
 
 Saved smart playlist
-Intelligente Wiedergabeliste wurde gespichert
+Intelligente Wiedergabeliste wurde gespeichert
 
 Too many timers defined
 Zu viele Timer definiert
@@ -1837,7 +1831,7 @@ AudioFormat
 Audioformat
 
 Not playing
-gestoppt
+Wiedergabe nicht gestartet
 
 Choose a playlist or enter a new playlist name
 Wiedergabeliste wählen oder neuen Namen eingeben
@@ -1863,7 +1857,7 @@ Größe ändern
 Show all albums from artist
 Zeige alle Alben des Interpreten an
 
-Show directory
+Open directory
 Zeige Verzeichnis an
 
 Each 
@@ -1892,9 +1886,6 @@ Neu hinzugefügte Lieder konnten nicht wiedergegeben werden
 
 Current search
 Aktuelle Suche
-
-Home icon
-Homeicon
 
 Replaced the queue
 Warteschlange wurde ersetzt
@@ -1948,7 +1939,7 @@ Covercache
 6 - Info
 
 7 - Debug
-7 -  Debug
+7 - Debug
 
 Temporary setting
 Temporäre Einstellung
@@ -1982,3 +1973,348 @@ Wiedergabe nach aktuellem Lied beenden
 
 Disable single mode
 Beende "Nur ein Lied" Modus
+
+Homeicon
+Home Icon
+
+Show
+Anzeigen
+
+Can't set playback options
+Wiedergabeeinstellungen konnten nicht gespeichert werden
+
+Can't set playback options: MPD not connected
+Wiedergabeeinstellungen konnten nicht gespeichert werden: keine Verbidnung zum MPD Server
+
+Addings songs from jukebox to queue failed
+Es konnten keine Lieder von der Jukebox zur Warteschlange hinzugefügt werden
+
+Filling jukebox queue
+Jukebox Warteschlange wird aufgefüllt
+
+Clear jukebox queue
+Leere Jukebox Warteschlange
+
+Mixramp delay
+Mixramp Verzögerung
+
+Mixramp db
+Mixramp DB
+
+Country
+Land
+
+Tags
+Tags
+
+Webradios
+Webradios
+
+Can not open webradios directory
+Konnte das Webradio Verzeichnis nicht öffnen
+
+Can not parse webradio favorite file
+Konnte die Webradio Favoriten Datei nicht parsen
+
+Click webradio
+Klick auf Webradio
+
+Click webradio favorite
+Klick auf Webradio Favorit
+
+Could not delete webradio favorite
+Konnte Webradio Favorit nicht löschen
+
+Could not save webradio favorite
+Konnte Webradio Favorit nicht speichern
+
+Edit webradio favorite
+Webradio Favorit editieren
+
+Error connection to radio-browser.info
+Verbindung zu radio-browser.info fehlgeschlagen
+
+Manually add webradio favorite
+Webradio Favorit manuell hinzufügen
+
+Browse radio-browser.info
+Suche auf radio-browser.info
+
+Type or select picture
+Bild wählen oder URL eingeben
+
+Uri
+Url
+
+Webradio details
+Webradio Details
+
+Webradio favorite successfully saved
+Webradio Favorit erfolgreich gespeichert
+
+Webradio favorites
+Webradio Favoriten
+
+Add to favorites
+Zu Favoriten hinzufügen
+
+Webradio
+Webradio
+
+Delete webradio favorite
+Webradio Favorit löschen
+
+Empty response from radio-browser.info
+Fehlerhafte Antwort von radio-browser.info
+
+Language
+Sprache
+
+Description
+Beschreibung
+
+Browse WebradioDB
+Suche in der WebradioDB
+
+Empty response from webradiodb backend
+Leere Antwort vom WebradioDB Backend
+
+Loading...
+Lade...
+
+Stream uri
+Stream URL
+
+clickcount
+Klick Anzahl
+
+country
+Land
+
+homepage
+Homepage
+
+language
+Sprache
+
+lastchangetime
+Geändert
+
+lastcheckok
+Check
+
+tags
+Tags
+
+url_resolved
+URL
+
+votes
+Stimmen
+
+Check WebradioDB
+WebradioDB prüfen
+
+Update WebradioDB
+WebradioDB aktualisieren
+
+Update from WebradioDB
+Favorit aktualisieren
+
+Add to WebradioDB
+Zu WebradioDB hinzufügen
+
+Uri not found in WebradioDB
+URL nicht in WebradioDB gefunden
+
+Favorite and WebradioDb entry are different
+Favorit und WebradioDB Eintrag unterscheiden sich
+
+Favorite is uptodate
+Favorit ist aktuell
+
+Empty uri
+Leere Url
+
+Checking...
+Überprüfe...
+
+WebradioDB
+WebradioDB
+
+Documentation
+Dokumentation
+
+Startup
+Start
+
+Startup view
+Startbildschirm
+
+Jukebox Queue
+Jukebox Warteschlange
+
+Display tags in rows for small displays
+Zeige Tags in Zeilen für kleine Displays
+
+Disable consume
+Deaktiviere Konsumieren
+
+Disable random
+Deaktiviere Zufallswiedergabe
+
+Disable repeat
+Deaktiviere Wiederholen
+
+Enable consume
+Aktiviere Konsumieren
+
+Enable random
+Aktiviere Zufallswiedergabe
+
+Enable repeat
+Aktiviere Wiederholen
+
+Switch single mode
+Nur ein Lied Modus ändern
+
+Toggle consume
+Konsumieren ändern
+
+Toggle random
+Zufallswiedergabe ändern
+
+Toggle repeat
+Wiederholen ändern
+
+Invalid response
+Ungültige Antwort
+
+Codec
+Codec
+
+Bitrate
+Bitrate
+
+Format
+Format
+
+kbit
+kbit
+
+Alternative stream uri
+Alternative Stream URL
+
+Alternative streams
+Alternative Streams
+
+Browser specific setting
+Browserspezifische Einstellung
+
+Cloud
+Cloud
+
+Listenbrainz Token
+Listenbrainz Token
+
+Show or hide
+Anzeigen oder verbergen
+
+MusicBrainz
+MusicBrainz
+
+Goto album
+Gehe zu Album
+
+Goto artist
+Gehe zu Interpret
+
+No outputs found
+Keine Ausgabegeräte gefunden
+
+Quick play
+Abspielen
+
+Quick play button
+Direkt abspielen Button
+
+Quick remove button
+Direkt entfernen Button
+
+Click quick play button
+Klick auf direkt abspielen
+
+Enforce mobile view
+Erzwinge mobile Ansicht
+
+Advanced Audio Coding
+Advanced Audio Coding
+
+Cuesheet
+Cuesheet
+
+Free Lossless Audio Codec
+Free Lossless Audio Codec
+
+MPEG-1 Audio Layer III
+MPEG-1 Audio Layer III
+
+MPEG-4
+MPEG-4
+
+Monkey Audio
+Monkey Audio
+
+Musepack
+Musepack
+
+Ogg Vorbis
+Ogg Vorbis
+
+Opus Audio
+Opus Audio
+
+WAVE Audio File
+WAVE Audio File
+
+WavPack
+WavPack
+
+Windows Media Audio
+Windows Media Audio
+
+Import script
+Skript importieren
+
+Can not parse script arguments
+Skriptargumente konnten nicht eingelesen werden
+
+Active partition
+Aktive Partition
+
+Partition switched
+Partition gewechselt
+
+Outputs moved to current partition
+Ausgabegeräte wurden in aktuelle Partition verschoben
+
+Move
+Verschieben
+
+Could not find album
+Album nicht gefunden
+
+Could not get local ip
+Lokale IP konnte nicht ermittelt werden
+
+Add external link
+Externen Link hinzufügen
+
+Open external link
+Externen Link öffnen
+
+External link
+Externer Link
+
+Cache update is already running
+Cache update läuft bereits

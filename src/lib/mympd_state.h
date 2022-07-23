@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -9,6 +9,7 @@
 
 #include "../dist/rax/rax.h"
 #include "../dist/sds/sds.h"
+#include "mympd_configuration.h"
 #include "list.h"
 
 #include <mpd/client.h>
@@ -18,6 +19,7 @@ enum jukebox_modes {
     JUKEBOX_OFF,
     JUKEBOX_ADD_SONG,
     JUKEBOX_ADD_ALBUM,
+    JUKEBOX_UNKNOWN
 };
 
 enum trigger_events {
@@ -26,6 +28,7 @@ enum trigger_events {
     TRIGGER_MYMPD_STOP = -3,
     TRIGGER_MYMPD_CONNECTED = -4,
     TRIGGER_MYMPD_DISCONNECTED = -5,
+    TRIGGER_MYMPD_FEEDBACK = -6,
     TRIGGER_MPD_DATABASE = 0x1,
     TRIGGER_MPD_STORED_PLAYLIST = 0x2,
     TRIGGER_MPD_PLAYLIST = 0x4,
@@ -54,11 +57,11 @@ enum mpd_conn_states {
 };
 
 struct t_sticker {
-    unsigned playCount;
-    unsigned skipCount;
-    unsigned lastPlayed;
-    unsigned lastSkipped;
-    unsigned like;
+    long playCount;
+    long skipCount;
+    long lastPlayed;
+    long lastSkipped;
+    long like;
 };
 
 struct t_tags {
@@ -70,25 +73,25 @@ struct t_mpd_state {
     //Connection
     struct mpd_connection *conn;
     enum mpd_conn_states conn_state;
-    int mpd_timeout;
+    unsigned mpd_timeout;
     bool mpd_keepalive;
     time_t reconnect_time;
-    unsigned reconnect_interval;
+    time_t reconnect_interval;
     //connection configuration
     enum mpd_state state;
     sds mpd_host;
-    int mpd_port;
+    unsigned mpd_port;
     sds mpd_pass;
     unsigned mpd_binarylimit;
     //connection states
     int song_id;
     int next_song_id;
     int last_song_id;
-    unsigned song_pos;
+    int song_pos;
     sds song_uri;
     sds last_song_uri;
     unsigned queue_version;
-    unsigned queue_length;
+    long long queue_length;
     int last_last_played_id;
     int last_skipped_id;
     time_t song_end_time;
@@ -102,7 +105,7 @@ struct t_mpd_state {
     sds tag_list;
     struct t_tags tag_types_mympd;
     struct t_tags tag_types_mpd;
-    unsigned tag_albumartist;
+    enum mpd_tag_type tag_albumartist;
     //Feats
     const unsigned* protocol;
     bool feat_mpd_library;
@@ -121,6 +124,7 @@ struct t_mpd_state {
     bool feat_mpd_smartpls;
     bool feat_mpd_playlist_rm_range;
     bool feat_mpd_whence;
+    bool feat_mpd_advqueue;
 };
 
 struct t_timer_definition {
@@ -130,21 +134,20 @@ struct t_timer_definition {
     int start_minute;
     sds action;
     sds subaction;
-    int volume;
+    unsigned volume;
     sds playlist;
-    unsigned jukebox_mode;
+    enum jukebox_modes jukebox_mode;
     bool weekdays[7];
     struct t_list arguments;
 };
 
-typedef void (*time_handler)(struct t_timer_definition *definition, void *user_data);
+typedef void (*timer_handler)(int timer_id, struct t_timer_definition *definition);
 
 struct t_timer_node {
     int fd;
-    time_handler callback;
+    timer_handler callback;
     struct t_timer_definition *definition;
-    void *user_data;
-    unsigned timeout;
+    time_t timeout;
     int interval;
     int timer_id;
     struct t_timer_node *next;
@@ -165,7 +168,7 @@ struct t_mympd_state {
     //lists
     struct t_timer_list timer_list;
     struct t_list home_list;
-    struct t_list triggers;
+    struct t_list trigger_list;
     struct t_list last_played;
     struct t_list jukebox_queue;
     struct t_list jukebox_queue_tmp;
@@ -186,12 +189,12 @@ struct t_mympd_state {
     time_t smartpls_interval;
     struct t_tags smartpls_generate_tag_types;
     sds smartpls_generate_tag_list;
-    unsigned last_played_count;
+    long last_played_count;
     bool auto_play;
     enum jukebox_modes jukebox_mode;
     sds jukebox_playlist;
-    unsigned jukebox_queue_length;
-    int jukebox_last_played;
+    long jukebox_queue_length;
+    long jukebox_last_played;
     struct t_tags jukebox_unique_tag;
     bool jukebox_enforce_unique;
     sds cols_queue_current;
@@ -202,14 +205,17 @@ struct t_mympd_state {
     sds cols_playback;
     sds cols_queue_last_played;
     sds cols_queue_jukebox;
+    sds cols_browse_radio_webradiodb;
+    sds cols_browse_radio_radiobrowser;
     bool localplayer;
-    int mpd_stream_port;
+    unsigned mpd_stream_port;
     sds music_directory;
     sds music_directory_value;
     sds playlist_directory;
     sds booklet_name;
     sds navbar_icons;
     sds coverimage_names;
+    sds thumbnail_names;
     unsigned volume_min;
     unsigned volume_max;
     unsigned volume_step;
@@ -218,8 +224,21 @@ struct t_mympd_state {
     sds lyrics_vorbis_uslt;
     sds lyrics_vorbis_sylt;
     int covercache_keep_days;
+    sds listenbrainz_token;
     //settings only for webui
     sds webui_settings;
 };
+
+void mympd_state_default(struct t_mympd_state *mympd_state);
+void *mympd_state_free(struct t_mympd_state *mympd_state);
+
+void mympd_state_default_mpd_state(struct t_mpd_state *mpd_state);
+void *mympd_state_free_mpd_state(struct t_mpd_state *mpd_state);
+
+void *album_cache_free(rax *album_cache);
+void *sticker_cache_free(rax *sticker_cache);
+
+void copy_tag_types(struct t_tags *src_tag_list, struct t_tags *dst_tag_list);
+void reset_t_tags(struct t_tags *tags);
 
 #endif

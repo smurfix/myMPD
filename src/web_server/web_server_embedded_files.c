@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -26,9 +26,8 @@ INCBIN(mympd_background_dark_svg, "htdocs/assets/mympd-background-dark.svg.gz");
 INCBIN(mympd_background_light_svg, "htdocs/assets/mympd-background-light.svg.gz");
 INCBIN(combined_css, "htdocs/css/combined.css.gz");
 INCBIN(combined_js, "htdocs/js/combined.js.gz");
-INCBIN(MaterialIcons_Regular_woff2, "../dist/material-icons/MaterialIcons-Regular.woff2.gz");
+INCBIN(MaterialIcons_Regular_woff2, "htdocs/assets/MaterialIcons-Regular.woff2.gz");
 //uncompressed assets
-INCBIN(favicon_ico, "../htdocs/assets/favicon.ico");
 INCBIN(appicon_192_png, "../htdocs/assets/appicon-192.png");
 INCBIN(appicon_512_png, "../htdocs/assets/appicon-512.png");
 

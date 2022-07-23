@@ -1,42 +1,69 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 function initSearch() {
     document.getElementById('SearchList').addEventListener('click', function(event) {
-        if (event.target.nodeName === 'TD') {
-            clickSong(getData(event.target.parentNode, 'uri'));
+        //action td
+        if (event.target.nodeName === 'A') {
+            handleActionTdClick(event);
+            return;
         }
-        else if (event.target.nodeName === 'A') {
-            showPopover(event);
+        //table header
+        if (event.target.nodeName === 'TH') {
+            const colName = event.target.getAttribute('data-col');
+            if (colName === null ||
+                colName === 'Duration' ||
+                colName.indexOf('sticker') === 0 ||
+                features.featAdvsearch === false)
+            {
+                return;
+            }
+            toggleSort(event.target, colName);
+            appGoto(app.current.card, app.current.tab, app.current.view,
+                app.current.offset, app.current.limit, app.current.filter, app.current.sort, '-', app.current.search);
+            return;
+        }
+        //table body
+        const target = getParent(event.target, 'TR');
+        if (target !== null) {
+            clickSong(getData(target, 'uri'));
         }
     }, false);
 
-    document.getElementById('searchtags').addEventListener('click', function(event) {
+    document.getElementById('searchTags').addEventListener('click', function(event) {
         if (event.target.nodeName === 'BUTTON') {
             app.current.filter = getData(event.target, 'tag');
-            doSearch(document.getElementById('searchstr').value);
+            doSearch(document.getElementById('searchStr').value);
         }
     }, false);
 
-    document.getElementById('searchstr').addEventListener('keyup', function(event) {
+    document.getElementById('searchStr').addEventListener('keyup', function(event) {
+        clearSearchTimer();
+        const value = this.value;
         if (event.key === 'Escape') {
             this.blur();
         }
-        else if (event.key === 'Enter' && features.featAdvsearch) {
-            if (this.value !== '') {
+        else if (event.key === 'Enter' &&
+            features.featAdvsearch === true)
+        {
+            if (value !== '') {
                 const op = getSelectValueId('searchMatch');
-                document.getElementById('searchCrumb').appendChild(createSearchCrumb(app.current.filter, op, this.value));
+                document.getElementById('searchCrumb').appendChild(createSearchCrumb(app.current.filter, op, value));
                 elShowId('searchCrumb');
                 this.value = '';
             }
             else {
-                doSearch(this.value);
+                searchTimer = setTimeout(function() {
+                    doSearch(value);
+                }, searchTimerTimeout);
             }
         }
         else {
-            doSearch(this.value);
+            searchTimer = setTimeout(function() {
+                doSearch(value);
+            }, searchTimerTimeout);
         }
     }, false);
 
@@ -52,12 +79,12 @@ function initSearch() {
             //edit search expression
             event.preventDefault();
             event.stopPropagation();
-            document.getElementById('searchstr').value = unescapeMPD(getData(event.target, 'filter-value'));
-            selectTag('searchtags', 'searchtagsdesc', getData(event.target, 'filter-tag'));
+            document.getElementById('searchStr').value = unescapeMPD(getData(event.target, 'filter-value'));
+            selectTag('searchTags', 'searchTagsDesc', getData(event.target, 'filter-tag'));
             document.getElementById('searchMatch').value = getData(event.target, 'filter-op');
             event.target.remove();
             app.current.filter = getData(event.target,'filter-tag');
-            doSearch(document.getElementById('searchstr').value);
+            doSearch(document.getElementById('searchStr').value);
             if (document.getElementById('searchCrumb').childElementCount === 0) {
                 elHideId('searchCrumb');
             }
@@ -65,60 +92,7 @@ function initSearch() {
     }, false);
 
     document.getElementById('searchMatch').addEventListener('change', function() {
-        doSearch(document.getElementById('searchstr').value);
-    }, false);
-
-    document.getElementById('SearchList').getElementsByTagName('tr')[0].addEventListener('click', function(event) {
-        if (features.featAdvsearch === false ||
-            event.target.nodeName !== 'TH' ||
-            event.target.textContent === '')
-        {
-            return;
-        }
-        let col = event.target.getAttribute('data-col');
-        if (col === 'Duration' || col.indexOf('sticker') === 0) {
-            return;
-        }
-        let sortcol = app.current.sort;
-        let sortdesc = true;
-
-        if (sortcol === col || sortcol === '-' + col) {
-            if (sortcol.indexOf('-') === 0) {
-                sortdesc = true;
-                col = sortcol.substring(1);
-            }
-            else {
-                sortdesc = false;
-            }
-        }
-        if (sortdesc === false) {
-            sortcol = '-' + col;
-            sortdesc = true;
-        }
-        else {
-            sortdesc = false;
-            sortcol = col;
-        }
-
-        const s = document.getElementById('SearchList').getElementsByClassName('sort-dir');
-        for (let i = 0, j = s.length; i < j; i++) {
-            s[i].remove();
-        }
-        app.current.sort = sortcol;
-
-        elClear(event.target);
-        event.target.appendChild(
-            document.createTextNode(
-                tn(
-                    event.target.getAttribute('data-col')
-                )
-            )
-        );
-        event.target.appendChild(
-            elCreateText('span', {"class": ["sort-dir", "mi", "float-end"]}, (sortdesc === true ? 'arrow_drop_up' : 'arrow_drop_down'))
-        );
-        appGoto(app.current.card, app.current.tab, app.current.view,
-            app.current.offset, app.current.limit, app.current.filter, app.current.sort, '-', app.current.search);
+        doSearch(document.getElementById('searchStr').value);
     }, false);
 }
 

@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 function initTrigger() {
@@ -56,7 +56,7 @@ function saveTrigger() {
             "event": Number(getSelectValueId('selectTriggerEvent')),
             "script": getSelectValueId('selectTriggerScript'),
             "arguments": args
-            }, saveTriggerCheckError, true);
+        }, saveTriggerCheckError, true);
     }
 }
 
@@ -79,7 +79,7 @@ function showEditTrigger(id) {
 
     const nameEl = document.getElementById('inputTriggerName');
     nameEl.value = '';
-    nameEl.focus();
+    setFocus(nameEl);
     document.getElementById('inputTriggerId').value = '-1';
     document.getElementById('selectTriggerEvent').selectedIndex = 0;
     document.getElementById('selectTriggerScript').selectedIndex = 0;
@@ -119,7 +119,7 @@ function showTriggerScriptArgs(option, values) {
         const input = elCreateEmpty('input', {"class": ["form-control"], "type": "text", "name": "triggerActionScriptArguments" + i,
             "value": (values[args.arguments[i]] ? values[args.arguments[i]] : '')});
         setData(input, 'name', args.arguments[i]);
-        const fg = elCreateNodes('div', {"class": ["form-group", "row"]}, [
+        const fg = elCreateNodes('div', {"class": ["form-group", "row", "mb-3"]}, [
             elCreateText('label', {"class": ["col-sm-4", "col-form-label"], "for": "triggerActionScriptArguments" + i}, args.arguments[i]),
             elCreateNode('div', {"class": ["col-sm-8"]}, input)
         ]);

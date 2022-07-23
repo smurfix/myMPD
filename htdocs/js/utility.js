@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 //element handling shortcuts
@@ -19,26 +19,32 @@ function elCreateNode(tagName, attributes, node) {
 function elCreateNodes(tagName, attributes, nodes) {
     const tag = elCreateEmpty(tagName, attributes);
     for (const node of nodes) {
-        tag.appendChild(node);
+        if (node !== null) {
+            tag.appendChild(node);
+        }
     }
     return tag;
 }
 
 function elCreateEmpty(tagName, attributes) {
-    const tag = attributes['is'] === undefined ?
-        document.createElement(tagName) : document.createElement(tagName, {is: attributes['is']});
+    const tag = document.createElement(tagName);
     for (const key in attributes) {
         switch(key) {
-            case "class":
+            case 'class':
                 tag.classList.add(...attributes[key]);
                 break;
-            case "is":
+            case 'is':
+                tag.setAttribute('data-is', attributes[key]);
                 break;
             default:
                 tag.setAttribute(key, attributes[key]);
         }
     }
     return tag;
+}
+
+function elReplaceChildId(id, child) {
+    elReplaceChild(document.getElementById(id), child);
 }
 
 function elReplaceChild(el, child) {
@@ -76,6 +82,9 @@ function elDisableId(el) {
 
 function elDisable(el) {
     el.setAttribute('disabled', 'disabled');
+    //manually disabled, remove disabled class
+    el.classList.remove('disabled');
+    el.classList.replace('clickable', 'not-clickable');
 }
 
 function elEnableId(el) {
@@ -84,6 +93,7 @@ function elEnableId(el) {
 
 function elEnable(el) {
     el.removeAttribute('disabled');
+    el.classList.replace('not-clickable', 'clickable');
 }
 
 function elReflow(el) {
@@ -98,6 +108,16 @@ function getOpenModal() {
         }
     }
     return null;
+}
+
+function setFocusId(id) {
+    setFocus(document.getElementById(id));
+}
+
+function setFocus(el) {
+    if (userAgentData.isMobile === false) {
+        el.focus();
+    }
 }
 
 //replaces special characters with underscore
@@ -131,7 +151,9 @@ function showConfirm(text, btnText, callback) {
     document.getElementById('modalConfirmText').textContent = text;
     const yesBtn = elCreateText('button', {"id": "modalConfirmYesBtn", "class": ["btn", "btn-danger"]}, btnText);
     yesBtn.addEventListener('click', function() {
-        if (callback !== undefined && typeof(callback) === 'function') {
+        if (callback !== undefined &&
+            typeof(callback) === 'function')
+        {
             callback();
         }
         uiElements.modalConfirm.hide();
@@ -166,12 +188,21 @@ function showConfirmInline(el, text, btnText, callback) {
     el.appendChild(confirm);
 }
 
+function myEncodeURIhost(str) {
+    const match = str.match(/(https?:\/\/[^/]+)(.*)$/);
+    if (match) {
+        //encode only non host part of uri
+        return match[1] + myEncodeURI(match[2]);
+    }
+    return myEncodeURI(str);
+}
+
 //custom encoding function
 //works like encodeURIComponent but
 //- does not escape /
 //- escapes further reserved characters
 function myEncodeURI(str) {
-    return encodeURI(str).replace(/[!'()*#?;,:@&=+$~]/g, function(c) {
+    return encodeURI(str).replace(/[!'()*#?;:,@&=+$~]/g, function(c) {
         return '%' + c.charCodeAt(0).toString(16);
     });
 }
@@ -187,15 +218,44 @@ function myDecodeURIComponent(str) {
 }
 
 function joinArray(a) {
-    if (a === undefined) {
-        return '';
-    }
-    return a.join(', ');
+    return a === undefined ? '' : a.join(', ');
 }
 
-//functions to get custom actions
+//functions to execute default actions
+function clickQuickRemove(target) {
+    switch(app.id) {
+        case 'QueueCurrent': {
+            const songId = getData(target.parentNode.parentNode, 'songid');
+            removeFromQueue('single', songId);
+            break;
+        }
+        case 'BrowsePlaylistsDetail': {
+            const pos = getData(target.parentNode.parentNode, 'songpos');
+            const plist = getDataId('BrowsePlaylistsDetailList', 'uri');
+            removeFromPlaylist('single', plist, pos);
+            break;
+        }
+    }
+}
+
+function clickQuickPlay(target) {
+    const type = getData(target.parentNode.parentNode, 'type');
+    let uri = getData(target.parentNode.parentNode, 'uri');
+    if (type === 'webradio') {
+        uri = getRadioFavoriteUri(uri);
+    }
+    switch(settings.webuiSettings.clickQuickPlay) {
+        case 'append': return appendQueue(type, uri);
+        case 'appendPlay': return appendPlayQueue(type, uri);
+        case 'insertAfterCurrent': return insertAfterCurrentQueue(type, uri);
+        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue(type, uri);
+        case 'replace': return replaceQueue(type, uri);
+        case 'replacePlay': return replacePlayQueue(type, uri);
+    }
+}
+
 function clickAlbumPlay(albumArtist, album) {
-    switch(settings.webuiSettings.clickAlbumPlay) {
+    switch(settings.webuiSettings.clickQuickPlay) {
         case 'append': return _addAlbum('appendQueue', albumArtist, album);
         case 'appendPlay': return _addAlbum('appendPlayQueue', albumArtist, album);
         case 'insertAfterCurrent': return _addAlbum('insertAfterCurrentQueue', albumArtist, album);
@@ -207,13 +267,49 @@ function clickAlbumPlay(albumArtist, album) {
 
 function clickSong(uri) {
     switch (settings.webuiSettings.clickSong) {
-        case 'append':             return appendQueue('song', uri);
-        case 'appendPlay':         return appendPlayQueue('song', uri);
+        case 'append': return appendQueue('song', uri);
+        case 'appendPlay': return appendPlayQueue('song', uri);
         case 'insertAfterCurrent': return insertAfterCurrentQueue('song', uri);
         case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('song', uri);
-        case 'replace':            return replaceQueue('song', uri);
-        case 'replacePlay':        return replacePlayQueue('song', uri);
-        case 'view':               return songDetails(uri);
+        case 'replace': return replaceQueue('song', uri);
+        case 'replacePlay': return replacePlayQueue('song', uri);
+        case 'view': return songDetails(uri);
+    }
+}
+
+function clickRadiobrowser(uri, uuid) {
+    switch (settings.webuiSettings.clickRadiobrowser) {
+        case 'append': return appendQueue('song', uri);
+        case 'appendPlay': return appendPlayQueue('song', uri);
+        case 'insertAfterCurrent': return insertAfterCurrentQueue('song', uri);
+        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('song', uri);
+        case 'replace': return replaceQueue('song', uri);
+        case 'replacePlay': return replacePlayQueue('song', uri);
+    }
+    countClickRadiobrowser(uuid);
+}
+
+function clickWebradiodb(uri) {
+    switch (settings.webuiSettings.clickRadiobrowser) {
+        case 'append': return appendQueue('song', uri);
+        case 'appendPlay': return appendPlayQueue('song', uri);
+        case 'insertAfterCurrent': return insertAfterCurrentQueue('song', uri);
+        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('song', uri);
+        case 'replace': return replaceQueue('song', uri);
+        case 'replacePlay': return replacePlayQueue('song', uri);
+    }
+}
+
+function clickRadioFavorites(uri) {
+    const fullUri = getRadioFavoriteUri(uri);
+    switch(settings.webuiSettings.clickRadioFavorites) {
+        case 'append': return appendQueue('plist', fullUri);
+        case 'appendPlay': return appendPlayQueue('plist', fullUri);
+        case 'insertAfterCurrent': return insertAfterCurrentQueue('plist', fullUri);
+        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('plist', fullUri);
+        case 'replace': return replaceQueue('plist', fullUri);
+        case 'replacePlay': return replacePlayQueue('plist', fullUri);
+        case 'edit': return editRadioFavorite(uri);
     }
 }
 
@@ -247,24 +343,35 @@ function clickPlaylist(uri) {
     }
 }
 
-function clickFolder(uri) {
-    switch(settings.webuiSettings.clickFolder) {
-        case 'append':  return appendQueue('dir', uri);
-        case 'appendPlay':  return appendPlayQueue('dir', uri);
-        case 'insertAfterCurrent':  return insertAfterCurrentQueue('dir', uri);
-        case 'insertPlayAfterCurrent':  return insertPlayAfterCurrentQueue('dir', uri);
-        case 'replace': return replaceQueue('dir', uri);
-        case 'replacePlay': return replacePlayQueue('dir', uri);
+function clickFilesystemPlaylist(uri) {
+    switch(settings.webuiSettings.clickFilesystemPlaylist) {
+        case 'append': return appendQueue('plist', uri);
+        case 'appendPlay': return appendPlayQueue('plist', uri);
+        case 'insertAfterCurrent': return insertAfterCurrentQueue('plist', uri);
+        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('plist', uri);
+        case 'replace': return replaceQueue('plist', uri);
+        case 'replacePlay': return replacePlayQueue('plist', uri);
         case 'view':
             //remember offset for current browse uri
             browseFilesystemHistory[app.current.search] = {
                 "offset": app.current.offset,
                 "scrollPos": document.body.scrollTop ? document.body.scrollTop : document.documentElement.scrollTop
             };
-            //reset filter and open folder
+            //reset filter and show playlist
             app.current.filter = '-';
-            appGoto('Browse', 'Filesystem', undefined, 0, app.current.limit, app.current.filter, app.current.sort, '-', uri);
+            appGoto('Browse', 'Filesystem', undefined, 0, app.current.limit, app.current.filter, app.current.sort, 'plist', uri);
     }
+}
+
+function clickFolder(uri) {
+    //remember offset for current browse uri
+    browseFilesystemHistory[app.current.search] = {
+        "offset": app.current.offset,
+        "scrollPos": getScrollPosY()
+    };
+    //reset filter and open folder
+    app.current.filter = '-';
+    appGoto('Browse', 'Filesystem', undefined, 0, app.current.limit, app.current.filter, app.current.sort, 'dir', uri);
 }
 
 function seekRelativeForward() {
@@ -464,29 +571,91 @@ function basename(uri, removeQuery) {
     return uri.split('/').reverse()[0];
 }
 
+ function splitFilename(filename) {
+     const parts = filename.match(/^(.*)\.([^.]+)$/);
+     return {
+        "file": parts[1],
+        "ext": parts[2]
+     };
+ }
+
+function isCoverfile(uri) {
+    const filename = basename(uri);
+    const fileparts = splitFilename(filename);
+
+    const coverimageNames = [...settings.coverimageNames.split(','), ...settings.thumbnailNames.split(',')];
+    for (let i = 0, j = coverimageNames.length; i < j; i++) {
+        const name = coverimageNames[i].trim();
+        if (filename === name) {
+            return true;
+        }
+        if (name === fileparts.file &&
+            imageExtensions.includes(fileparts.ext))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+function isThumbnailfile(uri) {
+    const filename = basename(uri);
+    const fileparts = splitFilename(filename);
+
+    const coverimageNames = settings.thumbnailNames.split(',');
+    for (let i = 0, j = coverimageNames.length; i < j; i++) {
+        const name = coverimageNames[i].trim();
+        if (filename === name) {
+            return true;
+        }
+        if (name === fileparts.file &&
+            imageExtensions.includes(fileparts.ext))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 function filetype(uri) {
     if (uri === undefined) {
         return '';
     }
     const ext = uri.split('.').pop().toUpperCase();
     switch(ext) {
-        case 'MP3':  return ext + ' - MPEG-1 Audio Layer III';
-        case 'FLAC': return ext + ' - Free Lossless Audio Codec';
-        case 'OGG':  return ext + ' - Ogg Vorbis';
-        case 'OPUS': return ext + ' - Opus Audio';
-        case 'WAV':  return ext + ' - WAVE Audio File';
-        case 'WV':   return ext + ' - WavPack';
-        case 'AAC':  return ext + ' - Advancded Audio Coding';
-        case 'MPC':  return ext + ' - Musepack';
-        case 'MP4':  return ext + ' - MPEG-4';
-        case 'APE':  return ext + ' - Monkey Audio';
-        case 'WMA':  return ext + ' - Windows Media Audio';
+        case 'MP3':  return ext + ' - ' + tn('MPEG-1 Audio Layer III');
+        case 'FLAC': return ext + ' - ' + tn('Free Lossless Audio Codec');
+        case 'OGG':  return ext + ' - ' + tn('Ogg Vorbis');
+        case 'OPUS': return ext + ' - ' + tn('Opus Audio');
+        case 'WAV':  return ext + ' - ' + tn('WAVE Audio File');
+        case 'WV':   return ext + ' - ' + tn('WavPack');
+        case 'AAC':  return ext + ' - ' + tn('Advanced Audio Coding');
+        case 'MPC':  return ext + ' - ' + tn('Musepack');
+        case 'MP4':  return ext + ' - ' + tn('MPEG-4');
+        case 'APE':  return ext + ' - ' + tn('Monkey Audio');
+        case 'WMA':  return ext + ' - ' + tn('Windows Media Audio');
+        case 'CUE':  return ext + ' - ' + tn('Cuesheet');
         default:     return ext;
     }
 }
 
+function getScrollPosY() {
+    if (userAgentData.isMobile === true) {
+        return document.body.scrollTop ? document.body.scrollTop : document.documentElement.scrollTop;
+    }
+    else {
+        const container = document.getElementById(app.id + 'List');
+        if (container) {
+            return container.parentNode.scrollTop;
+        }
+        else {
+            return 0;
+        }
+    }
+}
+
 function scrollToPosY(container, pos) {
-    if (isMobile === true) {
+    if (userAgentData.isMobile === true) {
         // For Safari
         document.body.scrollTop = pos;
         // For Chrome, Firefox, IE and Opera
@@ -531,7 +700,10 @@ function addTagList(elId, list) {
         stack.appendChild(elCreateText('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": settings[list][i]}, tn(settings[list][i])));
     }
     if (elId === 'BrowseNavFilesystemDropdown' ||
-        elId === 'BrowseNavPlaylistsDropdown')
+        elId === 'BrowseNavPlaylistsDropdown' ||
+        elId === 'BrowseNavRadioFavoritesDropdown' ||
+        elId === 'BrowseNavWebradiodbDropdown' ||
+        elId === 'BrowseNavRadiobrowserDropdown')
     {
         if (features.featTags === true && features.featAdvsearch === true) {
             elClear(stack);
@@ -540,7 +712,10 @@ function addTagList(elId, list) {
     }
     if (elId === 'BrowseDatabaseByTagDropdown' ||
         elId === 'BrowseNavFilesystemDropdown' ||
-        elId === 'BrowseNavPlaylistsDropdown')
+        elId === 'BrowseNavPlaylistsDropdown' ||
+        elId === 'BrowseNavRadioFavoritesDropdown' ||
+        elId === 'BrowseNavWebradiodbDropdown' ||
+        elId === 'BrowseNavRadiobrowserDropdown')
     {
         if (elId === 'BrowseDatabaseByTagDropdown') {
             stack.appendChild(elCreateEmpty('div', {"class": ["dropdown-divider"]}));
@@ -553,6 +728,13 @@ function addTagList(elId, list) {
         if (elId === 'BrowseNavFilesystemDropdown') {
             stack.lastChild.classList.add('active');
         }
+        stack.appendChild(elCreateText('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Radio"}, tn('Webradios')));
+        if (elId === 'BrowseNavRadioFavoritesDropdown' ||
+            elId === 'BrowseNavWebradiodbDropdown' ||
+            elId === 'BrowseNavRadiobrowserDropdown')
+        {
+            stack.lastChild.classList.add('active');
+        }
     }
     else if (elId === 'databaseSortTagsList') {
         if (settings.tagList.includes('Date') === true &&
@@ -562,13 +744,19 @@ function addTagList(elId, list) {
         }
         stack.appendChild(elCreateText('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "LastModified"}, tn('Last modified')));
     }
+    else if (elId === 'searchQueueTags') {
+        if (features.featAdvqueue === true)
+        {
+            stack.appendChild(elCreateText('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "prio"}, tn('Priority')));
+        }
+    }
     const el = document.getElementById(elId);
     elReplaceChild(el, stack);
 }
 
 function addTagListSelect(elId, list) {
     const select = document.getElementById(elId);
-    elClear(select);
+    select.options.length = 0;
     if (elId === 'saveSmartPlaylistSort' || elId === 'selectSmartplsSort') {
         select.appendChild(elCreateText('option', {"value": ""}, tn('Disabled')));
         select.appendChild(elCreateText('option', {"value": "shuffle"}, tn('Shuffle')));
@@ -597,7 +785,7 @@ function openModal(modal) {
 function focusSearch() {
     switch(app.id) {
         case 'QueueCurrent':
-            document.getElementById('searchqueuestr').focus();
+            document.getElementById('searchQueueStr').focus();
             break;
         case 'QueueLastPlayed':
             document.getElementById('searchQueueLastPlayedStr').focus();
@@ -617,12 +805,22 @@ function focusSearch() {
         case 'BrowsePlaylistsDetail':
             document.getElementById('searchPlaylistsDetailStr').focus();
             break;
+        case 'BrowseRadioWebradiodb':
+            document.getElementById('BrowseRadioWebradiodbSearchStr').focus();
+            break;
+        case 'BrowseRadioRadiobrowser':
+            document.getElementById('BrowseRadioRadiobrowserSearchStr').focus();
+            break;
         case 'Search':
-            document.getElementById('searchstr').focus();
+            document.getElementById('searchStr').focus();
             break;
         default:
             appGoto('Search');
     }
+}
+
+function btnWaitingId(id, waiting) {
+    btnWaiting(document.getElementById(id), waiting);
 }
 
 function btnWaiting(btn, waiting) {
@@ -632,12 +830,15 @@ function btnWaiting(btn, waiting) {
         elDisable(btn);
     }
     else {
-        elEnable(btn);
-        if (btn.firstChild.nodeName === 'SPAN' &&
-            btn.firstChild.classList.contains('spinner-border'))
-        {
-            btn.firstChild.remove();
-        }
+        //add a small delay, user should notice the change
+        setTimeout(function() {
+            elEnable(btn);
+            if (btn.firstChild.nodeName === 'SPAN' &&
+                btn.firstChild.classList.contains('spinner-border'))
+            {
+                btn.firstChild.remove();
+            }
+        }, 100);
     }
 }
 
@@ -817,8 +1018,7 @@ function setPagination(total, returned) {
 }
 
 function createPaginationEls(totalPages, curPage) {
-    const prev = elCreateNode('button', {"title": tn('Previous page'), "type": "button", "class": ["btn", "btn-secondary"]},
-        elCreateText('span', {"class": ["mi"]}, 'navigate_before'));
+    const prev = elCreateText('button', {"title": tn('Previous page'), "type": "button", "class": ["btn", "btn-secondary", "mi"]}, 'navigate_before');
     if (curPage === 1) {
         elDisable(prev);
     }
@@ -854,7 +1054,7 @@ function createPaginationEls(totalPages, curPage) {
     elPerPage.addEventListener('change', function(event) {
         const newLimit = Number(getSelectValue(event.target));
         if (app.current.limit !== newLimit) {
-            event.target.parentNode.parentNode.parentNode.previousElementSibling.Dropdown.hide();
+            BSN.Dropdown.getInstance(event.target.parentNode.parentNode.parentNode.previousElementSibling).hide();
             gotoPage(app.current.offset, newLimit);
         }
     }, false);
@@ -877,7 +1077,8 @@ function createPaginationEls(totalPages, curPage) {
         first.textContent = '1';
     }
     else {
-        first.appendChild(elCreateText('span', {"class": ["mi"]}, 'first_page'));
+        first.textContent = 'first_page';
+        first.classList.add('mi');
     }
     if (curPage === 1) {
         elDisable(first);
@@ -912,7 +1113,8 @@ function createPaginationEls(totalPages, curPage) {
         last.textContent = end + 1;
     }
     else {
-        last.appendChild(elCreateText('span', {"class": ["mi"]}, 'last_page'));
+        last.textContent = 'last_page';
+        last.classList.add('mi');
     }
     if (totalPages === -1) {
         elDisable(last);
@@ -936,8 +1138,7 @@ function createPaginationEls(totalPages, curPage) {
     );
     pageDropdownMenu.appendChild(row);
 
-    const next = elCreateEmpty('button', {"title": tn('Next page'), "type": "button", "class": ["btn", "btn-secondary"]});
-    next.appendChild(elCreateText('span', {"class": ["mi"]}, 'navigate_next'));
+    const next = elCreateText('button', {"title": tn('Next page'), "type": "button", "class": ["btn", "btn-secondary", "mi"]}, 'navigate_next');
     if (totalPages !== -1 && totalPages === curPage) {
         elDisable(next);
     }
@@ -957,6 +1158,9 @@ function createPaginationEls(totalPages, curPage) {
         next
     ]);
     new BSN.Dropdown(pageDropdownBtn);
+    pageDropdownBtn.parentNode.addEventListener('show.bs.dropdown', function (event) {
+        alignDropdown(event.target);
+    });
     return outer;
 }
 
@@ -982,6 +1186,9 @@ function parseCmd(event, href) {
         switch(cmd.cmd) {
             case 'sendAPI':
                 sendAPI(cmd.options[0].cmd, {});
+                break;
+            case 'createLocalPlaybackEl':
+                window[cmd.cmd](event, ... cmd.options);
                 break;
             case 'toggleBtn':
             case 'toggleBtnChk':
@@ -1066,6 +1273,19 @@ function createSearchCrumb(filter, op, value) {
     return btn;
 }
 
+function _createSearchExpression(tag, op, value) {
+    if (op === 'starts_with' &&
+        app.id !== 'BrowseDatabaseList')
+    {
+        //mpd does not support starts_with, convert it to regex
+        op = '=~';
+        value = '^' + value;
+    }
+    return '(' + tag + ' ' + op + ' ' +
+        (op === '>=' ? value : '\'' + escapeMPD(value) + '\'') +
+        ')';
+}
+
 function createSearchExpression(crumbsEl, tag, op, value) {
     let expression = '(';
     const crumbs = crumbsEl.children;
@@ -1073,31 +1293,42 @@ function createSearchExpression(crumbsEl, tag, op, value) {
         if (i > 0) {
             expression += ' AND ';
         }
-        let crumbOp = getData(crumbs[i], 'filter-op');
-        let crumbValue = getData(crumbs[i], 'filter-value');
-        if (app.current.card === 'Search' && crumbOp === 'starts_with') {
-            crumbOp = '=~';
-            crumbValue = '^' + crumbValue;
-        }
-        expression += '(' + getData(crumbs[i], 'filter-tag') + ' ' +
-            crumbOp + ' \'' + escapeMPD(crumbValue) + '\')';
+        expression += _createSearchExpression(
+            getData(crumbs[i], 'filter-tag'),
+            getData(crumbs[i], 'filter-op'),
+            getData(crumbs[i], 'filter-value')
+        );
     }
     if (value !== '') {
         if (expression.length > 1) {
             expression += ' AND ';
         }
-        if (app.current.card === 'Search' && op === 'starts_with') {
-            //mpd does not support starts_with, convert it to regex
-            op = '=~';
-            value = '^' + value;
-        }
-        expression += '(' + tag + ' ' + op + ' \'' + escapeMPD(value) +'\')';
+        expression += _createSearchExpression(tag, op, value);
     }
     expression += ')';
     if (expression.length <= 2) {
         expression = '';
     }
     return expression;
+}
+
+function printBrowseLink(el, tag, values) {
+    if (settings.tagListBrowse.includes(tag)) {
+        for (const value of values) {
+            const link = elCreateText('a', {"href": "#"}, value);
+            setData(link, 'tag', tag);
+            setData(link, 'name', value);
+            link.addEventListener('click', function(event) {
+                event.preventDefault();
+                gotoBrowse(event);
+            }, false);
+            el.appendChild(link);
+            el.appendChild(elCreateEmpty('br', {}));
+        }
+    }
+    else {
+        el.appendChild(printValue(tag, values));
+    }
 }
 
 function printValue(key, value) {
@@ -1111,6 +1342,8 @@ function printValue(key, value) {
                 case 'smartpls': return elCreateText('span', {"class": ["mi"]}, 'queue_music');
                 case 'plist':    return elCreateText('span', {"class": ["mi"]}, 'list');
                 case 'dir':      return elCreateText('span', {"class": ["mi"]}, 'folder_open');
+                case 'stream':	 return elCreateText('span', {"class": ["mi"]}, 'stream');
+                case 'webradio': return elCreateText('span', {"class": ["mi"]}, 'radio');
                 default:         return elCreateText('span', {"class": ["mi"]}, 'radio_button_unchecked');
             }
         case 'Duration':
@@ -1129,15 +1362,16 @@ function printValue(key, value) {
             return elCreateText('span', {"class": ["mi"]},
                 value === 0 ? 'thumb_down' : value === 1 ? 'radio_button_unchecked' : 'thumb_up');
         case 'Artist':
+        case 'ArtistSort':
         case 'AlbumArtist':
-        case 'Genre':
+        case 'AlbumArtistSort':
         case 'Composer':
         case 'Performer':
         case 'Conductor':
         case 'Ensemble':
         case 'MUSICBRAINZ_ARTISTID':
         case 'MUSICBRAINZ_ALBUMARTISTID': {
-            //multi value tags
+            //multi value tags - print one line per value
             const span = elCreateEmpty('span', {});
             for (let i = 0, j = value.length; i < j; i++) {
                 if (i > 0) {
@@ -1152,6 +1386,34 @@ function printValue(key, value) {
             }
             return span;
         }
+        case 'Genre':
+            //multi value tags - print comma separated
+            if (typeof value === 'string') {
+                return document.createTextNode(value);
+            }
+            return document.createTextNode(
+                value.join(', ')
+            );
+        case 'tags':
+            //radiobrowser.info
+            return document.createTextNode(
+                value.replace(/,(\S)/g, ', $1')
+            );
+        case 'homepage':
+        case 'Homepage':
+            //webradios
+            if (value === '') {
+                return document.createTextNode(value);
+            }
+            return elCreateText('a', {"class": ["text-success", "external"],
+                "href": myEncodeURIhost(value), "target": "_blank"}, value);
+        case 'lastcheckok':
+            //radiobrowser.info
+            return elCreateText('span', {"class": ["mi"]},
+                (value === 1 ? 'check_circle' : 'error')
+            );
+        case 'Bitrate':
+            return document.createTextNode(value + ' ' + tn('kbit'));
         default:
             if (key.indexOf('MUSICBRAINZ') === 0) {
                 return getMBtagLink(key, value);
@@ -1164,13 +1426,6 @@ function printValue(key, value) {
 
 function getTimestamp() {
     return Math.floor(Date.now() / 1000);
-}
-
-function setScrollViewHeight(container) {
-    const footerHeight = document.getElementsByTagName('footer')[0].offsetHeight;
-    const tpos = getYpos(container.parentNode);
-    const maxHeight = window.innerHeight - tpos - footerHeight;
-    container.parentNode.style.maxHeight = maxHeight + 'px';
 }
 
 function toggleCollapseArrow(el) {
@@ -1202,18 +1457,6 @@ function openFullscreen() {
     }
 }
 
-function setViewport(store) {
-    document.querySelector("meta[name=viewport]").setAttribute('content', 'width=device-width, initial-scale=' + scale + ', maximum-scale=' + scale);
-    if (store === true) {
-        try {
-            localStorage.setItem('scale-ratio', scale);
-        }
-        catch(err) {
-            logError('Can not save scale-ratio in localStorage: ' + err.message);
-        }
-    }
-}
-
 //eslint-disable-next-line no-unused-vars
 function clearCovercache() {
     sendAPI("MYMPD_API_COVERCACHE_CLEAR", {});
@@ -1233,32 +1476,24 @@ function zoomPicture(el) {
 
     if (el.classList.contains('carousel')) {
         let images;
+        let embeddedImageCount;
         const dataImages = getData(el, 'images');
         if (dataImages !== undefined) {
             images = dataImages.slice();
+            embeddedImageCount = getData(el, 'embeddedImageCount');
         }
         else if (currentSongObj.images) {
             images = currentSongObj.images.slice();
+            embeddedImageCount = currentSongObj.embeddedImageCount;
         }
         else {
             return;
         }
 
-        //add uri to image list to get embedded albumart
-        let aImages = [];
         const uri = getData(el, 'uri');
-        if (uri) {
-            aImages = [ subdir + '/albumart/' + uri ];
-        }
-        //add all but coverfiles to image list
-        for (let i = 0, j = images.length; i < j; i++) {
-            if (isCoverfile(images[i]) === false) {
-                aImages.push(subdir + '/browse/music/' + images[i]);
-            }
-        }
         const imgEl = document.getElementById('modalPictureImg');
         imgEl.style.paddingTop = 0;
-        createImgCarousel(imgEl, 'picsCarousel', aImages);
+        createImgCarousel(imgEl, 'picsCarousel', uri, images, embeddedImageCount);
         elHideId('modalPictureZoom');
         uiElements.modalPicture.show();
         return;
@@ -1279,7 +1514,26 @@ function zoomZoomPicture() {
     window.open(document.getElementById('modalPictureImg').style.backgroundImage.match(/^url\(["']?([^"']*)["']?\)/)[1]);
 }
 
-function createImgCarousel(imgEl, name, images) {
+function createImgCarousel(imgEl, name, uri, images, embeddedImageCount) {
+    //embedded albumart
+    if (embeddedImageCount === 0) {
+        //enforce first coverimage
+        embeddedImageCount++;
+    }
+    const aImages = [];
+    for (let i = 0; i < embeddedImageCount; i++) {
+        aImages.push(subdir + '/albumart?offset=' + i + '&uri=' + myEncodeURIComponent(uri));
+    }
+    //add all but coverfiles to image list
+    for (let i = 0, j = images.length; i < j; i++) {
+        if (isCoverfile(images[i]) === false) {
+            aImages.push(subdir + myEncodeURI(images[i]));
+        }
+    }
+    _createImgCarousel(imgEl, name, aImages);
+}
+
+function _createImgCarousel(imgEl, name, images) {
     const nrImages = images.length;
     const carousel = elCreateEmpty('div', {"id": name, "class": ["carousel", "slide"], "data-bs-ride": "carousel"});
     if (nrImages > 1) {
@@ -1298,7 +1552,7 @@ function createImgCarousel(imgEl, name, images) {
             elCreateEmpty('div', {})
         );
 
-        carouselItem.style.backgroundImage = 'url("' + myEncodeURI(images[i]) + '")';
+        carouselItem.style.backgroundImage = 'url("' + images[i] + '")';
         carouselInner.appendChild(carouselItem);
         if (i === 0) {
             carouselItem.classList.add('active');
@@ -1332,7 +1586,12 @@ function showModal(modal) {
 }
 
 function checkMediaSessionSupport() {
-    return settings.mediaSession && 'mediaSession' in navigator
+    if (settings.mediaSession === false ||
+        navigator.mediaSession === undefined)
+    {
+        return false;
+    }
+    return true;
 }
 
 function checkTagValue(tag, value) {
@@ -1344,4 +1603,90 @@ function checkTagValue(tag, value) {
 
 function strToBool(str) {
     return str === 'true';
+}
+
+function getParent(el, nodeName) {
+    let target = el;
+    let i = 0;
+    while (target.nodeName !== nodeName) {
+        i++;
+        if (i > 10) {
+            return null;
+        }
+        target = target.parentNode;
+    }
+    return target;
+}
+
+function clearSearchTimer() {
+    if (searchTimer !== null) {
+        clearTimeout(searchTimer);
+        searchTimer = null;
+    }
+}
+
+//cuesheet handling
+function cuesheetUri(uri) {
+    const cuesheet = uri.match(/^(.*\.cue)\/(track\d+)$/);
+    if (cuesheet !== null) {
+        return cuesheet[1];
+    }
+    return uri;
+}
+
+function cuesheetTrack(uri) {
+    const cuesheet = uri.match(/^(.*\.cue)\/(track\d+)$/);
+    if (cuesheet !== null) {
+        return cuesheet[2];
+    }
+    return '';
+}
+
+function setViewport() {
+    document.querySelector("meta[name=viewport]").setAttribute('content', 'width=device-width, initial-scale=' +
+        localSettings.scaleRatio + ', maximum-scale=' + localSettings.scaleRatio);
+}
+
+function setScrollViewHeight(container) {
+    if (userAgentData.isMobile === true) {
+        container.parentNode.style.maxHeight = '';
+        return;
+    }
+    const footerHeight = document.getElementsByTagName('footer')[0].offsetHeight;
+    const tpos = getYpos(container.parentNode);
+    const maxHeight = window.innerHeight - tpos - footerHeight;
+    container.parentNode.style.maxHeight = maxHeight + 'px';
+}
+
+function setMobileView() {
+    if (userAgentData.isMobile === true) {
+        setViewport();
+        domCache.body.classList.remove('not-mobile');
+    }
+    else {
+        domCache.body.classList.add('not-mobile');
+    }
+}
+
+function httpGet(uri, callback, json) {
+    const ajaxRequest = new XMLHttpRequest();
+    ajaxRequest.open('GET', uri, true);
+    ajaxRequest.onreadystatechange = function() {
+        if (ajaxRequest.readyState === 4) {
+            if (json === true) {
+                try {
+                    const obj = JSON.parse(ajaxRequest.responseText);
+                    callback(obj);
+                }
+                catch(error) {
+                    showNotification(tn('Can not parse response to json object'), '', 'general', 'error');
+                    logError('Can not parse response to json object:' + ajaxRequest.responseText);
+                }
+            }
+            else {
+                callback(ajaxRequest.responseText);
+            }
+        }
+    };
+    ajaxRequest.send();
 }

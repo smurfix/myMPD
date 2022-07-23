@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -9,6 +9,7 @@
 
 #include "log.h"
 #include "sds_extras.h"
+#include "utility.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -16,7 +17,7 @@
 #include <unistd.h>
 
 struct t_mime_type_entry {
-    unsigned skip;
+    size_t skip;
     const char *magic_bytes;
     const char *extension;
     const char *mime_type;
@@ -40,22 +41,23 @@ const struct t_mime_type_entry mime_entries[] = {
 };
 
 const char *get_mime_type_by_ext(const char *filename) {
-    sds ext = sds_get_extension_from_filename(filename);
-
+    const char *ext = get_extension_from_filename(filename);
+    if (ext == NULL) {
+        return "application/octet-stream";
+    }
     const struct t_mime_type_entry *p = NULL;
     for (p = mime_entries; p->extension != NULL; p++) {
-        if (strcmp(ext, p->extension) == 0) {
+        if (strcasecmp(ext, p->extension) == 0) {
             break;
         }
     }
-    FREE_SDS(ext);
     return p->mime_type;
 }
 
 const char *get_ext_by_mime_type(const char *mime_type) {
     const struct t_mime_type_entry *p = NULL;
     for (p = mime_entries; p->extension != NULL; p++) {
-        if (strcmp(mime_type, p->mime_type) == 0) {
+        if (strcasecmp(mime_type, p->mime_type) == 0) {
             break;
         }
     }

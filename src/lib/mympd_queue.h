@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -27,9 +27,9 @@ struct t_mympd_queue {
 };
 
 struct t_mympd_queue *mympd_queue_create(const char *name);
-void mympd_queue_free(struct t_mympd_queue *queue);
+void *mympd_queue_free(struct t_mympd_queue *queue);
 int mympd_queue_push(struct t_mympd_queue *queue, void *data, long id);
 void *mympd_queue_shift(struct t_mympd_queue *queue, int timeout, long id);
 void *mympd_queue_expire(struct t_mympd_queue *queue, time_t max_age);
-unsigned mympd_queue_length(struct t_mympd_queue *queue, int timeout);
+long mympd_queue_length(struct t_mympd_queue *queue, int timeout);
 #endif

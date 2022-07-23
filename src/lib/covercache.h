@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,6 +11,6 @@
 
 #include "../../dist/sds/sds.h"
 
-bool covercache_write_file(const char *cachedir, const char *uri, const char *mime_type, sds binary);
-int covercache_clear(const char *cachedir, int keepdays);
+bool covercache_write_file(sds cachedir, const char *uri, const char *mime_type, sds binary, int offset);
+int covercache_clear(sds cachedir, int keepdays);
 #endif

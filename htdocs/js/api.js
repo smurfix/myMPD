@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 const ignoreMessages = ['No current song', 'No lyrics found'];
@@ -22,7 +22,7 @@ function removeEnterPinFooter(footer) {
 }
 
 function createEnterPinFooter(footers, method, params, callback, onerror) {
-    const input = elCreateEmpty('input', {"type": "password", "class": ["form-control", "border-secondary"]});
+    const input = elCreateEmpty('input', {"type": "password", "autocomplete": "off", "class": ["form-control", "border-secondary"]});
     const btn = elCreateText('button', {"class": ["btn", "btn-success"]}, tn('Enter'));
     const newFooter = elCreateNode('div', {"class": ["modal-footer", "enterPinFooter"]},
         elCreateNodes('div', {"class": ["row", "w-100"]}, [
@@ -39,7 +39,7 @@ function createEnterPinFooter(footers, method, params, callback, onerror) {
         footer.classList.add('d-none');
     }
     footers[0].parentNode.appendChild(newFooter);
-    input.focus();
+    setFocus(input);
     btn.addEventListener('click', function() {
         sendAPI('MYMPD_API_SESSION_LOGIN', {"pin": input.value}, function(obj) {
             input.value = '';
@@ -208,19 +208,20 @@ function sendAPI(method, params, callback, onerror) {
             ajaxRequest.responseText === '' ||
             ajaxRequest.responseText.length > 1000000)
         {
-            logError('Illegal response for request: ' + JSON.stringify(request));
+            logError('Invalid response for request: ' + JSON.stringify(request));
             logError('Response code: ' + ajaxRequest.status);
             logError('Response length: ' + ajaxRequest.responseText.length);
             if (onerror === true) {
                 if (callback !== undefined && typeof(callback) === 'function') {
                     logDebug('Got empty API response calling ' + callback.name);
-                    callback({"error": {"message": "Illegal response"}});
+                    callback({"error": {"message": "Invalid response"}});
                 }
             }
             return;
         }
 
-        if (settings.pin === true && session.token !== '' &&
+        if (settings.pin === true &&
+            session.token !== '' &&
             APImethods[method].protected === true)
         {
             //session was extended through request
@@ -356,32 +357,30 @@ function webSocketConnect() {
                         validateSession();
                     }
                     break;
+                case 'update_queue':
                 case 'update_state':
                     //rename param to result
                     obj.result = obj.params;
                     delete obj.params;
+                    if (app.id === 'QueueCurrent' &&
+                        obj.method === 'update_queue')
+                    {
+                        getQueue(document.getElementById('searchQueueStr').value);
+                    }
                     parseState(obj);
                     break;
                 case 'mpd_disconnected':
                     if (progressTimer) {
                         clearTimeout(progressTimer);
                     }
-                    getSettings(true);
+                    settings.mpdConnected = false;
+                    toggleUI();
                     break;
                 case 'mpd_connected':
                     //MPD connection established get state and settings
                     showNotification(tn('Connected to MPD'), '', 'general', 'info');
                     sendAPI('MYMPD_API_PLAYER_STATE', {}, parseState);
                     getSettings(true);
-                    break;
-                case 'update_queue':
-                    if (app.id === 'QueueCurrent') {
-                        getQueue();
-                    }
-                    //rename param to result
-                    obj.result = obj.params;
-                    delete obj.params;
-                    parseUpdateQueue(obj);
                     break;
                 case 'update_options':
                     getSettings();
@@ -392,7 +391,7 @@ function webSocketConnect() {
                     }, parseOutputs);
                     break;
                 case 'update_started':
-                    updateDBstarted(false);
+                    updateDBstarted(false, true);
                     break;
                 case 'update_database':
                 case 'update_finished':

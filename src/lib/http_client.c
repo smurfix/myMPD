@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -8,6 +8,7 @@
 #include "http_client.h"
 
 #include "../../dist/mongoose/mongoose.h"
+#include "filehandler.h"
 #include "log.h"
 #include "sds_extras.h"
 
@@ -30,15 +31,18 @@ sds get_dnsserver(void) {
     }
     sds line = sdsempty();
     sds nameserver = sdsempty();
-    while (sds_getline(&line, fp, 1000) == 0) {
-        if (sdslen(line) > 10 && strncmp(line, "nameserver", 10) == 0 && isspace(line[10])) {
+    while (sds_getline(&line, fp, LINE_LENGTH_MAX) == 0) {
+        if (sdslen(line) > 10 &&
+            strncmp(line, "nameserver", 10) == 0 &&
+            isspace(line[10]))
+        {
             char *p;
             char *z;
             for (p = line + 11; isspace(*p); p++) {
                 //skip blank chars
             }
             for (z = p; *z != '\0' && (isdigit(*z) || *z == '.'); z++) {
-                nameserver = sdscatprintf(nameserver, "%c", *z);
+                nameserver = sds_catchar(nameserver, *z);
             }
             struct sockaddr_in sa;
             if (inet_pton(AF_INET, nameserver, &(sa.sin_addr)) == 1) {
@@ -50,9 +54,9 @@ sds get_dnsserver(void) {
         }
     }
     FREE_SDS(line);
-    fclose(fp);
+    (void) fclose(fp);
     if (sdslen(nameserver) > 0) {
-        buffer = sdscatfmt(buffer, "udp://%s:53", nameserver);
+        buffer = sdscatfmt(buffer, "udp://%S:53", nameserver);
     }
     else {
         MYMPD_LOG_WARN("No valid nameserver found");
@@ -139,9 +143,10 @@ static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_d
             if (hm->headers[i].name.len == 0) {
                 break;
             }
-            mg_client_response->header = sdscatprintf(mg_client_response->header, "%.*s: %.*s\n",
-                (int) hm->headers[i].name.len, hm->headers[i].name.ptr,
-                (int) hm->headers[i].value.len, hm->headers[i].value.ptr);
+            mg_client_response->header = sdscatlen(mg_client_response->header, hm->headers[i].name.ptr, hm->headers[i].name.len);
+            mg_client_response->header = sdscatlen(mg_client_response->header, ": ", 2);
+            mg_client_response->header = sdscatlen(mg_client_response->header, hm->headers[i].value.ptr, hm->headers[i].value.len);
+            mg_client_response->header = sdscatlen(mg_client_response->header, "\n", 1);
         }
         //response code line
         for (unsigned i = 0; i < hm->message.len; i++) {
@@ -149,8 +154,7 @@ static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_d
                 break;
             }
             if (isprint(hm->message.ptr[i])) {
-                mg_client_response->response = sdscatprintf(mg_client_response->response,
-                    "%c", hm->message.ptr[i]);
+                mg_client_response->response = sds_catchar(mg_client_response->response, hm->message.ptr[i]);
             }
         }
         //set response code

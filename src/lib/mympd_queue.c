@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -21,7 +21,7 @@ static void set_wait_time(int timeout, struct timespec *max_wait);
 //public functions
 
 struct t_mympd_queue *mympd_queue_create(const char *name) {
-    struct t_mympd_queue *queue = (struct t_mympd_queue *)malloc_assert(sizeof(struct t_mympd_queue));
+    struct t_mympd_queue *queue = malloc_assert(sizeof(struct t_mympd_queue));
     queue->head = NULL;
     queue->tail = NULL;
     queue->length = 0;
@@ -32,16 +32,17 @@ struct t_mympd_queue *mympd_queue_create(const char *name) {
     return queue;
 }
 
-void mympd_queue_free(struct t_mympd_queue *queue) {
+void *mympd_queue_free(struct t_mympd_queue *queue) {
     struct t_mympd_msg *current = queue->head;
     struct t_mympd_msg *tmp = NULL;
     while (current != NULL) {
-        free(current->data);
+        FREE_PTR(current->data);
         tmp = current;
         current = current->next;
-        free(tmp);
+        FREE_PTR(tmp);
     }
-    free(queue);
+    FREE_PTR(queue);
+    return NULL;
 }
 
 int mympd_queue_push(struct t_mympd_queue *queue, void *data, long id) {
@@ -50,7 +51,7 @@ int mympd_queue_push(struct t_mympd_queue *queue, void *data, long id) {
         MYMPD_LOG_ERROR("Error in pthread_mutex_lock: %d", rc);
         return 0;
     }
-    struct t_mympd_msg* new_node = (struct t_mympd_msg*)malloc_assert(sizeof(struct t_mympd_msg));
+    struct t_mympd_msg* new_node = malloc_assert(sizeof(struct t_mympd_msg));
     new_node->data = data;
     new_node->id = id;
     new_node->timestamp = time(NULL);
@@ -74,7 +75,7 @@ int mympd_queue_push(struct t_mympd_queue *queue, void *data, long id) {
     return 1;
 }
 
-unsigned mympd_queue_length(struct t_mympd_queue *queue, int timeout) {
+long mympd_queue_length(struct t_mympd_queue *queue, int timeout) {
     int rc = pthread_mutex_lock(&queue->mutex);
     if (rc != 0) {
         MYMPD_LOG_ERROR("Error in pthread_mutex_lock: %d", rc);
@@ -86,11 +87,11 @@ unsigned mympd_queue_length(struct t_mympd_queue *queue, int timeout) {
         errno = 0;
         rc = pthread_cond_timedwait(&queue->wakeup, &queue->mutex, &max_wait);
         if (rc != 0 && rc != ETIMEDOUT) {
-            MYMPD_LOG_ERROR("Error in pthread_cond_timedwait: %s", rc);
+            MYMPD_LOG_ERROR("Error in pthread_cond_timedwait: %d", rc);
             MYMPD_LOG_ERRNO(errno);
         }
     }
-    unsigned len = queue->length;
+    long len = queue->length;
     unlock_mutex(&queue->mutex);
     return len;
 }
@@ -144,12 +145,12 @@ void *mympd_queue_shift(struct t_mympd_queue *queue, int timeout, long id) {
                     queue->tail = previous;
                 }
 
-                free(current);
+                FREE_PTR(current);
                 queue->length--;
                 unlock_mutex(&queue->mutex);
                 return data;
             }
-            MYMPD_LOG_DEBUG("Skipping queue entry with id %d", current->id);
+            MYMPD_LOG_DEBUG("Skipping queue entry with id %ld", current->id);
         }
     }
 
@@ -187,7 +188,7 @@ void *mympd_queue_expire(struct t_mympd_queue *queue, time_t max_age) {
                     queue->tail = previous;
                 }
 
-                free(current);
+                FREE_PTR(current);
                 queue->length--;
                 unlock_mutex(&queue->mutex);
                 MYMPD_LOG_WARN("Found expired entry in queue");

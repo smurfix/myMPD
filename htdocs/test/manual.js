@@ -1,7 +1,7 @@
 "use strict";
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -108,12 +108,16 @@ function formToParams(p, k) {
 }
 
 function sendAPI() {
+    document.getElementById('resultState').textContent = 'Sending...';
+    document.getElementById('resultText').textContent = '';
     let select = document.getElementById('cmds');
     let method = select.options[select.selectedIndex].value;
     let request = {"jsonrpc": "2.0", "id": 0, "method": method, "params": {}};
     if (APImethods[method].params !== undefined) {
         request.params = formToParams(APImethods[method].params, '');
     }
+    let time_start = 0;
+    let time_end = 0;
     let ajaxRequest = new XMLHttpRequest();
     ajaxRequest.open('POST', '/api/', true);
     ajaxRequest.setRequestHeader('Content-type', 'application/json');
@@ -123,7 +127,9 @@ function sendAPI() {
             try {
                 let obj = JSON.parse(ajaxRequest.responseText);
                 if (obj.result) {
-                    document.getElementById('resultState').textContent = 'OK';
+                    time_end = new Date().getTime();
+                    const duration = time_end - time_start;
+                    document.getElementById('resultState').textContent = 'OK - ' + duration + ' ms';
                 }
                 else {
                     document.getElementById('resultState').textContent = 'ERROR';
@@ -139,6 +145,7 @@ function sendAPI() {
             document.getElementById('resultText').textContent = ajaxRequest.responseText;
         }
     };
+    time_start = new Date().getTime();
     ajaxRequest.send(JSON.stringify(request));
     document.getElementById('requestText').textContent = JSON.stringify(request);
 }

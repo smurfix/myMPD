@@ -1,18 +1,20 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "mympd_config_defs.h"
 #include "cert.h"
 
+#include "filehandler.h"
+#include "list.h"
 #include "log.h"
 #include "sds_extras.h"
-#include "utility.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <ifaddrs.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <openssl/bn.h>
@@ -23,6 +25,7 @@
 #include <openssl/rand.h>
 #include <openssl/x509v3.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 //private definitions
@@ -42,10 +45,11 @@ static bool create_server_certificate(sds serverkey_file, EVP_PKEY **server_key,
                                       sds custom_san, EVP_PKEY **ca_key, X509 **ca_cert);
 static int check_expiration(X509 *cert, sds cert_file, int min_days, int max_days);
 static bool certificates_cleanup(sds dir, const char *name);
+
 //public functions
 
 bool certificates_check(sds workdir, sds ssl_san) {
-    sds testdirname = sdscatfmt(sdsempty(), "%s/ssl", workdir);
+    sds testdirname = sdscatfmt(sdsempty(), "%S/ssl", workdir);
     int testdir_rc = testdir("SSL cert dir", testdirname, true);
     if (testdir_rc == DIR_EXISTS || testdir_rc == DIR_CREATED) {
         if (certificates_create(testdirname, ssl_san) == false) {
@@ -68,8 +72,8 @@ bool certificates_create(sds dir, sds custom_san) {
     bool rc_cert = false;
 
     //read ca certificate / private key or create it
-    sds cacert_file = sdscatfmt(sdsempty(), "%s/ca.pem", dir);
-    sds cakey_file = sdscatfmt(sdsempty(), "%s/ca.key", dir);
+    sds cacert_file = sdscatfmt(sdsempty(), "%S/ca.pem", dir);
+    sds cakey_file = sdscatfmt(sdsempty(), "%S/ca.key", dir);
     EVP_PKEY *ca_key = NULL;
     X509 *ca_cert = NULL;
 
@@ -98,8 +102,8 @@ bool certificates_create(sds dir, sds custom_san) {
     }
 
     //read server certificate / privat key or create it
-    sds servercert_file = sdscatfmt(sdsempty(), "%s/server.pem", dir);
-    sds serverkey_file = sdscatfmt(sdsempty(), "%s/server.key", dir);
+    sds servercert_file = sdscatfmt(sdsempty(), "%S/server.pem", dir);
+    sds serverkey_file = sdscatfmt(sdsempty(), "%S/server.key", dir);
     EVP_PKEY *server_key = NULL;
     X509 *server_cert = NULL;
 
@@ -143,22 +147,14 @@ bool certificates_create(sds dir, sds custom_san) {
 //private functions
 
 static bool certificates_cleanup(sds dir, const char *name) {
-    sds cert_file = sdscatfmt(sdsempty(), "%s/%s.pem", dir, name);
-    errno = 0;
-    if (unlink(cert_file) != 0) {
-        MYMPD_LOG_ERROR("Error removing file \"%s\"", cert_file);
-        MYMPD_LOG_ERRNO(errno);
-    }
-    FREE_SDS(cert_file);
-    sds key_file = sdscatfmt(sdsempty(), "%s/%s.key", dir, name);
-    errno = 0;
-    if (unlink(key_file) != 0) {
-        MYMPD_LOG_ERROR("Error removing file \"%s\"", key_file);
-        MYMPD_LOG_ERRNO(errno);
-    }
-    FREE_SDS(key_file);
+    sds filepath = sdscatfmt(sdsempty(), "%S/%s.pem", dir, name);
+    int rc_cert = try_rm_file(filepath);
+    sdsclear(filepath);
+    filepath = sdscatfmt(filepath, "%S/%s.key", dir, name);
+    int rc_key = try_rm_file(filepath);
+    FREE_SDS(filepath);
 
-    return true;
+    return rc_cert != RM_FILE_ERROR && rc_key != RM_FILE_ERROR ? true : false;
 }
 
 static int check_expiration(X509 *cert, sds cert_file, int min_days, int max_days) {
@@ -212,7 +208,8 @@ static bool create_server_certificate(sds serverkey_file, EVP_PKEY **server_key,
     sds san = sdsempty();
     san = get_san(san);
     if (sdslen(custom_san) > 0) {
-        san = sdscatfmt(san, ", %s", custom_san);
+        MYMPD_LOG_DEBUG("Adding custom san: %s", custom_san);
+        san = sdscatfmt(san, ",%S", custom_san);
     }
     MYMPD_LOG_NOTICE("Set server certificate san to: %s", san);
     *server_cert = sign_certificate_request(*ca_key, *ca_cert, server_req, san);
@@ -263,54 +260,89 @@ static bool load_certificate(sds key_file, EVP_PKEY **key, sds cert_file, X509 *
 
 /*Gets local hostname and ip for subject alternative names */
 static sds get_san(sds buffer) {
-    buffer = sdscatfmt(buffer, "DNS:localhost, IP:127.0.0.1, IP:::1");
+    sds key = sdsempty();
+    struct t_list san;
+    list_init(&san);
+    MYMPD_LOG_DEBUG("Adding DNS:localhost to SAN");
+    list_push(&san, "DNS:localhost", 0, NULL, NULL);
+    list_push(&san, "DNS:ip6-localhost", 0, NULL, NULL);
+    list_push(&san, "DNS:ip6-loopback", 0, NULL, NULL);
 
     //Retrieve short hostname
     char hostbuffer[256]; /* Flawfinder: ignore */
     int hostname = gethostname(hostbuffer, sizeof(hostbuffer));
-    if (hostname == -1) {
-        return buffer;
-    }
-    buffer = sdscatfmt(buffer, ", DNS:%s", hostbuffer);
-
-    //Retrieve fqdn and ips
-    struct addrinfo hints = {0};
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_flags = AI_CANONNAME;
-    struct addrinfo *res;
-    struct addrinfo *rp;
-    if (getaddrinfo(hostbuffer, 0, &hints, &res) == 0) {
-        // The hostname was successfully resolved.
-        if (strcmp(hostbuffer, res->ai_canonname) != 0) {
-            buffer = sdscatfmt(buffer, ", DNS:%s", res->ai_canonname);
-        }
-        char addrstr[INET6_ADDRSTRLEN];
-        sds old_addrstr = sdsempty();
-        void *ptr = NULL;
-
-        for (rp = res; rp != NULL; rp = rp->ai_next) {
-            inet_ntop(res->ai_family, res->ai_addr->sa_data, addrstr, INET6_ADDRSTRLEN);
-
-            switch (res->ai_family) {
-                case AF_INET:
-                    ptr = &((struct sockaddr_in *) res->ai_addr)->sin_addr;
-                    break;
-                case AF_INET6:
-                    ptr = &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr;
-                    break;
+    if (hostname == 0) {
+        MYMPD_LOG_DEBUG("Adding DNS:%s to SAN", hostbuffer);
+        key = sdscatfmt(key, "DNS:%s", hostbuffer);
+        list_push(&san, key, 0, NULL, NULL);
+        //Retrieve fqdn
+        struct addrinfo hints = {0};
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_flags = AI_CANONNAME;
+        struct addrinfo *res;
+        if (getaddrinfo(hostbuffer, 0, &hints, &res) == 0) {
+            // The hostname was successfully resolved.
+            if (strcmp(hostbuffer, res->ai_canonname) != 0) {
+                MYMPD_LOG_DEBUG("Adding DNS:%s to SAN", res->ai_canonname);
+                sdsclear(key);
+                key = sdscatfmt(key, "DNS:%s", res->ai_canonname);
+                list_push(&san, key, 0, NULL, NULL);
             }
-            if (ptr != NULL) {
-                inet_ntop(res->ai_family, ptr, addrstr, INET6_ADDRSTRLEN);
-                if (strcmp(old_addrstr, addrstr) != 0) {
-                    buffer = sdscatfmt(buffer, ", IP:%s", addrstr);
-                    old_addrstr = sds_replace(old_addrstr, addrstr);
+            freeaddrinfo(res);
+        }
+    }
+    //retrieve interface ip addresses
+    struct ifaddrs *ifaddr;
+    struct ifaddrs *ifa;
+
+    errno = 0;
+    if (getifaddrs(&ifaddr) == 0) {
+        for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+            if (ifa->ifa_addr == NULL) {
+                continue;
+            }
+            int family = ifa->ifa_addr->sa_family;
+            if (family == AF_INET ||
+                family == AF_INET6)
+            {
+                char host[NI_MAXHOST];
+                int s = getnameinfo(ifa->ifa_addr,
+                    (family == AF_INET) ? sizeof(struct sockaddr_in) :
+                                          sizeof(struct sockaddr_in6),
+                    host, NI_MAXHOST,
+                    NULL, 0, NI_NUMERICHOST);
+
+                if (s != 0) {
+                    MYMPD_LOG_ERROR("getnameinfo() failed: %s\n", gai_strerror(s));
+                    continue;
                 }
+                sdsclear(key);
+                char *crap;
+                // remove zone info from ipv6
+                char *ip = strtok_r(host, "%", &crap);
+                MYMPD_LOG_DEBUG("Adding IP:%s to SAN", ip);
+                key = sdscatfmt(key, "IP:%s", ip);
+                list_push(&san, key, 0, NULL, NULL);
             }
-            ptr = NULL;
         }
-        freeaddrinfo(res);
-        FREE_SDS(old_addrstr);
+        freeifaddrs(ifaddr);
     }
+    else {
+        MYMPD_LOG_ERROR("Can not get list of inteface ip addresses");
+        MYMPD_LOG_ERRNO(errno);
+    }
+    //create san string
+    struct t_list_node *current = san.head;
+    int i = 0;
+    while (current != NULL) {
+        if (i++) {
+            buffer = sdscatlen(buffer, ",", 1);
+        }
+        buffer = sdscatsds(buffer, current->key);
+        current = current->next;
+    }
+    list_clear(&san);
+    FREE_SDS(key);
     return buffer;
 }
 
@@ -343,7 +375,7 @@ static X509_REQ *generate_request(EVP_PKEY *pkey) {
 
     /* Set the DN */
     time_t now = time(NULL);
-    sds cn = sdscatprintf(sdsempty(), "myMPD Server Certificate %llu", (unsigned long long)now);
+    sds cn = sdscatfmt(sdsempty(), "myMPD Server Certificate %U", (unsigned long long)now);
 
     X509_NAME *name = X509_REQ_get_subject_name(req);
     X509_NAME_add_entry_by_txt(name, "C",  MBSTRING_ASC, (unsigned char *)"DE", -1, -1, 0);
@@ -362,6 +394,10 @@ static X509_REQ *generate_request(EVP_PKEY *pkey) {
 
 static void add_extension(X509V3_CTX *ctx, X509 *cert, int nid, const char *value) {
     X509_EXTENSION *ex = X509V3_EXT_conf_nid(NULL, ctx, nid, value);
+    if (!ex) {
+        MYMPD_LOG_ERROR("Error adding extension with value: %s", value);
+        return;
+    }
     X509_add_ext(cert, ex, -1);
     X509_EXTENSION_free(ex);
 }
@@ -464,7 +500,7 @@ static X509 *generate_selfsigned_cert(EVP_PKEY *pkey) {
 
     /* Set the DN */
     time_t now = time(NULL);
-    sds cn = sdscatprintf(sdsempty(), "myMPD CA %llu", (unsigned long long)now);
+    sds cn = sdscatfmt(sdsempty(), "myMPD CA %U", (unsigned long long)now);
     X509_NAME_add_entry_by_txt(name, "C",  MBSTRING_ASC, (unsigned char *)"DE", -1, -1, 0);
     X509_NAME_add_entry_by_txt(name, "O",  MBSTRING_ASC, (unsigned char *)"myMPD", -1, -1, 0);
     X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (unsigned char *)cn, -1, -1, 0);
@@ -492,57 +528,29 @@ static X509 *generate_selfsigned_cert(EVP_PKEY *pkey) {
 
 static bool write_to_disk(sds key_file, EVP_PKEY *pkey, sds cert_file, X509 *cert) {
     /* Write the key to disk. */
-    sds key_file_tmp = sdscatfmt(sdsempty(), "%s.XXXXXX", key_file);
-    errno = 0;
-    int fd = mkstemp(key_file_tmp);
-    if (fd < 0) {
-        MYMPD_LOG_ERROR("Can not open file \"%s\" for write", key_file_tmp);
-        MYMPD_LOG_ERRNO(errno);
-        FREE_SDS(key_file_tmp);
+    sds tmp_file = sdscatfmt(sdsempty(), "%S.XXXXXX", key_file);
+    FILE *fp = open_tmp_file(tmp_file);
+    if (fp == NULL) {
+        FREE_SDS(tmp_file);
         return false;
     }
-    FILE *key_file_fp = fdopen(fd, "w");
-    bool rc = PEM_write_PrivateKey(key_file_fp, pkey, NULL, NULL, 0, NULL, NULL);
-    fclose(key_file_fp);
-    if (!rc) {
-        MYMPD_LOG_ERROR("Unable to write private key to disk");
-        FREE_SDS(key_file_tmp);
-        return false;
+    bool write_rc = PEM_write_PrivateKey(fp, pkey, NULL, NULL, 0, NULL, NULL) == 0 ? false : true;
+    bool rc = rename_tmp_file(fp, tmp_file, key_file, write_rc);
+    if (rc == false) {
+        FREE_SDS(tmp_file);
+        return rc;
     }
-    errno = 0;
-    if (rename(key_file_tmp, key_file) == -1) {
-        MYMPD_LOG_ERROR("Renaming file from %s to %s failed", key_file_tmp, key_file);
-        MYMPD_LOG_ERRNO(errno);
-        FREE_SDS(key_file_tmp);
-        return false;
-    }
-    FREE_SDS(key_file_tmp);
+    sdsclear(tmp_file);
 
     /* Write the certificate to disk. */
-    sds cert_file_tmp = sdscatfmt(sdsempty(), "%s.XXXXXX", cert_file);
-    errno = 0;
-    if ((fd = mkstemp(cert_file_tmp)) < 0 ) {
-        MYMPD_LOG_ERROR("Can not open file \"%s\" for write", cert_file_tmp);
-        MYMPD_LOG_ERRNO(errno);
-        FREE_SDS(cert_file_tmp);
+    tmp_file = sdscatfmt(tmp_file, "%S.XXXXXX", cert_file);
+    fp = open_tmp_file(tmp_file);
+    if (fp == NULL) {
+        FREE_SDS(tmp_file);
         return false;
     }
-    FILE *cert_file_fp = fdopen(fd, "w");
-    rc = PEM_write_X509(cert_file_fp, cert);
-    fclose(cert_file_fp);
-    if (!rc) {
-        MYMPD_LOG_ERROR("Unable to write certificate to disk");
-        FREE_SDS(cert_file_tmp);
-        return false;
-    }
-    errno = 0;
-    if (rename(cert_file_tmp, cert_file) == -1) {
-        MYMPD_LOG_ERROR("Renaming file from %s to %s failed", cert_file_tmp, cert_file);
-        MYMPD_LOG_ERRNO(errno);
-        FREE_SDS(cert_file_tmp);
-        return false;
-    }
-    FREE_SDS(cert_file_tmp);
-
-    return true;
+    write_rc = PEM_write_X509(fp, cert) == 0 ? false : true;
+    rc = rename_tmp_file(fp, tmp_file, cert_file, write_rc);
+    FREE_SDS(tmp_file);
+    return rc;
 }

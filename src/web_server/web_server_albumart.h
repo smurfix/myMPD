@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -14,6 +14,13 @@
 
 #include <stdbool.h>
 
+enum albumart_sizes {
+    ALBUMART_THUMBNAIL,
+    ALBUMART_FULL
+};
+
 void webserver_albumart_send(struct mg_connection *nc, sds data, sds binary);
-bool webserver_albumart_handler(struct mg_connection *nc, struct mg_http_message *hm, struct t_mg_user_data *mg_user_data, struct t_config *config, long long conn_id);
+bool webserver_albumart_handler(struct mg_connection *nc, struct mg_http_message *hm,
+    struct t_mg_user_data *mg_user_data, struct t_config *config, long long conn_id,
+    enum albumart_sizes size);
 #endif

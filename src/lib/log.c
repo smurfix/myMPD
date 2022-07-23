@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -60,11 +60,10 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
     }
 
     sds logline = sdsempty();
+    //preallocate some space for the logline to avoid continuous reallocations
+    logline = sdsMakeRoomFor(logline, 512);
     if (log_on_tty == true) {
         logline = sdscat(logline, loglevel_colors[level]);
-    }
-
-    if (log_on_tty == true) {
         time_t now = time(NULL);
         struct tm timeinfo;
         if (localtime_r(&now, &timeinfo) != NULL) {
@@ -73,7 +72,7 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
     }
     logline = sdscatprintf(logline, "%-8s %-10s", loglevel_names[level], thread_logname);
     #ifdef DEBUG
-        logline = sdscatprintf(logline, "%s:%d: ", file, line);
+        logline = sdscatfmt(logline, "%s:%i: ", file, line);
     #else
         (void)file;
         (void)line;
@@ -86,17 +85,16 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
 
     if (sdslen(logline) > 1023) {
         sdsrange(logline, 0, 1020);
-        logline = sdscatlen(logline, "...\n", 4);
+        logline = sdscatlen(logline, "...", 3);
+    }
+
+    if (log_on_tty == true) {
+        logline = sdscat(logline, "\033[0m\n");
     }
     else {
         logline = sdscatlen(logline, "\n", 1);
     }
-    if (log_on_tty == true) {
-        logline = sdscat(logline, "\033[0m");
-    }
 
-    fputs(logline, stdout);
-    fflush(stdout);
-
+    (void) fputs(logline, stdout);
     FREE_SDS(logline);
 }

@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 function initScripts() {
@@ -59,6 +59,24 @@ function initScripts() {
         document.getElementById('dropdownAddFunction').style.width = dw + 'px';
     }, false);
 
+    document.getElementById('btnDropdownImportScript').parentNode.addEventListener('show.bs.dropdown', function() {
+        const dw = document.getElementById('textareaScriptContent').offsetWidth - document.getElementById('btnDropdownImportScript').parentNode.offsetLeft;
+        document.getElementById('dropdownImportScript').style.width = dw + 'px';
+        getImportScriptList();
+    }, false);
+
+    document.getElementById('btnImportScript').addEventListener('click', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const script = getSelectValueId('selectImportScript');
+        if (script === '') {
+            return;
+        }
+        getImportScript(script);
+        BSN.Dropdown.getInstance(document.getElementById('btnDropdownImportScript')).hide();
+        setFocusId('textareaScriptContent');
+    }, false);
+
     const selectAPIcallEl = document.getElementById('selectAPIcall');
     elClear(selectAPIcallEl);
     selectAPIcallEl.appendChild(
@@ -95,8 +113,8 @@ function initScripts() {
             '    result = json.decode(raw_result)\n' +
             'end\n';
         el.setRangeText(newText, start, end, 'preserve');
-        document.getElementById('btnDropdownAddAPIcall').Dropdown.hide();
-        el.focus();
+        BSN.Dropdown.getInstance(document.getElementById('btnDropdownAddAPIcall')).hide();
+        setFocus(el);
     }, false);
 
     const selectFunctionEl = document.getElementById('selectFunction');
@@ -129,8 +147,48 @@ function initScripts() {
         const el = document.getElementById('textareaScriptContent');
         const [start, end] = [el.selectionStart, el.selectionEnd];
         el.setRangeText(LUAfunctions[value].func, start, end, 'end');
-        document.getElementById('btnDropdownAddFunction').Dropdown.hide();
-        el.focus();
+        BSN.Dropdown.getInstance(document.getElementById('btnDropdownAddFunction')).hide();
+        setFocus(el);
+    }, false);
+}
+
+function getImportScriptList() {
+    const sel = document.getElementById('selectImportScript');
+    sel.setAttribute('disabled', 'disabled');
+    httpGet(subdir + '/proxy?uri=' + myEncodeURI('https://jcorporation.github.io/myMPD/scripting/scripts/index.json'), function(obj) {
+        sel.options.length = 0;
+        for (const script of obj.scripts) {
+            sel.appendChild(
+                elCreateText('option', {"value": script}, script)
+            );
+        }
+        sel.removeAttribute('disabled');
+    }, true);
+}
+
+function getImportScript(script) {
+    document.getElementById('textareaScriptContent').setAttribute('disabled', 'disabled');
+    httpGet(subdir + '/proxy?uri=' + myEncodeURI('https://jcorporation.github.io/myMPD/scripting/scripts/' + script), function(text) {
+        const lines = text.split('\n');
+        const firstLine = lines.shift();
+        let obj;
+        try {
+            obj = JSON.parse(firstLine.substring(firstLine.indexOf('{')));
+        }
+        catch(error) {
+            showNotification(tn('Can not parse script arguments'), '', 'general', 'error');
+            logError('Can not parse script arguments:' + firstLine);
+            return;
+        }
+        const scriptArgEl = document.getElementById('selectScriptArguments');
+        scriptArgEl.options.length = 0;
+        for (let i = 0, j = obj.arguments.length; i < j; i++) {
+            scriptArgEl.appendChild(
+                elCreateText('option', {}, obj.arguments[i])
+            );
+        }
+        document.getElementById('textareaScriptContent').value = lines.join('\n');
+        document.getElementById('textareaScriptContent').removeAttribute('disabled');
     }, false);
 }
 
@@ -213,13 +271,13 @@ function removeScriptArgument(ev) {
     const el = document.getElementById('inputScriptArgument');
     el.value = ev.target.text;
     ev.target.remove();
-    el.focus();
+    setFocus(el);
 }
 
 //eslint-disable-next-line no-unused-vars
 function showEditScript(script) {
     cleanupModalId('modalScripts');
-
+    document.getElementById('textareaScriptContent').removeAttribute('disabled');
     document.getElementById('listScripts').classList.remove('active');
     document.getElementById('editScript').classList.add('active');
     elHideId('listScriptsFooter');
@@ -236,7 +294,7 @@ function showEditScript(script) {
         document.getElementById('selectScriptArguments').textContent = '';
         document.getElementById('textareaScriptContent').value = '';
     }
-    document.getElementById('inputScriptName').focus();
+    setFocusId('inputScriptName');
 }
 
 function parseEditScript(obj) {
@@ -245,7 +303,7 @@ function parseEditScript(obj) {
     document.getElementById('inputScriptOrder').value = obj.result.metadata.order;
     document.getElementById('inputScriptArgument').value = '';
     const selSA = document.getElementById('selectScriptArguments');
-    selSA.textContent = '';
+    selSA.options.length = 0;
     for (let i = 0, j = obj.result.metadata.arguments.length; i < j; i++) {
         selSA.appendChild(
             elCreateText('option', {}, obj.result.metadata.arguments[i])
@@ -267,10 +325,17 @@ function deleteScript(el, script) {
     showConfirmInline(el.parentNode.previousSibling, tn('Do you really want to delete the script?', {"script": script}), tn('Yes, delete it'), function() {
         sendAPI("MYMPD_API_SCRIPT_RM", {
             "script": script
-        }, function() {
-            getScriptList(true);
-        }, false);
+        }, deleteScriptCheckError, true);
     });
+}
+
+function deleteScriptCheckError(obj) {
+    if (obj.error) {
+        showModalAlert(obj);
+    }
+    else {
+        getScriptList(true);
+    }
 }
 
 function getScriptList(all) {
@@ -291,7 +356,7 @@ function parseScriptList(obj) {
         return;
     }
 
-    const timerActions = elCreateEmpty('optgroup', {"label": tn('Script')});
+    const timerActions = elCreateEmpty('optgroup', {"id": "timerActionsScriptsOptGroup", "label": tn('Script')});
     setData(timerActions, 'value', 'script');
     const scriptMaxListLen = 4;
     const scriptListLen = obj.result.data.length;
@@ -321,10 +386,11 @@ function parseScriptList(obj) {
             setData(tr, 'href', {"script": obj.result.data[i].name, "arguments": obj.result.data[i].metadata.arguments});
             tbodyScripts.appendChild(tr);
 
-            //scriptlist select for timers and triggers
+            //scriptlist select for timers
             const option = elCreateText('option', {"value": obj.result.data[i].name}, obj.result.data[i].name);
             setData(option, 'arguments', {"arguments": obj.result.data[i].metadata.arguments});
             timerActions.appendChild(option);
+            //scriptlist select for trigger
             const option2 = option.cloneNode(true);
             setData(option2, 'arguments', {"arguments": obj.result.data[i].metadata.arguments});
             triggerScripts.appendChild(option2);
@@ -339,11 +405,16 @@ function parseScriptList(obj) {
     }
     else {
         elHide(navScripting);
-        elShow(navScripting.previousElementSibling);
+        if (showScriptListLen === 0) {
+            elHide(navScripting.previousElementSibling);
+        }
+        else {
+            elShow(navScripting.previousElementSibling);
+        }
         document.getElementById('scripts').classList.remove('collapse', 'menu-indent');
     }
-
-    const old = document.getElementById('selectTimerAction').querySelector('optgroup[label="Script"]');
+    //update timer actions select
+    const old = document.getElementById('timerActionsScriptsOptGroup');
     if (old) {
         old.replaceWith(timerActions);
     }

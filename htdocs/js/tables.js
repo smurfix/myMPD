@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 function dragAndDropTable(table) {
@@ -80,24 +80,17 @@ function dragAndDropTable(table) {
             tr[i].classList.remove('dragover');
         }
         document.getElementById(table).classList.add('opacity05');
-        if (app.current.card === 'Queue' && app.current.tab === 'Current') {
+        if (app.id === 'QueueCurrent') {
             sendAPI("MYMPD_API_QUEUE_MOVE_SONG", {"from": oldSongpos, "to": newSongpos});
         }
-        else if (app.current.card === 'Browse' && app.current.tab === 'Playlists' && app.current.view === 'Detail') {
+        else if (app.id === 'BrowsePlaylistsDetail') {
             playlistMoveSong(oldSongpos, newSongpos);
         }
     }, false);
 }
 
 function dragAndDropTableHeader(table) {
-    let tableHeader;
-    if (document.getElementById(table + 'List')) {
-        tableHeader = document.getElementById(table + 'List').getElementsByTagName('tr')[0];
-    }
-    else {
-        tableHeader = table.getElementsByTagName('tr')[0];
-        table = 'BrowseDatabase';
-    }
+    const tableHeader = document.getElementById(table + 'List').getElementsByTagName('tr')[0];
 
     tableHeader.addEventListener('dragstart', function(event) {
         if (event.target.nodeName === 'TH') {
@@ -169,6 +162,13 @@ function dragAndDropTableHeader(table) {
 }
 
 function setColTags(table) {
+    if (table === 'BrowseRadioWebradiodb') {
+        return ["Country", "Description", "Genre", "Homepage", "Language", "Name", "StreamUri", "Codec", "Bitrate"];
+    }
+    else if (table === 'BrowseRadioRadiobrowser') {
+        return ["clickcount", "country", "homepage", "language", "lastchangetime", "lastcheckok", "tags", "url_resolved", "votes"];
+    }
+
     const tags = settings.tagList.slice();
     if (features.featTags === false) {
         tags.push('Title');
@@ -203,8 +203,8 @@ function setColTags(table) {
     }
     //sort tags and append stickers
     tags.sort();
-    tags.push('dropdownTitleSticker');
     if (features.featStickers === true) {
+        tags.push('dropdownTitleSticker');
         for (const sticker of stickerList) {
             tags.push(sticker);
         }
@@ -237,16 +237,17 @@ function setColsChecklist(table, menu) {
 }
 
 function setCols(table) {
-    let sort = app.current.sort;
-    if (table === 'Search' && app.cards.Search.sort === 'Title') {
+    if (table === 'Search' &&
+        app.cards.Search.sort.tag === 'Title')
+    {
         if (settings.tagList.includes('Title')) {
-            sort = 'Title';
+            app.cards.Search.sort.tag = 'Title';
         }
         else if (features.featTags === false) {
-            sort = 'Filename';
+            app.cards.Search.sort.tag = 'Filename';
         }
         else {
-            sort = '-';
+            app.cards.Search.sort.tag = '-';
         }
     }
 
@@ -256,17 +257,17 @@ function setCols(table) {
     for (let i = 0, j = settings['cols' + table].length; i < j; i++) {
         const hname = settings['cols' + table][i];
         const th = elCreateText('th', {"draggable": "true", "data-col": settings['cols' + table][i]}, tn(hname));
-        if (hname === 'Track' || hname === 'Pos') {
+        if (hname === 'Track' ||
+            hname === 'Pos')
+        {
             th.textContent = '#';
         }
-
-        if (table === 'Search' && (hname === sort || ('-' + hname) === sort) ) {
-            let sortdesc = false;
-            if (app.current.sort.indexOf('-') === 0) {
-                sortdesc = true;
-            }
+        if ((table === 'Search' && hname === app.cards.Search.sort.tag) ||
+            (table === 'BrowseRadioWebradiodb' && hname === app.cards.Browse.tabs.Radio.views.Webradiodb.sort.tag)
+           )
+        {
             th.appendChild(
-                elCreateText('span', {"class": ["sort-dir", "mi", "float-end"]}, (sortdesc === true ? 'arrow_drop_up' : 'arrow_drop_down'))
+                elCreateText('span', {"class": ["sort-dir", "mi", "float-end"]}, (app.cards.Search.sort.desc === true ? 'arrow_drop_up' : 'arrow_drop_down'))
             );
         }
         thead.appendChild(th);
@@ -275,7 +276,7 @@ function setCols(table) {
     const th = elCreateEmpty('th', {"data-col": "Action"});
     if (features.featTags === true) {
         th.appendChild(
-            elCreateText('a', {"href": "#", "data-popover": "columns", "class": ["align-middle", "mi", "mi-small", "clickable"], "data-title-phrase": "Columns", "title": tn('Columns')}, 'settings')
+            elCreateText('a', {"href": "#", "data-action": "popover", "data-popover": "columns", "class": ["align-middle", "mi", "mi-small", "clickable"], "data-title-phrase": "Columns", "title": tn('Columns')}, 'settings')
         );
     }
     thead.appendChild(th);
@@ -325,7 +326,7 @@ function saveCols(table, tableEl) {
 
 //eslint-disable-next-line no-unused-vars
 function saveColsPlayback(table) {
-    const colInputs = document.getElementById(table + 'ColsDropdown').firstChild.getElementsByTagName('button');
+    const colInputs = document.getElementById(table + 'ColsDropdown').firstElementChild.getElementsByTagName('button');
     const header = document.getElementById('cardPlaybackTags');
 
     for (let i = 0, j = colInputs.length - 1; i < j; i++) {
@@ -359,6 +360,31 @@ function saveColsPlayback(table) {
     sendAPI("MYMPD_API_COLS_SAVE", params, getSettings);
 }
 
+function toggleSort(th, colName) {
+    if (th.nodeName !== 'TH' ||
+        th.textContent === '')
+    {
+        return;
+    }
+
+    if (app.current.sort.tag === colName) {
+        app.current.sort.desc = app.current.sort.desc === false ? true : false;
+    }
+    else {
+        app.current.sort.desc = false;
+        app.current.sort.tag = colName;
+    }
+    //remove old sort indicator
+    const sdi = th.parentNode.getElementsByClassName('sort-dir');
+    for (const s of sdi) {
+        s.remove();
+    }
+    //set new sort indicator
+    th.appendChild(
+        elCreateText('span', {"class": ["sort-dir", "mi", "float-end"]}, (app.current.sort.desc === true ? 'arrow_drop_up' : 'arrow_drop_down'))
+    );
+}
+
 function replaceTblRow(row, el) {
     const menuEl = row.querySelector('[data-popover]');
     if (menuEl) {
@@ -373,7 +399,7 @@ function addDiscRow(disc, album, albumartist, colspan) {
             elCreateText('span', {"class": ["mi"]}, 'album')
         ),
         elCreateText('td', {"colspan": (colspan - 1)}, tn('Disc') + ' ' + disc),
-        elCreateNode('td', {},
+        elCreateNode('td', {"data-col": "Action"},
             elCreateText('a', {"data-popover": "disc", "href": "#", "class": ["mi", "color-darkgrey"], "title": tn('Actions')}, ligatureMore)
         )
     ]);
@@ -391,7 +417,14 @@ function updateTable(obj, list, perRowCallback, createRowCellsCallback) {
 
     const nrItems = obj.result.returnedEntities;
     const tr = tbody.getElementsByTagName('tr');
-    const smallWidth = window.innerWidth < 576 ? true : false;
+    const smallWidth = uiSmallWidthTagRows();
+
+    if (smallWidth === true) {
+        table.classList.add('smallWidth');
+    }
+    else {
+        table.classList.remove('smallWidth');
+    }
 
     //disc handling for album view
     let z = 0;
@@ -424,7 +457,6 @@ function updateTable(obj, list, perRowCallback, createRowCellsCallback) {
             perRowCallback(row, obj.result.data[i]);
         }
         //data row
-        row.setAttribute('tabindex', 0);
         //set artist and album data
         if (obj.result.data[i].Album !== undefined) {
             setData(row, 'Album', obj.result.data[i].Album);
@@ -467,16 +499,13 @@ function updateTable(obj, list, perRowCallback, createRowCellsCallback) {
         tr[i].remove();
     }
 
-    if (nrItems === 1000) {
-        tbody.appendChild(warningRow('Too many results, list is cropped', colspan + 1));
-    }
-
     setPagination(obj.result.totalEntities, obj.result.returnedEntities);
 
     if (nrItems === 0) {
         tbody.appendChild(emptyRow(colspan + 1));
     }
     table.classList.remove('opacity05');
+    scrollToPosY(table.parentNode, app.current.scrollPos);
 }
 
 function tableRow(row, data, list, colspan, smallWidth) {
@@ -490,7 +519,9 @@ function tableRow(row, data, list, colspan, smallWidth) {
                 td.appendChild(
                     elCreateNodes('div', {"class": ["row"]}, [
                         elCreateText('small', {"class": ["col-3"]}, tn(settings['cols' + list][c])),
-                        elCreateNode('span', {"data-col": settings['cols' + list][c], "class": ["col-9"]}, printValue(settings['cols' + list][c], data[settings['cols' + list][c]]))
+                        elCreateNode('span', {"data-col": settings['cols' + list][c], "class": ["col-9"]},
+                            printValue(settings['cols' + list][c], data[settings['cols' + list][c]])
+                        )
                     ])
                 );
             }
@@ -505,11 +536,18 @@ function tableRow(row, data, list, colspan, smallWidth) {
                 );
             }
         }
-        row.appendChild(
-            elCreateNode('td', {},
-                elCreateText('a', {"data-col": "Action", "href": "#", "class": ["mi", "color-darkgrey"], "title": tn('Actions')}, ligatureMore)
-            )
-        );
+        switch(app.id) {
+            case 'QueueCurrent':
+            case 'BrowsePlaylistsDetail':
+                row.appendChild(
+                    pEl.actionQueueTd.cloneNode(true)
+                );
+                break;
+            default:
+                row.appendChild(
+                    pEl.actionTd.cloneNode(true)
+                );
+        }
     }
 }
 
@@ -517,6 +555,14 @@ function emptyRow(colspan) {
     return elCreateNode('tr', {"class": ["not-clickable"]},
         elCreateNode('td', {"colspan": colspan},
             elCreateText('div', {"class": ["alert", "alert-secondary"]}, tn('Empty list'))
+        )
+    );
+}
+
+function loadingRow(colspan) {
+    return elCreateNode('tr', {"class": ["not-clickable"]},
+        elCreateNode('td', {"colspan": colspan},
+            elCreateText('div', {"class": ["alert", "alert-secondary"]}, tn('Loading...'))
         )
     );
 }
@@ -529,6 +575,7 @@ function errorRow(obj, colspan) {
     );
 }
 
+//eslint-disable-next-line no-unused-vars
 function warningRow(message, colspan) {
     return elCreateNode('tr', {"class": ["not-clickable"]},
         elCreateNode('td', {"colspan": colspan},
@@ -542,9 +589,14 @@ function checkResultId(obj, id) {
 }
 
 function checkResult(obj, tbody) {
-    const colspan = tbody.parentNode.getElementsByTagName('tr')[0].getElementsByTagName('th').length;
+    const thead = tbody.parentNode.getElementsByTagName('tr')[0];
+    const colspan = thead !== undefined ? thead.getElementsByTagName('th').length : 0;
+    const tfoot = tbody.parentNode.getElementsByTagName('tfoot');
     if (obj.error) {
         elClear(tbody);
+        if (tfoot.length === 1) {
+            elClear(tfoot[0]);
+        }
         tbody.appendChild(errorRow(obj, colspan));
         tbody.parentNode.classList.remove('opacity05');
         setPagination(0, 0);
@@ -552,10 +604,35 @@ function checkResult(obj, tbody) {
     }
     if (obj.result.returnedEntities === 0) {
         elClear(tbody);
+        if (tfoot.length === 1) {
+            elClear(tfoot[0]);
+        }
         tbody.appendChild(emptyRow(colspan));
         tbody.parentNode.classList.remove('opacity05');
         setPagination(0, 0);
         return false;
     }
     return true;
+}
+
+function uiSmallWidthTagRows() {
+    if (settings.webuiSettings.uiSmallWidthTagRows === true) {
+        return window.innerWidth < 576 ? true : false;
+    }
+    return false;
+}
+
+function handleActionTdClick(event) {
+    event.preventDefault();
+    switch(event.target.getAttribute('data-action')) {
+        case 'popover':
+            showPopover(event);
+            break;
+        case 'quickPlay':
+            clickQuickPlay(event.target);
+            break;
+        case 'quickRemove':
+            clickQuickRemove(event.target);
+            break;
+    }
 }

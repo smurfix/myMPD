@@ -38,81 +38,12 @@
 #include "iso8601.h"
 #include "uri.h"
 #include "iaf.h"
+#include "isong.h"
 
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-
-struct mpd_tag_value {
-	struct mpd_tag_value *next;
-
-	char *value;
-};
-
-struct mpd_song {
-	char *uri;
-
-	struct mpd_tag_value tags[MPD_TAG_COUNT];
-
-	/**
-	 * Duration of the song in seconds, or 0 for unknown.
-	 */
-	unsigned duration;
-
-	/**
-	 * Duration of the song in milliseconds, or 0 for unknown.
-	 */
-	unsigned duration_ms;
-
-	/**
-	 * Start of the virtual song within the physical file in
-	 * seconds.
-	 */
-	unsigned start;
-
-	/**
-	 * End of the virtual song within the physical file in
-	 * seconds.  Zero means that the physical song file is
-	 * played to the end.
-	 */
-	unsigned end;
-
-	/**
-	 * The POSIX UTC time stamp of the last modification, or 0 if
-	 * that is unknown.
-	 */
-	time_t last_modified;
-
-	/**
-	 * The position of this song within the queue.
-	 */
-	unsigned pos;
-
-	/**
-	 * The id of this song within the queue.
-	 */
-	unsigned id;
-
-	/**
-	 * The priority of this song within the queue.
-	 */
-	unsigned prio;
-
-#ifndef NDEBUG
-	/**
-	 * This flag is used in an assertion: when it is set, you must
-	 * not call mpd_song_feed() again.  It is a safeguard for
-	 * buggy callers.
-	 */
-	bool finished;
-#endif
-
-	/**
-	 * The audio format as reported by MPD's decoder plugin.
-	 */
-	struct mpd_audio_format audio_format;
-};
 
 static struct mpd_song *
 mpd_song_new(const char *uri)
@@ -206,7 +137,7 @@ mpd_song_dup(const struct mpd_song *song)
 			continue;
 
 		do {
-			success = mpd_song_add_tag(ret, i, src_tag->value);
+			success = mpd_song_add_tag(ret, (enum mpd_tag_type)i, src_tag->value);
 			if (!success) {
 				mpd_song_free(ret);
 				return NULL;
@@ -531,7 +462,7 @@ mpd_song_feed(struct mpd_song *song, const struct mpd_pair *pair)
 	}
 
 	if (strcmp(pair->name, "Time") == 0)
-		mpd_song_set_duration(song, atoi(pair->value));
+		mpd_song_set_duration(song, strtoul(pair->value, NULL, 10));
 	else if (strcmp(pair->name, "duration") == 0)
 		mpd_song_set_duration_ms(song, 1000 * atof(pair->value));
 	else if (strcmp(pair->name, "Range") == 0)
@@ -539,11 +470,11 @@ mpd_song_feed(struct mpd_song *song, const struct mpd_pair *pair)
 	else if (strcmp(pair->name, "Last-Modified") == 0)
 		mpd_song_set_last_modified(song, iso8601_datetime_parse(pair->value));
 	else if (strcmp(pair->name, "Pos") == 0)
-		mpd_song_set_pos(song, atoi(pair->value));
+		mpd_song_set_pos(song, strtoul(pair->value, NULL, 10));
 	else if (strcmp(pair->name, "Id") == 0)
-		mpd_song_set_id(song, atoi(pair->value));
+		mpd_song_set_id(song, strtoul(pair->value, NULL, 10));
 	else if (strcmp(pair->name, "Prio") == 0)
-		mpd_song_set_prio(song, atoi(pair->value));
+		mpd_song_set_prio(song, strtoul(pair->value, NULL, 10));
 	else if (strcmp(pair->name, "Format") == 0)
 		mpd_song_parse_audio_format(song, pair->value);
 

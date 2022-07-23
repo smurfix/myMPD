@@ -1,7 +1,7 @@
 "use strict";
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -26,7 +26,7 @@ function setTest(cmd, state, response) {
     }
     const duration = time_end - time_start;
     time_all += duration;
-    document.getElementById('testCount').innerText = 'Test ' + (i + 1) + '/' + cmds.length + ' - ' +
+    document.getElementById('testCount').textContent = 'Test ' + (i + 1) + '/' + cmds.length + ' - ' +
         ok + ' ok, ' + warn + ' warnings, ' + error + ' errors, duration: ' + time_all + ' ms';
     const tr = document.createElement('tr');
     tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + JSON.stringify(cmd) + '</td><td>' + duration + ' ms</td><td>' + response + '</td>';
@@ -50,7 +50,13 @@ function sendAPI(method) {
                     }
                     else if (obj.result) {
                         setTest(request, 'ok', ajaxRequest.responseText);
-                    } 
+                    }
+                    else if (obj.error &&
+                        (obj.error.message === 'Invalid API request' ||
+                         obj.error.message === 'No response for method %{method}')
+                    ) {
+                        setTest(request, 'error', ajaxRequest.responseText);
+                    }
                     else {
                         setTest(request, 'warn', ajaxRequest.responseText);
                     }
@@ -67,12 +73,12 @@ function sendAPI(method) {
                 sendAPI(cmds[i]);
             }
             else {
-                document.getElementsByTagName('h5')[0].innerText = 'Finished';
+                document.getElementsByTagName('h5')[0].textContent = 'Finished';
             }
         }
     };
     let request = {"jsonrpc": "2.0", "id": 0, "method": method, "params": apiParamsToObject(APImethods[method].params)};
-    document.getElementsByTagName('h5')[0].innerText = 'Running ' + JSON.stringify(request);
+    document.getElementsByTagName('h5')[0].textContent = 'Running ' + JSON.stringify(request);
     time_start = new Date().getTime();
     ajaxRequest.send(JSON.stringify(request));
 }

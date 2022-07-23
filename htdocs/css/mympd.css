@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,10 +11,9 @@ body.not-mobile {
 
 body.not-mobile .scrollContainer {
   overflow-y: auto;
-  overflow-x: auto;
 }
 
-body.not-mobile .BrowseDatabaseCardsContainer {
+div.cardsContainer {
   overflow-x: hidden;
 }
 
@@ -30,13 +29,25 @@ body.not-mobile .album-cover-grid:hover > div {
   display: block;
 }
 
+body.not-mobile .featMobile {
+  display: none;
+}
+
 :root {
-  --mympd-coverimagesize: 250px;
-  --mympd-coverimagesizesmall: 175px;
+  --mympd-thumbnail-size: 175px;
   --mympd-highlightcolor: #28a745;
   --mympd-highlightcolor-contrast: white;
   --mympd-backgroundcolor: black;
   --mympd-black-light: #1d2124;
+  --bs-dropdown-divider-bg: var(--bs-gray-100);
+  --bs-dropdown-divider-margin-y: 0.5rem;
+  --bs-nav-link-padding-y: 0.5rem;
+  --bs-nav-link-padding-x: 1rem;
+  --bs-dropdown-item-padding-y: 0.25rem;
+  --bs-dropdown-item-padding-x: 0.5rem;
+  --bs-dropdown-header-padding-y: 0.5rem;
+  --bs-dropdown-header-padding-x: 1rem;
+  --bs-dropdown-header-color: var(--bs-gray-600);
 }
 
 .color-darkgrey {
@@ -75,7 +86,8 @@ button.active,
   border-color: var(--mympd-highlightcolor);
 }
 
-.btn-success:disabled, .btn-success.disabled {
+.btn-success:disabled,
+.btn-success.disabled {
   color: inherit;
 }
 
@@ -95,7 +107,7 @@ a.text-success:focus {
 }
 
 #splashScreen {
-  background: linear-gradient(0deg, rgba(0, 0, 0, 1) 0%, rgba(52, 58, 64, 1) 100%);
+  background: linear-gradient(0deg, #28a745 0%, #1e7e34 100%);
   width: 100vw;
   height: 100vh;
   z-index: 2000;
@@ -146,7 +158,7 @@ html {
 body {
   min-height: 100vh;
   padding-top: 3rem;
-  padding-bottom: 4rem;
+  padding-bottom: 5rem;
   background-color: var(--mympd-backgroundcolor);
   background-position: center center;
   background-attachment: fixed;
@@ -163,6 +175,14 @@ main {
   padding-right: 1rem;
 }
 
+#navbar-main {
+  overflow: auto;
+}
+
+#headerLeft {
+  margin-right: 2rem;
+}
+
 .square-end {
   border-bottom-right-radius: 0 !important;
   border-top-right-radius: 0 !important;
@@ -177,27 +197,22 @@ main {
   word-break: break-all;
 }
 
-.albumartbg {
+body > .albumartbg {
   position: fixed;
-  width: 100%;
-  height: 100%;
-  background-position: center center;
-  background-size: cover;
-  filter: blur(5px);
-  transition: opacity 1s;
-  z-index: -9;
 }
 
-.coverbg {
-  position: absolute;
+div > .albumartbg {
+  border-radius: 0.25rem;
+}
+
+.albumartbg {
   width: 100%;
   height: 100%;
   background-position: center center;
   background-size: cover;
-  top: 0;
-  left: 0;
   transition: opacity 1s;
-  z-index: 3;
+  z-index: -9;
+  position: absolute;
 }
 
 .badge {
@@ -211,7 +226,7 @@ main {
     height: 100vw;
     width: 4rem;
     flex-flow: column;
-    padding: 1.2rem 0 6.5rem 0;
+    padding: 1.2rem 0 6.5rem;
     justify-content: normal !important;
   }
 
@@ -226,6 +241,7 @@ main {
 
   #headerLeft {
     margin-bottom: 2rem;
+    margin-right: 0;
   }
 
   .navText {
@@ -240,9 +256,9 @@ main {
     flex-direction: column !important;
   }
 
-  #navQueue > a {
-    padding-right: 0 !important;
-    padding-left: 0.5rem !important;
+  #top-alerts {
+    padding-right: 4rem !important;
+    margin-top: 0 !important;
   }
 }
 
@@ -276,6 +292,7 @@ div.footerCounter {
   background-size: cover;
   flex-shrink: 0;
   position: relative;
+  z-index: 1;
 }
 
 #footerTitle {
@@ -324,7 +341,8 @@ button {
 }
 
 #navQueue > a {
-  padding-right: 1rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
 }
 
 #BrowseBreadcrumb {
@@ -341,13 +359,6 @@ button {
 }
 
 @media only screen and (max-width: 440px) {
-  #volumeMenu::after,
-  #localPlaybackMenu::after {
-    display: none !important;
-  }
-}
-
-@media only screen and (max-width: 400px) {
   #btnPrev,
   #btnPlay {
     padding-right: 4px !important;
@@ -358,7 +369,10 @@ button {
     padding-left: 4px !important;
   }
 
-  #footerPlaying {
+  #volumeMenu::after,
+  #localPlaybackMenu::after,
+  #footerPlaying,
+  #footerCover {
     display: none !important;
   }
 }
@@ -377,35 +391,45 @@ button {
   cursor: default !important;
 }
 
-.queue-playing [data-col=Action] {
+.queue-playing [data-col="Action"] {
   color: inherit;
 }
 
 .queue-playing:hover > * {
   background-color: unset;
+
   --bs-table-accent-bg: unset !important;
 }
 
-[data-col=Pos],
-[data-col=Track] {
+[data-col="Pos"],
+[data-col="Track"] {
   max-width: 5rem;
   word-break: keep-all;
 }
 
-[data-col=Duration] {
+[data-col="Duration"] {
   max-width: 8rem;
   min-width: 8rem;
   word-break: keep-all;
 }
 
-[data-col=Type] {
+[data-col="Type"] {
   width: 3rem;
   word-break: keep-all;
 }
 
-[data-col=Action] {
+[data-col="Action"] {
   width: 2rem;
   text-align: right;
+  word-break: keep-all;
+}
+
+table.smallWidth [data-col="Action"] {
+  word-break: break-all;
+}
+
+th[data-col="Action"] {
+  padding-right: 0.4rem !important;
 }
 
 th {
@@ -417,40 +441,23 @@ div.card {
   margin-bottom: 2rem;
 }
 
-.coverPanel {
-  float: left;
-  width: var(--mympd-coverimagesize, 250px);
-  margin-bottom: 1.25rem;
-  margin-right: 1.25rem;
-}
-
 .album-cover {
   background-size: cover;
   border: 1px solid black;
   border-radius: 5px;
   overflow: hidden;
-  max-width: 100%;
-  width: var(--mympd-coverimagesize, 250px);
-  height: var(--mympd-coverimagesize, 250px);
+  width: 100%;
+  height: 0;
+  padding-bottom: 100%;
   background-color: #eee;
   position: relative;
   z-index: 1;
 }
 
-.album-cover-small {
-  background-size: cover;
-  border: 1px solid black;
-  border-radius: 5px;
-  overflow: hidden;
-  max-width: 100%;
-  width: var(--mympd-coverimagesizesmall, 175px);
-  height: var(--mympd-coverimagesizesmall, 175px);
-  background-color: #eee;
-  float: left;
-  margin-bottom: 1.25rem;
-  margin-right: 1.25rem;
-  position: relative;
-  z-index: 1;
+div#homeActions {
+  position: absolute;
+  right: 1rem;
+  top: 0.5rem;
 }
 
 .home-icons {
@@ -482,12 +489,16 @@ div.card {
   background-color: transparent;
 }
 
-.dragover-icon {
+.dragover-icon-left {
   border-left: 1px solid var(--mympd-highlightcolor);
 }
 
+.dragover-icon-right {
+  border-right: 1px solid var(--mympd-highlightcolor);
+}
+
 .card-grid {
-  width: var(--mympd-coverimagesizesmall);
+  width: var(--mympd-thumbnail-size);
   min-height: 0 !important;
   margin-bottom: 1.25rem;
   overflow: hidden;
@@ -503,25 +514,16 @@ div.card {
 
 .album-cover-grid {
   background-size: cover;
+  background-position: center center;
   overflow: hidden;
-  width: var(--mympd-coverimagesizesmall);
-  height: var(--mympd-coverimagesizesmall);
+  width: var(--mympd-thumbnail-size);
+  height: var(--mympd-thumbnail-size);
   max-width: 100%;
   padding: 0.5rem;
 }
 
 .album-cover-loading {
   background-image: url("../assets/coverimage-mympd.svg");
-}
-
-.album-cover-songdetails {
-  margin-right: 0;
-}
-
-.album-desc {
-  min-width: 240px;
-  float: left;
-  padding-bottom: 1.25rem;
 }
 
 div.card-toolbar {
@@ -535,14 +537,14 @@ div.card-toolbar > form {
 }
 
 @font-face {
-  font-family: 'Material Icons';
+  font-family: "Material Icons";
   font-style: normal;
   font-weight: 400;
-  src: url(../assets/MaterialIcons-Regular.woff2) format('woff2');
+  src: url("../assets/MaterialIcons-Regular.woff2") format("woff2");
 }
 
 .mi {
-  font-family: 'Material Icons';
+  font-family: "Material Icons";
   font-weight: normal;
   font-style: normal;
   font-size: 1.4rem;
@@ -553,8 +555,8 @@ div.card-toolbar > form {
   white-space: nowrap;
   direction: ltr;
   vertical-align: top;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'liga';
+  text-rendering: optimizelegibility;
+  font-feature-settings: "liga";
 }
 
 .mi-left {
@@ -573,9 +575,13 @@ div.card-toolbar > form {
   font-size: 0.8rem;
 }
 
-.btn-sm-big-icon {
-  font-size: 1.4rem !important;
-  padding: 0.05rem 0.25rem !important;
+button.mi {
+  line-height: 1.5rem;
+}
+
+button.mi::after {
+  font-size: 1rem;
+  vertical-align: 0.5rem !important;
 }
 
 .pagination button {
@@ -587,13 +593,14 @@ div.card-toolbar > form {
   min-width: 8rem;
 }
 
-#volumeDiv {
+.volumeRangeDiv {
   padding-bottom: 0;
-  padding-top: 0.4rem;
+  padding-top: 0.5rem;
 }
 
-#volumeBar {
-  width: 10rem;
+#volumeBar,
+#localPlaybackVolumeBar {
+  min-width: 10rem;
 }
 
 .form-range::-webkit-slider-thumb {
@@ -680,10 +687,6 @@ tfoot td {
   animation-iteration-count: infinite;
 }
 
-.modal-body .album-cover {
-  float: none;
-}
-
 .menu-indent {
   padding-left: 1rem;
 }
@@ -704,25 +707,11 @@ div.key {
   div#shortcutList > div.col-6 {
     width: 100%;
   }
-}
 
-ol#searchCrumb,
-ol#searchDatabaseCrumb {
-  padding: 0.5rem;
-}
-
-.nodropdown::after {
-  content: none !important;
-}
-
-.dropdown-header-lx {
-  font-size: 1.2rem;
-}
-
-.connected,
-.connected:focus,
-.connected:hover {
-  color: var(--mympd-highlightcolor) !important;
+  [data-col="Duration"] {
+    max-width: none;
+    min-width: auto;
+  }
 }
 
 .dropdown-item:focus {
@@ -745,9 +734,8 @@ textarea.small {
   border-color: var(--mympd-highlightcolor) !important;
 }
 
-.btn-xs,
-.btn-group-xs > .btn {
-  padding: 0.12rem;
+.btn-xs {
+  padding: 0 0.25rem;
   border-radius: 0.2rem;
 }
 
@@ -758,20 +746,9 @@ textarea.small {
   border-color: var(--mympd-highlightcolor) !important;
 }
 
-.was-validated .form-control:invalid:focus, .form-control.is-invalid:focus {
+.was-validated .form-control:invalid:focus,
+.form-control.is-invalid:focus {
   box-shadow: none;
-}
-
-img.database-header {
-  width: 50px;
-  height: 50px;
-  display: block;
-  float: left;
-  margin-right: 1rem;
-}
-
-div.database-header {
-  padding: 0.37rem 0.75rem !important;
 }
 
 #dropdownHomeIconLigature .row {
@@ -782,11 +759,6 @@ div.database-header {
 #listHomeIconLigature {
   max-height: 60vh;
   overflow-y: scroll;
-}
-
-div#playDropdown .row {
-  flex-wrap: nowrap;
-  white-space: nowrap;
 }
 
 .form-check {
@@ -811,6 +783,7 @@ div#playDropdown .row {
   width: 100%;
   z-index: 1000;
   top: 0;
+  margin-top: 3.5rem;
 }
 
 .top-alert {
@@ -825,7 +798,7 @@ div#playDropdown .row {
 .top-alert-dismissible .btn-close {
   position: absolute;
   top: 0;
-  right: 4rem;
+  right: 0;
   z-index: 2;
   padding: 0.25rem 1.25rem;
   color: var(--bs-danger) !important;
@@ -850,29 +823,6 @@ div#playDropdown .row {
   max-height: none;
 }
 
-/*resize coverimage in playback card*/
-@media only screen and (min-width: 768px) and (min-height: 35rem) {
-  #currentCover {
-    width: 20rem;
-    height: 20rem;
-  }
-
-  .coverPanel {
-    width: 20rem;
-  }
-}
-
-@media only screen and (min-width: 992px) and (min-height: 43rem) {
-  #currentCover {
-    width: 26rem;
-    height: 26rem;
-  }
-
-  .coverPanel {
-    width: 26rem;
-  }
-}
-
 .disabled {
   pointer-events: none;
   cursor: not-allowed;
@@ -895,14 +845,12 @@ div.active #badgeQueueItems {
   left: 7px;
 }
 
-div.BrowseDatabaseCardsContainer,
-div.HomeContainer {
+div.cardsContainer {
   padding-right: 5px;
   padding-left: 5px;
 }
 
-div.BrowseDatabaseCardsContainer .col,
-div.HomeContainer .col {
+div.cardsContainer .col {
   margin-left: 0.5rem;
   margin-right: 0.5rem;
 }
@@ -919,7 +867,7 @@ div#modalPictureImg {
 }
 
 div#BrowseFilesystemImages {
-  height: calc(var(--mympd-coverimagesizesmall, 175px) + 1rem);
+  height: calc(var(--mympd-thumbnail-size, 175px) + 1rem);
   margin-bottom: 1rem;
   overflow-x: auto;
   overflow-y: hidden;
@@ -927,8 +875,8 @@ div#BrowseFilesystemImages {
 }
 
 div#BrowseFilesystemImages > div {
-  height: var(--mympd-coverimagesizesmall, 175px);
-  width: var(--mympd-coverimagesizesmall, 175px);
+  height: var(--mympd-thumbnail-size, 175px);
+  width: var(--mympd-thumbnail-size, 175px);
   background-position: center center;
   background-size: cover;
   display: inline-block;
@@ -945,12 +893,10 @@ div#homeIconPreview {
   padding-bottom: 0;
   text-align: center;
   padding-top: 1rem;
-  float: left;
-  margin-right: 2rem;
 }
 
 div.album-grid-mouseover {
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 50%);
   color: white;
   width: 3rem;
   height: 3rem;
@@ -982,14 +928,14 @@ div.album-grid-mouseover {
   padding: 0.375rem 0.75rem;
 }
 
-input[type=color] {
+input[type="color"] {
   height: 2.35rem;
 }
 
 body.locked button.protected::before {
   content: "lock";
   float: left;
-  font-family: 'Material Icons';
+  font-family: "Material Icons";
   font-weight: normal;
   font-style: normal;
   font-size: 1.4rem;
@@ -998,14 +944,14 @@ body.locked button.protected::before {
   letter-spacing: normal;
   word-wrap: normal;
   vertical-align: top;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'liga';
+  text-rendering: optimizelegibility;
+  font-feature-settings: "liga";
   margin-right: 0.5rem;
 }
 
 a.external::before {
   content: "open_in_browser";
-  font-family: 'Material Icons';
+  font-family: "Material Icons";
   font-weight: normal;
   font-style: normal;
   font-size: 1.4rem;
@@ -1014,14 +960,14 @@ a.external::before {
   letter-spacing: normal;
   word-wrap: normal;
   vertical-align: top;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'liga';
+  text-rendering: optimizelegibility;
+  font-feature-settings: "liga";
   margin-right: 0.5rem;
 }
 
 a.download::before {
   content: "download";
-  font-family: 'Material Icons';
+  font-family: "Material Icons";
   font-weight: normal;
   font-style: normal;
   font-size: 1.4rem;
@@ -1030,8 +976,8 @@ a.download::before {
   letter-spacing: normal;
   word-wrap: normal;
   vertical-align: top;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'liga';
+  text-rendering: optimizelegibility;
+  font-feature-settings: "liga";
   margin-right: 0.5rem;
 }
 
@@ -1054,7 +1000,7 @@ button.input-inner-button:focus {
 
 button.select-inner-button {
   background-repeat: no-repeat;
-  background-position: right .75rem center;
+  background-position: right 0.75rem center;
   background-size: 16px 12px;
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
   width: 2rem;
@@ -1078,11 +1024,6 @@ button.select-inner-button {
   min-width: 6rem;
 }
 
-input[is=mympd-select-search][readonly] {
-  background-color: inherit;
-  cursor: default;
-}
-
 .top-alert-dismissible .btn-close-alert {
   top: 2px;
   background: transparent url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23842029'%3e%3cpath d='M.293.293a1 1 0 011.414 0L8 6.586 14.293.293a1 1 0 111.414 1.414L9.414 8l6.293 6.293a1 1 0 01-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 01-1.414-1.414L6.586 8 .293 1.707a1 1 0 010-1.414z'/%3e%3c/svg%3e") center/1em auto no-repeat;
@@ -1092,7 +1033,9 @@ input[is=mympd-select-search][readonly] {
   margin-right: -1.5rem;
 }
 
-#SearchList > thead > tr > th {
+#SearchList > thead > tr > th,
+#BrowseRadioWebradiodbList > thead > tr > th,
+#QueueCurrentList > thead > tr > th {
   padding-right: 1.5rem;
 }
 
@@ -1103,7 +1046,7 @@ input[is=mympd-select-search][readonly] {
 div.alert-warning::before {
   content: "warning";
   float: left;
-  font-family: 'Material Icons';
+  font-family: "Material Icons";
   font-weight: normal;
   font-style: normal;
   font-size: 1.4rem;
@@ -1112,15 +1055,15 @@ div.alert-warning::before {
   letter-spacing: normal;
   word-wrap: normal;
   vertical-align: top;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'liga';
+  text-rendering: optimizelegibility;
+  font-feature-settings: "liga";
   margin-right: 0.5rem;
 }
 
 div.alert-danger::before {
   content: "error_outline";
   float: left;
-  font-family: 'Material Icons';
+  font-family: "Material Icons";
   font-weight: normal;
   font-style: normal;
   font-size: 1.4rem;
@@ -1129,15 +1072,15 @@ div.alert-danger::before {
   letter-spacing: normal;
   word-wrap: normal;
   vertical-align: top;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'liga';
+  text-rendering: optimizelegibility;
+  font-feature-settings: "liga";
   margin-right: 0.5rem;
 }
 
 div.alert-secondary::before {
   content: "info";
   float: left;
-  font-family: 'Material Icons';
+  font-family: "Material Icons";
   font-weight: normal;
   font-style: normal;
   font-size: 1.4rem;
@@ -1146,8 +1089,8 @@ div.alert-secondary::before {
   letter-spacing: normal;
   word-wrap: normal;
   vertical-align: top;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'liga';
+  text-rendering: optimizelegibility;
+  font-feature-settings: "liga";
   margin-right: 0.5rem;
 }
 
@@ -1158,6 +1101,25 @@ div.alert-secondary {
   margin-bottom: 0;
 }
 
+div.alert-danger {
+  background-color: #f8d7da !important;
+}
+
 input.innerButton {
-  padding-right: calc(1.5em + .75rem);
+  padding-right: calc(1.5em + 0.75rem);
+}
+
+.btn-group2 {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.list-group-scroll {
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+form#outputs {
+  overflow: auto;
 }

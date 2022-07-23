@@ -36,6 +36,7 @@
 #include "iaf.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -198,8 +199,8 @@ parse_mpd_state(const char *p)
 		return MPD_STATE_UNKNOWN;
 }
 
-static enum mpd_single_state
-parse_mpd_single_state(const char *p)
+enum mpd_single_state
+mpd_parse_single_state(const char *p)
 {
 	if (strcmp(p, "0") == 0)
 		return MPD_SINGLE_OFF;
@@ -209,6 +210,22 @@ parse_mpd_single_state(const char *p)
 		return MPD_SINGLE_ONESHOT;
 	else
 		return MPD_SINGLE_UNKNOWN;
+}
+
+const char *
+mpd_lookup_single_state(enum mpd_single_state state)
+{
+	switch (state) {
+	case MPD_SINGLE_OFF:
+		return "0";
+	case MPD_SINGLE_ON:
+		return "1";
+	case MPD_SINGLE_ONESHOT:
+		return "oneshot";
+	case MPD_SINGLE_UNKNOWN:
+		return NULL;
+	}
+	return NULL;
 }
 
 void
@@ -224,25 +241,25 @@ mpd_status_feed(struct mpd_status *status, const struct mpd_pair *pair)
 	else if (strcmp(pair->name, "random") == 0)
 		status->random = !!atoi(pair->value);
 	else if (strcmp(pair->name, "single") == 0)
-		status->single = parse_mpd_single_state(pair->value);
+		status->single = mpd_parse_single_state(pair->value);
 	else if (strcmp(pair->name, "consume") == 0)
 		status->consume = !!atoi(pair->value);
 	else if (strcmp(pair->name, "playlist") == 0)
 		status->queue_version = strtoul(pair->value, NULL, 10);
 	else if (strcmp(pair->name, "playlistlength") == 0)
-		status->queue_length = atoi(pair->value);
+		status->queue_length = strtoul(pair->value, NULL, 10);
 	else if (strcmp(pair->name, "bitrate") == 0)
-		status->kbit_rate = atoi(pair->value);
+		status->kbit_rate = strtoul(pair->value, NULL, 10);
 	else if (strcmp(pair->name, "state") == 0)
 		status->state = parse_mpd_state(pair->value);
 	else if (strcmp(pair->name, "song") == 0)
-		status->song_pos = atoi(pair->value);
+		status->song_pos = strtoimax(pair->value, NULL, 10);
 	else if (strcmp(pair->name, "songid") == 0)
-		status->song_id = atoi(pair->value);
+		status->song_id = strtoimax(pair->value, NULL, 10);
 	else if (strcmp(pair->name, "nextsong") == 0)
-		status->next_song_pos = atoi(pair->value);
+		status->next_song_pos = strtoimax(pair->value, NULL, 10);
 	else if (strcmp(pair->name, "nextsongid") == 0)
-		status->next_song_id = atoi(pair->value);
+		status->next_song_id = strtoimax(pair->value, NULL, 10);
 	else if (strcmp(pair->name, "time") == 0) {
 		char *endptr;
 
@@ -268,13 +285,13 @@ mpd_status_feed(struct mpd_status *status, const struct mpd_pair *pair)
 		free(status->error);
 		status->error = strdup(pair->value);
 	} else if (strcmp(pair->name, "xfade") == 0)
-		status->crossfade = atoi(pair->value);
+		status->crossfade = strtoul(pair->value, NULL, 10);
 	else if (strcmp(pair->name, "mixrampdb") == 0)
-		status->mixrampdb = atof(pair->value);
+		status->mixrampdb = strtof(pair->value, NULL);
 	else if (strcmp(pair->name, "mixrampdelay") == 0)
-		status->mixrampdelay = atof(pair->value);
+		status->mixrampdelay = strtof(pair->value, NULL);
 	else if (strcmp(pair->name, "updating_db") == 0)
-		status->update_id = atoi(pair->value);
+		status->update_id = strtoul(pair->value, NULL, 10);
 	else if (strcmp(pair->name, "audio") == 0)
 		mpd_parse_audio_format(&status->audio_format, pair->value);
 }

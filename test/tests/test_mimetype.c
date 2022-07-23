@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -22,6 +22,7 @@ UTEST(mimetype, test_get_mime_type_by_ext) {
     ASSERT_STREQ("application/octet-stream", mime_type);
 
     mime_type = get_mime_type_by_ext("");
+    ASSERT_STREQ("application/octet-stream", mime_type);
 }
 
 UTEST(mimetype, test_get_ext_by_mime_type) {

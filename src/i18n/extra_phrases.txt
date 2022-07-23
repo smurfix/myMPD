@@ -31,6 +31,7 @@ Location
 Type
 Pos
 Fileformat
+Duration
 Dark
 Default
 Light
@@ -57,7 +58,11 @@ Click album play button
 Click folder
 Click playlist
 Click song in queue
+Click filesystem playlist
 Click song
+Click webradio
+Click webradio favorite
+Click quick play button
 Play
 Num entries
 Song change
@@ -83,8 +88,7 @@ Media session
 On page notifications
 Web notifications
 Open folder
-Size normal
-Size small
+Thumbnail size
 CSS filter
 Color
 Error getting mympd state for script execution
@@ -130,7 +134,7 @@ Each 60
 Each 604800
 Each 86400
 Show all albums from artist
-Show directory
+Open directory
 name
 state
 plugin
@@ -138,3 +142,32 @@ Repeat current song once
 Repeat current song
 Stop playback after current song
 Disable single mode
+Show
+View
+Add to favorites
+Delete webradio favorite
+Description
+Stream uri
+clickcount
+country
+homepage
+language
+lastchangetime
+lastcheckok
+tags
+url_resolved
+votes
+Jukebox Queue
+Startup
+Startup view
+Display tags in rows for small displays
+Enable consume
+Disable consume
+Enable random
+Disable random
+Enable repeat
+Disable repeat
+Invalid response
+Quick play button
+Quick remove button
+External link

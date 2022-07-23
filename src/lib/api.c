@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2021 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -8,6 +8,7 @@
 #include "api.h"
 
 #include "../../dist/mongoose/mongoose.h"
+#include "log.h"
 #include "lua_mympd_state.h"
 #include "mem.h"
 #include "sds_extras.h"
@@ -95,13 +96,24 @@ bool is_mympd_only_api_method(enum mympd_cmd_ids cmd_id) {
     }
 }
 
+/**
+ * Sends a websocket notification to the browser
+ * @param message the message to send
+ */
+void ws_notify(sds message) {
+    MYMPD_LOG_DEBUG("Push websocket notify to queue: \"%s\"", message);
+    struct t_work_result *response = create_result_new(0, 0, INTERNAL_API_WEBSERVER_NOTIFY);
+    response->data = sds_replace(response->data, message);
+    mympd_queue_push(web_server_queue, response, 0);
+}
+
 struct t_work_result *create_result(struct t_work_request *request) {
     struct t_work_result *response = create_result_new(request->conn_id, request->id, request->cmd_id);
     return response;
 }
 
-struct t_work_result *create_result_new(long long conn_id, long request_id, unsigned cmd_id) {
-    struct t_work_result *response = (struct t_work_result *)malloc_assert(sizeof(struct t_work_result));
+struct t_work_result *create_result_new(long long conn_id, long request_id, enum mympd_cmd_ids cmd_id) {
+    struct t_work_result *response = malloc_assert(sizeof(struct t_work_result));
     response->conn_id = conn_id;
     response->id = request_id;
     response->cmd_id = cmd_id;
@@ -113,8 +125,8 @@ struct t_work_result *create_result_new(long long conn_id, long request_id, unsi
     return response;
 }
 
-struct t_work_request *create_request(long long conn_id, long request_id, unsigned cmd_id, const char *data) {
-    struct t_work_request *request = (struct t_work_request *)malloc_assert(sizeof(struct t_work_request));
+struct t_work_request *create_request(long long conn_id, long request_id, enum mympd_cmd_ids cmd_id, const char *data) {
+    struct t_work_request *request = malloc_assert(sizeof(struct t_work_request));
     request->conn_id = conn_id;
     request->cmd_id = cmd_id;
     request->id = request_id;
@@ -134,7 +146,7 @@ void free_request(struct t_work_request *request) {
     if (request != NULL) {
         FREE_SDS(request->data);
         FREE_SDS(request->method);
-        free(request);
+        FREE_PTR(request);
     }
 }
 
@@ -143,7 +155,7 @@ void free_result(struct t_work_result *result) {
         FREE_SDS(result->data);
         FREE_SDS(result->method);
         FREE_SDS(result->binary);
-        free(result);
+        FREE_PTR(result);
     }
 }
 
@@ -156,7 +168,7 @@ int expire_result_queue(struct t_mympd_queue *queue, time_t age) {
                 lua_mympd_state_free(response->extra);
             }
             else {
-                free(response->extra);
+               FREE_PTR(response->extra);
             }
         }
         free_result(response);
@@ -175,7 +187,7 @@ int expire_request_queue(struct t_mympd_queue *queue, time_t age) {
                 lua_mympd_state_free(request->extra);
             }
             else {
-                free(request->extra);
+                FREE_PTR(request->extra);
             }
         }
         free_request(request);
