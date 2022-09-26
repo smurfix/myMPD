@@ -39,7 +39,7 @@ function parseStats(obj) {
 }
 
 function getServerinfo() {
-    httpGet(subdir + '/api/serverinfo', function(obj) {
+    httpGet(subdir + '/serverinfo', function(obj) {
         document.getElementById('wsIP').textContent = obj.result.ip;
     }, true);
 }
@@ -155,7 +155,7 @@ function parseState(obj) {
     }
 
     if (obj.result.nextSongPos === -1 &&
-        settings.jukeboxMode === 'off')
+        settings.partition.jukeboxMode === 'off')
     {
         elDisableId('btnNext');
     }
@@ -217,16 +217,16 @@ function parseState(obj) {
 
     //check if we need to get settings
     let getNewSettings = false;
-    if (settings.partition !== obj.result.partition) {
+    if (localSettings.partition !== obj.result.partition) {
         //partition has changed, fetch new settings
         getNewSettings = true;
     }
     //refresh settings if mpd is not connected or ui is disabled
     //ui is disabled at startup
-    if (settings.mpdConnected === false ||
+    if (settings.partition.mpdConnected === false ||
         uiEnabled === false)
     {
-        logDebug((settings.mpdConnected === false ? 'MPD disconnected' : 'UI disabled') + ' - refreshing settings');
+        logDebug((settings.partition.mpdConnected === false ? 'MPD disconnected' : 'UI disabled') + ' - refreshing settings');
         getNewSettings = true;
     }
 
@@ -318,8 +318,7 @@ function clearCurrentCover() {
 
 function parseCurrentSong(obj) {
     const list = document.getElementById('PlaybackList');
-    list.classList.remove('opacity05');
-    setScrollViewHeight(list);
+    unsetUpdateView(list);
 
     //check for song change
     //use title to detect stream changes
@@ -346,12 +345,10 @@ function parseCurrentSong(obj) {
         pageTitle += obj.result.Artist.join(', ') + smallSpace + nDash + smallSpace;
         footerArtistEl.textContent = obj.result.Artist;
         setData(footerArtistEl, 'name', obj.result.Artist);
-        if (features.featAdvsearch === true) {
-            footerArtistEl.classList.add('clickable');
-        }
+        footerArtistEl.classList.add('clickable');
     }
     else {
-        footerArtistEl.textContent = '';
+        elClear(footerArtistEl);
         setData(footerArtistEl, 'name', ['']);
     }
 
@@ -363,12 +360,10 @@ function parseCurrentSong(obj) {
         footerAlbumEl.textContent = obj.result.Album;
         setData(footerAlbumEl, 'name', obj.result.Album);
         setData(footerAlbumEl, 'AlbumArtist', obj.result[tagAlbumArtist]);
-        if (features.featAdvsearch === true) {
-            footerAlbumEl.classList.add('clickable');
-        }
+        footerAlbumEl.classList.add('clickable');
     }
     else {
-        footerAlbumEl.textContent = '';
+        elClear(footerAlbumEl);
         setData(footerAlbumEl, 'name', '');
         setData(footerAlbumEl, 'AlbumArtist', ['']);
     }
@@ -386,9 +381,9 @@ function parseCurrentSong(obj) {
         footerCoverEl.classList.add('clickable');
     }
     else {
-        document.getElementById('currentTitle').textContent = '';
+        elClear(currentTitleEl);
         setData(currentTitleEl, 'uri', '');
-        footerTitleEl.textContent = '';
+        elClear(footerTitleEl);
         currentTitleEl.classList.remove('clickable');
         footerTitleEl.classList.remove('clickable');
         footerCoverEl.classList.remove('clickable');
@@ -448,6 +443,8 @@ function parseCurrentSong(obj) {
     if (currentState.state === 'play') {
         showNotification(obj.result.Title, textNotification, 'player', 'info');
     }
+
+    setScrollViewHeight(list);
 
     //remember current song
     currentSong = newSong;
@@ -509,26 +506,26 @@ function setPlaybackCardTags(songObj) {
         }, false);
         elReplaceChild(cardPlaybackWebradio,
             elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                elCreateText('small', {}, tn('Webradio')),
+                elCreateText('small', {"data-phrase": "Webradio"}, tn('Webradio')),
                 webradioName
             ])
         );
         cardPlaybackWebradio.appendChild(
             elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                elCreateText('small', {}, tn('Genre')),
+                elCreateText('small', {"data-phrase": "Genre"}, tn('Genre')),
                 elCreateText('p', {}, songObj.webradio.Genre)
             ])
         );
         cardPlaybackWebradio.appendChild(
             elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                elCreateText('small', {}, tn('Country')),
+                elCreateText('small', {"data-phrase": "Country"}, tn('Country')),
                 elCreateText('p', {}, songObj.webradio.Country + smallSpace + nDash + smallSpace + songObj.webradio.Language)
             ])
         );
         if (songObj.webradio.Homepage !== '') {
             cardPlaybackWebradio.appendChild(
                 elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                    elCreateText('small', {}, tn('Homepage')),
+                    elCreateText('small', {"data-phrase": "Homepage"}, tn('Homepage')),
                     elCreateNode('p', {}, 
                         elCreateText('a', {"class": ["text-success", "external"],
                             "href": myEncodeURIhost(songObj.webradio.Homepage),
@@ -543,7 +540,7 @@ function setPlaybackCardTags(songObj) {
         {
             cardPlaybackWebradio.appendChild(
                 elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                    elCreateText('small', {}, tn('Format')),
+                    elCreateText('small', {"data-phrase": "Format"}, tn('Format')),
                     elCreateText('p', {}, songObj.webradio.Codec + 
                         (songObj.webradio.Bitrate !== '' ? ' / ' + songObj.webradio.Bitrate + ' ' + tn('kbit') : ''))
                 ])
@@ -552,7 +549,7 @@ function setPlaybackCardTags(songObj) {
         if (songObj.webradio.Description !== '') {
             cardPlaybackWebradio.appendChild(
                 elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                    elCreateText('small', {}, tn('Description')),
+                    elCreateText('small', {"data-phrase": "Description"}, tn('Description')),
                     elCreateText('p', {}, songObj.webradio.Description)
                 ])
             );

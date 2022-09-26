@@ -4,7 +4,7 @@
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
 #include "web_server.h"
 
 #include "../lib/api.h"
@@ -12,28 +12,40 @@
 #include "../lib/jsonrpc.h"
 #include "../lib/log.h"
 #include "../lib/mem.h"
-#include "../lib/mympd_pin.h"
+#include "../lib/msg_queue.h"
 #include "../lib/sds_extras.h"
-#include "../lib/utility.h"
-#include "../lib/validate.h"
-#include "web_server_albumart.h"
-#include "web_server_handler.h"
-#include "web_server_proxy.h"
-#include "web_server_tagart.h"
+#include "albumart.h"
+#include "proxy.h"
+#include "request_handler.h"
+#include "tagart.h"
 
 #include <sys/prctl.h>
 
-//private definitions
-static bool parse_internal_message(struct t_work_result *response, struct t_mg_user_data *mg_user_data);
+/**
+ * Private definitions
+ */
+
+static bool parse_internal_message(struct t_work_response *response, struct t_mg_user_data *mg_user_data);
 static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn_data);
 #ifdef ENABLE_SSL
     static void ev_handler_redirect(struct mg_connection *nc_http, int ev, void *ev_data, void *fn_data);
 #endif
-static void send_ws_notify(struct mg_mgr *mgr, struct t_work_result *response);
-static void send_api_response(struct mg_mgr *mgr, struct t_work_result *response);
+static void send_ws_notify(struct mg_mgr *mgr, struct t_work_response *response);
+static void send_api_response(struct mg_mgr *mgr, struct t_work_response *response);
 static bool check_acl(struct mg_connection *nc, sds acl);
+static void mongoose_log(char ch, void *param);
 
-//public functions
+/**
+ * Public functions
+ */
+
+/**
+ * Initializes the webserver
+ * @param mgr mongoose mgr
+ * @param config pointer to myMPD config
+ * @param mg_user_data already allocated t_mg_user_data to populate
+ * @return true on success, else false
+ */
 bool web_server_init(struct mg_mgr *mgr, struct t_config *config, struct t_mg_user_data *mg_user_data) {
     //initialize mgr user_data, malloced in main.c
     mg_user_data->config = config;
@@ -47,10 +59,9 @@ bool web_server_init(struct mg_mgr *mgr, struct t_config *config, struct t_mg_us
     FREE_SDS(default_thumbnail_names);
     mg_user_data->publish_music = false;
     mg_user_data->publish_playlists = false;
-    mg_user_data->feat_mpd_albumart = false;
+    mg_user_data->feat_albumart = false;
     mg_user_data->connection_count = 0;
-    mg_user_data->stream_uri = sdsnew("http://localhost:8000");
-    mg_user_data->covercache = true;
+    list_init(&mg_user_data->stream_uris);
     list_init(&mg_user_data->session_list);
 
     //init monogoose mgr
@@ -99,6 +110,11 @@ bool web_server_init(struct mg_mgr *mgr, struct t_config *config, struct t_mg_us
     return mgr;
 }
 
+/**
+ * Frees the mongoose mgr
+ * @param mgr mongoose mgr to free
+ * @return NULL
+ */
 void *web_server_free(struct mg_mgr *mgr) {
     sds dns4_url = (sds)mgr->dns4.url;
     FREE_SDS(dns4_url);
@@ -107,6 +123,11 @@ void *web_server_free(struct mg_mgr *mgr) {
     return NULL;
 }
 
+/**
+ * Main function for the webserver thread
+ * @param arg_mgr void pointer to mongoose mgr
+ * @return NULL
+ */
 void *web_server_loop(void *arg_mgr) {
     thread_logname = sds_replace(thread_logname, "webserver");
     prctl(PR_SET_NAME, thread_logname, 0, 0, 0);
@@ -114,9 +135,8 @@ void *web_server_loop(void *arg_mgr) {
     struct t_mg_user_data *mg_user_data = (struct t_mg_user_data *) mgr->userdata;
 
     //set mongoose loglevel
-    #ifdef DEBUG
-    mg_log_set("1");
-    #endif
+    mg_log_set(1);
+    mg_log_set_fn(mongoose_log, NULL);
 
     #ifdef ENABLE_SSL
     MYMPD_LOG_DEBUG("Using certificate: %s", mg_user_data->config->ssl_cert);
@@ -126,7 +146,7 @@ void *web_server_loop(void *arg_mgr) {
     sds last_notify = sdsempty();
     time_t last_time = 0;
     while (s_signal_received == 0) {
-        struct t_work_result *response = mympd_queue_shift(web_server_queue, 50, 0);
+        struct t_work_response *response = mympd_queue_shift(web_server_queue, 50, 0);
         if (response != NULL) {
             if (response->conn_id == -1) {
                 //internal message
@@ -145,11 +165,12 @@ void *web_server_loop(void *arg_mgr) {
                     send_ws_notify(mgr, response);
                 }
                 else {
-                    free_result(response);
+                    MYMPD_LOG_DEBUG("Discarding repeated notify");
+                    free_response(response);
                 }
             }
             else {
-                MYMPD_LOG_DEBUG("Got API response for id \"%lld\"", response->conn_id);
+                MYMPD_LOG_DEBUG("\"%s\": Got API response for id \"%lld\"", response->partition, response->conn_id);
                 //api response
                 send_api_response(mgr, response);
             }
@@ -162,8 +183,18 @@ void *web_server_loop(void *arg_mgr) {
     return NULL;
 }
 
-//private functions
-static bool parse_internal_message(struct t_work_result *response, struct t_mg_user_data *mg_user_data) {
+/**
+ * Private functions
+ */
+
+/**
+ * Sets the mg_user_data values from set_mg_user_data_request.
+ * Message is sent by the feature detection function in the mympd_api thread.
+ * @param response 
+ * @param mg_user_data t_mg_user_data to configure
+ * @return true on success, else false
+ */
+static bool parse_internal_message(struct t_work_response *response, struct t_mg_user_data *mg_user_data) {
     bool rc = false;
     if (response->extra != NULL) {
         struct set_mg_user_data_request *new_mg_user_data = (struct set_mg_user_data_request *)response->extra;
@@ -203,35 +234,54 @@ static bool parse_internal_message(struct t_work_result *response, struct t_mg_u
         mg_user_data->thumbnail_names = sds_split_comma_trim(new_mg_user_data->thumbnail_names, &mg_user_data->thumbnail_names_len);
         FREE_SDS(new_mg_user_data->thumbnail_names);
 
-        mg_user_data->feat_mpd_albumart = new_mg_user_data->feat_mpd_albumart;
-        mg_user_data->covercache = new_mg_user_data->covercache;
+        mg_user_data->feat_albumart = new_mg_user_data->feat_albumart;
 
-        sdsclear(mg_user_data->stream_uri);
-        if (new_mg_user_data->mpd_stream_port != 0) {
-            mg_user_data->stream_uri = sdscatfmt(mg_user_data->stream_uri, "http://%s:%u",
-                (strncmp(new_mg_user_data->mpd_host, "/", 1) == 0 ? "127.0.0.1" : new_mg_user_data->mpd_host),
-                new_mg_user_data->mpd_stream_port);
+        list_clear(&mg_user_data->stream_uris);
+        struct t_list_node *current = new_mg_user_data->partitions.head;
+        sds uri = sdsempty();
+        while (current != NULL) {
+            if (current->value_i > 0) {
+                uri = sdscatfmt(uri, "http://%s:%I",
+                    (new_mg_user_data->mpd_host[0] == '/' ? "127.0.0.1" : new_mg_user_data->mpd_host),
+                    current->value_i);
+                MYMPD_LOG_DEBUG("\"%s\": Setting stream uri to \"%s\"", current->key, uri);
+                list_push(&mg_user_data->stream_uris, current->key, 0, uri, NULL);
+            }
+            sdsclear(uri);
+            current = current->next;
         }
+        FREE_SDS(uri);
         FREE_SDS(new_mg_user_data->mpd_host);
+        list_clear(&new_mg_user_data->partitions);
 	    FREE_PTR(response->extra);
         rc = true;
     }
     else {
         MYMPD_LOG_WARN("Invalid internal message: %s", response->data);
     }
-    free_result(response);
+    free_response(response);
     return rc;
 }
 
-static void send_ws_notify(struct mg_mgr *mgr, struct t_work_result *response) {
+/**
+ * Broadcasts a websocket connections to all clients
+ * @param mgr mongoose mgr
+ * @param response jsonrpc notification
+ */
+static void send_ws_notify(struct mg_mgr *mgr, struct t_work_response *response) {
     struct mg_connection *nc = mgr->conns;
     int send_count = 0;
     int conn_count = 0;
     while (nc != NULL) {
         if ((int)nc->is_websocket == 1) {
-            MYMPD_LOG_DEBUG("Sending notify to conn_id %lu: %s", nc->id, response->data);
-            mg_ws_send(nc, response->data, sdslen(response->data), WEBSOCKET_OP_TEXT);
-            send_count++;
+            struct t_frontend_nc_data *frontend_nc_data = (struct t_frontend_nc_data *)nc->fn_data;
+            if (strcmp(response->partition, frontend_nc_data->partition) == 0 ||
+                strcmp(response->partition, MPD_PARTITION_ALL) == 0)
+            {
+                MYMPD_LOG_DEBUG("\"%s\": Sending notify to conn_id %lu: %s", response->partition, nc->id, response->data);
+                mg_ws_send(nc, response->data, sdslen(response->data), WEBSOCKET_OP_TEXT);
+                send_count++;
+            }
         }
         nc = nc->next;
         conn_count++;
@@ -239,7 +289,7 @@ static void send_ws_notify(struct mg_mgr *mgr, struct t_work_result *response) {
     if (send_count == 0) {
         MYMPD_LOG_DEBUG("No websocket client connected, discarding message: %s", response->data);
     }
-    free_result(response);
+    free_response(response);
     struct t_mg_user_data *mg_user_data = (struct t_mg_user_data *) mgr->userdata;
     if (conn_count != mg_user_data->connection_count) {
         MYMPD_LOG_DEBUG("Correcting connection count from %d to %d", mg_user_data->connection_count, conn_count);
@@ -247,24 +297,36 @@ static void send_ws_notify(struct mg_mgr *mgr, struct t_work_result *response) {
     }
 }
 
-static void send_api_response(struct mg_mgr *mgr, struct t_work_result *response) {
+/**
+ * Sends a api response
+ * @param mgr mongoose mgr
+ * @param response jsonrpc response
+ */
+static void send_api_response(struct mg_mgr *mgr, struct t_work_response *response) {
     struct mg_connection *nc = mgr->conns;
     while (nc != NULL) {
         if ((int)nc->is_websocket == 0 && nc->id == (long unsigned)response->conn_id) {
             if (response->cmd_id == INTERNAL_API_ALBUMART) {
-                webserver_albumart_send(nc, response->data, response->binary);
+                webserver_send_albumart(nc, response->data, response->binary);
             }
             else {
-                MYMPD_LOG_DEBUG("Sending response to conn_id %lu (length: %lu): %s", nc->id, (unsigned long)sdslen(response->data), response->data);
+                MYMPD_LOG_DEBUG("\"%s\": Sending response to conn_id %lu (length: %lu): %s", response->partition, nc->id, (unsigned long)sdslen(response->data), response->data);
                 webserver_send_data(nc, response->data, sdslen(response->data), "Content-Type: application/json\r\n");
             }
             break;
         }
         nc = nc->next;
     }
-    free_result(response);
+    free_response(response);
 }
 
+/**
+ * Matches the acl against the client ip and
+ * sends an error repsonse / drains the connection if acl is not matched
+ * @param nc mongoose connection
+ * @param acl acl string to check
+ * @return true if acl matches, else false
+ */
 static bool check_acl(struct mg_connection *nc, sds acl) {
     if (sdslen(acl) == 0) {
         return true;
@@ -291,20 +353,56 @@ static bool check_acl(struct mg_connection *nc, sds acl) {
     return false;
 }
 
-//nc->label usage
-//0 - connection type: F = frontend connection, B = backend connection
-//1 - http method: G = GET, H = HEAD, P = POST
-//2 - connection header: C = close, K = keepalive
+/**
+ * Enforces the connection limit
+ * @param nc mongoose connection
+ * @param connection_count connection count
+ * @return true if connection count is not exceeded, else false
+ */
+static bool check_conn_limit(struct mg_connection *nc, int connection_count) {
+    if (connection_count > HTTP_CONNECTIONS_MAX) {
+        MYMPD_LOG_DEBUG("Connections: %d", connection_count);
+        MYMPD_LOG_ERROR("Concurrent connections limit exceeded: %d", connection_count);
+        webserver_send_error(nc, 429, "Concurrent connections limit exceeded");
+        nc->is_draining = 1;
+        return false;
+    }
+    return true;
+}
 
-// Event handler
+/**
+ * Central webserver event handler
+ * nc->label usage
+ * 0 - connection type: F = frontend connection, B = backend connection
+ * 1 - http method: G = GET, H = HEAD, P = POST
+ * 2 - connection header: C = close, K = keepalive
+ *
+ * @param nc mongoose connection
+ * @param ev connection event
+ * @param ev_data event data (http / websocket message)
+ * @param fn_data backend connection for proxy connections
+ */
 static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn_data) {
-    //initial connection specific data structure
-    struct mg_connection *backend_nc = fn_data;
+    //connection specific data structure
+    struct t_frontend_nc_data *frontend_nc_data = (struct t_frontend_nc_data *)fn_data;
+    //mongoose user data
     struct t_mg_user_data *mg_user_data = (struct t_mg_user_data *) nc->mgr->userdata;
     struct t_config *config = mg_user_data->config;
     switch(ev) {
-        case MG_EV_ACCEPT: {
+        case MG_EV_OPEN: {
             mg_user_data->connection_count++;
+            //initialize fn_data
+            frontend_nc_data = malloc_assert(sizeof(struct t_frontend_nc_data));
+            frontend_nc_data->partition = NULL;
+            frontend_nc_data->backend_nc = NULL;
+            nc->fn_data = frontend_nc_data;
+            //set labels
+            nc->label[0] = 'F';
+            nc->label[1] = '-';
+            nc->label[2] = 'C';
+            break;
+        }
+        case MG_EV_ACCEPT:
             //ssl support
             #ifdef ENABLE_SSL
             if (config->ssl == true) {
@@ -317,11 +415,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
             }
             #endif
             //check connection count
-            if (mg_user_data->connection_count > HTTP_CONNECTIONS_MAX) {
-                MYMPD_LOG_DEBUG("Connections: %d", mg_user_data->connection_count);
-                MYMPD_LOG_ERROR("Concurrent connections limit exceeded: %d", mg_user_data->connection_count);
-                webserver_send_error(nc, 429, "Concurrent connections limit exceeded");
-                nc->is_draining = 1;
+            if (check_conn_limit(nc, mg_user_data->connection_count) == false) {
                 break;
             }
             //check acl
@@ -333,19 +427,14 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
                 mg_straddr(&nc->rem, buf, INET6_ADDRSTRLEN);
                 MYMPD_LOG_DEBUG("New connection id \"%lu\" from %s, connections: %d", nc->id, buf, mg_user_data->connection_count);
             }
-            //set labels
-            nc->label[0] = 'F';
-            nc->label[1] = '-';
-            nc->label[2] = '-';
             break;
-        }
         case MG_EV_WS_MSG: {
             struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-            MYMPD_LOG_DEBUG("WS message (%lu): %.*s", nc->id, (int)wm->data.len, wm->data.ptr);
-            if (strncmp(wm->data.ptr, "ping", wm->data.len) == 0) {
+            MYMPD_LOG_DEBUG("\"%s\": Websocket message (%lu): %.*s", frontend_nc_data->partition, nc->id, (int)wm->data.len, wm->data.ptr);
+            if (mg_vcmp(&wm->data, "ping") == 0) {
                 size_t sent = mg_ws_send(nc, "pong", 4, WEBSOCKET_OP_TEXT);
                 if (sent != 6) {
-                    MYMPD_LOG_WARN("WS could not reply with pong, closing connection");
+                    MYMPD_LOG_WARN("Websocket: Could not reply with pong, closing connection");
                     nc->is_closing = 1;
                 }
             }
@@ -353,15 +442,22 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
         }
         case MG_EV_HTTP_MSG: {
             struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-            MYMPD_LOG_INFO("HTTP request (%lu): %.*s %.*s", nc->id, (int)hm->method.len, hm->method.ptr, (int)hm->uri.len, hm->uri.ptr);
+            if (hm->query.len > 0) {
+                MYMPD_LOG_INFO("HTTP request (%lu): %.*s %.*s?%.*s", nc->id, (int)hm->method.len, hm->method.ptr,
+                    (int)hm->uri.len, hm->uri.ptr, (int)hm->query.len, hm->query.ptr);
+            }
+            else {
+                MYMPD_LOG_INFO("HTTP request (%lu): %.*s %.*s", nc->id, (int)hm->method.len, hm->method.ptr,
+                    (int)hm->uri.len, hm->uri.ptr);
+            }
             //limit allowed http methods
-            if (strncmp(hm->method.ptr, "GET", hm->method.len) == 0) {
+            if (mg_vcmp(&hm->method, "GET") == 0) {
                 nc->label[1] = 'G';
             }
-            else if (strncmp(hm->method.ptr, "HEAD", hm->method.len) == 0) {
+            else if (mg_vcmp(&hm->method, "HEAD") == 0) {
                 nc->label[1] = 'H';
             }
-            else if (strncmp(hm->method.ptr, "POST", hm->method.len) == 0) {
+            else if (mg_vcmp(&hm->method, "POST") == 0) {
                 nc->label[1] = 'P';
             }
             else {
@@ -387,89 +483,109 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
             //respect connection close header
             struct mg_str *connection_hdr = mg_http_get_header(hm, "Connection");
             if (connection_hdr != NULL) {
-                if (strncmp(connection_hdr->ptr, "close", connection_hdr->len) == 0) {
-                    MYMPD_LOG_DEBUG("Connection: close header found (%lu)", nc->id);
+                if (mg_vcasecmp(connection_hdr, "close") == 0) {
                     nc->label[2] = 'C';
                 }
-                else if (strncmp(connection_hdr->ptr, "keep-alive", connection_hdr->len) == 0) {
-                    MYMPD_LOG_DEBUG("Connection: keepalive header found (%lu)", nc->id);
+                else {
                     nc->label[2] = 'K';
                 }
             }
             //handle uris
-            if (mg_http_match_uri(hm, "/api/")) {
+            if (mg_http_match_uri(hm, "/api/*") == true) {
                 //api request
+                //check partition
+                if (get_partition_from_uri(nc, hm, frontend_nc_data) == false) {
+                    break;
+                }
+                //body
                 sds body = sdsnewlen(hm->body.ptr, hm->body.len);
-                struct mg_str *auth_header = mg_http_get_header(hm, "Authorization");
-                bool rc = webserver_api_handler(nc, body, auth_header, mg_user_data, backend_nc);
+                /*
+                 * We use the custom header X-myMPD-Session for authorization
+                 * to allow other authorization methods in reverse proxy setups
+                 */
+                struct mg_str *auth_header = mg_http_get_header(hm, "X-myMPD-Session");
+                bool rc = request_handler_api(nc, body, auth_header, mg_user_data, frontend_nc_data->backend_nc);
                 FREE_SDS(body);
                 if (rc == false) {
-                    MYMPD_LOG_ERROR("Invalid API request");
-                    sds response = jsonrpc_respond_message(sdsempty(), "", 0, true,
-                        "general", "error", "Invalid API request");
+                    MYMPD_LOG_ERROR("\"%s\": Invalid API request", frontend_nc_data->partition);
+                    sds response = jsonrpc_respond_message(sdsempty(), GENERAL_API_UNKNOWN, 0,
+                        JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Invalid API request");
                     webserver_send_data(nc, response, sdslen(response), "Content-Type: application/json\r\n");
                     FREE_SDS(response);
                 }
             }
-            else if (mg_http_match_uri(hm, "/albumart-thumb")) {
-                webserver_albumart_handler(nc, hm, mg_user_data, config, (long long)nc->id, ALBUMART_THUMBNAIL);
+            else if (mg_http_match_uri(hm, "/albumart-thumb") == true) {
+                request_handler_albumart(nc, hm, mg_user_data, (long long)nc->id, ALBUMART_THUMBNAIL);
             }
-            else if (mg_http_match_uri(hm, "/albumart")) {
-                webserver_albumart_handler(nc, hm, mg_user_data, config, (long long)nc->id, ALBUMART_FULL);
+            else if (mg_http_match_uri(hm, "/albumart") == true) {
+                request_handler_albumart(nc, hm, mg_user_data, (long long)nc->id, ALBUMART_FULL);
             }
-            else if (mg_http_match_uri(hm, "/tagart")) {
-                webserver_tagart_handler(nc, hm, mg_user_data);
+            else if (mg_http_match_uri(hm, "/tagart") == true) {
+                request_handler_tagart(nc, hm, mg_user_data);
             }
-            else if (mg_http_match_uri(hm, "/browse/#")) {
-                webserver_browse_handler(nc, hm, mg_user_data);
+            else if (mg_http_match_uri(hm, "/browse/#") == true) {
+                request_handler_browse(nc, hm, mg_user_data);
             }
-            else if (mg_http_match_uri(hm, "/ws/")) {
+            else if (mg_http_match_uri(hm, "/ws/*") == true) {
+                //check partition
+                if (get_partition_from_uri(nc, hm, frontend_nc_data) == false) {
+                    break;
+                }
                 mg_ws_upgrade(nc, hm, NULL);
-                MYMPD_LOG_INFO("New Websocket connection established (%lu)", nc->id);
-                sds response = jsonrpc_event(sdsempty(), "welcome");
+                MYMPD_LOG_INFO("\"%s\": New Websocket connection established (%lu)", frontend_nc_data->partition, nc->id);
+                sds response = jsonrpc_event(sdsempty(), JSONRPC_EVENT_WELCOME);
                 mg_ws_send(nc, response, sdslen(response), WEBSOCKET_OP_TEXT);
                 FREE_SDS(response);
             }
-            else if (mg_http_match_uri(hm, "/stream/")) {
-                if (sdslen(mg_user_data->stream_uri) == 0) {
-                    webserver_send_error(nc, 404, "MPD stream port not configured");
+            else if (mg_http_match_uri(hm, "/stream/*") == true) {
+                //check partition
+                if (get_partition_from_uri(nc, hm, frontend_nc_data) == false) {
+                    break;
+                }
+                struct t_list_node *node = list_get_node(&mg_user_data->stream_uris, frontend_nc_data->partition);
+                if (node == NULL) {
+                    webserver_send_error(nc, 404, "Stream uri not configured");
                     nc->is_draining = 1;
                     break;
                 }
-                create_backend_connection(nc, backend_nc, mg_user_data->stream_uri, forward_backend_to_frontend);
+                create_backend_connection(nc, frontend_nc_data->backend_nc, node->value_p, forward_backend_to_frontend);
             }
-            else if (mg_http_match_uri(hm, "/proxy")) {
+            else if (mg_http_match_uri(hm, "/proxy") == true) {
                 //Makes a get request to the defined uri and returns the response
-                webserver_proxy_handler(nc, hm, backend_nc);
+                request_handler_proxy(nc, hm, frontend_nc_data->backend_nc);
             }
-            else if (mg_http_match_uri(hm, "/api/serverinfo")) {
-                webserver_serverinfo_handler(nc);
+            else if (mg_http_match_uri(hm, "/serverinfo") == true) {
+                request_handler_serverinfo(nc);
             }
-            else if (mg_http_match_uri(hm, "/api/script")) {
+            else if (mg_http_match_uri(hm, "/script-api/*") == true) {
                 //check acl
                 if (check_acl(nc, config->scriptacl) == false) {
                     break;
                 }
+                //check partition
+                if (get_partition_from_uri(nc, hm, frontend_nc_data) == false) {
+                    break;
+                }
                 sds body = sdsnewlen(hm->body.ptr, hm->body.len);
-                bool rc = webserver_script_api_handler((long long)nc->id, body);
+                bool rc = request_handler_script_api(nc, body);
                 FREE_SDS(body);
                 if (rc == false) {
-                    MYMPD_LOG_ERROR("Invalid script API request");
-                    sds response = jsonrpc_respond_message(sdsempty(), "", 0, true,
-                        "script", "error", "Invalid script API request");
+                    MYMPD_LOG_ERROR("\"%s\": Invalid script API request", frontend_nc_data->partition);
+                    sds response = jsonrpc_respond_message(sdsempty(), GENERAL_API_UNKNOWN, 0,
+                        JSONRPC_FACILITY_SCRIPT, JSONRPC_SEVERITY_ERROR, "Invalid script API request");
                     webserver_send_data(nc, response, sdslen(response), "Content-Type: application/json\r\n");
                     FREE_SDS(response);
                 }
             }
-            else if (mg_vcmp(&hm->uri, "/index.html") == 0) {
+            else if (mg_http_match_uri(hm, "/index.html") == true) {
                 webserver_send_header_redirect(nc, "/");
             }
-            else if (mg_vcmp(&hm->uri, "/favicon.ico") == 0) {
-                webserver_send_header_redirect(nc, "/assets/favicon.ico");
+            else if (mg_http_match_uri(hm, "/favicon.ico") == true) {
+                webserver_send_header_redirect(nc, "/assets/appicon-192.png");
             }
             #ifdef ENABLE_SSL
-            else if (mg_http_match_uri(hm, "/ca.crt")) {
-                webserver_ca_handler(nc, hm, mg_user_data, config);
+            else if (mg_http_match_uri(hm, "/ca.crt") == true) {
+                request_handler_ca(nc, hm, mg_user_data);
             }
             #endif
             else {
@@ -478,7 +594,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
                     //serve all files from filesystem
                     static struct mg_http_serve_opts s_http_server_opts;
                     s_http_server_opts.root_dir = DOC_ROOT;
-                    if (mg_http_match_uri(hm, "/test/#")) {
+                    if (mg_http_match_uri(hm, "/test/#") == true) {
                         //test suite uses innerHTML
                         s_http_server_opts.extra_headers = EXTRA_HEADERS_UNSAFE;
                     }
@@ -499,34 +615,47 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
         case MG_EV_CLOSE: {
             MYMPD_LOG_INFO("HTTP connection %lu closed", nc->id);
             mg_user_data->connection_count--;
-            if (backend_nc != NULL) {
-                MYMPD_LOG_INFO("Closing backend connection \"%lu\"", backend_nc->id);
+            if (frontend_nc_data == NULL) {
+                MYMPD_LOG_WARN("frontend_nc_data not allocated");
+                break;
+            }
+            if (frontend_nc_data->backend_nc != NULL) {
+                MYMPD_LOG_INFO("Closing backend connection \"%lu\"", frontend_nc_data->backend_nc->id);
                 //remove pointer to frontend connection
-                struct backend_nc_data_t *backend_nc_data = (struct backend_nc_data_t *)backend_nc->fn_data;
+                struct t_backend_nc_data *backend_nc_data = (struct t_backend_nc_data *)frontend_nc_data->backend_nc->fn_data;
                 backend_nc_data->frontend_nc = NULL;
                 //close backend connection
-                backend_nc->is_closing = 1;
+                frontend_nc_data->backend_nc->is_closing = 1;
             }
+            FREE_SDS(frontend_nc_data->partition);
+            FREE_PTR(frontend_nc_data);
+            nc->fn_data = NULL;
             break;
         }
     }
 }
 
 #ifdef ENABLE_SSL
+/**
+ * Redirects the client to https if ssl is enabled.
+ * Only requests to /browse/webradios are not redirected.
+ * @param nc mongoose connection
+ * @param ev connection event
+ * @param ev_data event data (http / websocket message)
+ * @param fn_data not used
+ */
 static void ev_handler_redirect(struct mg_connection *nc, int ev, void *ev_data, void *fn_data) {
     (void)fn_data;
     struct t_mg_user_data *mg_user_data = (struct t_mg_user_data *) nc->mgr->userdata;
     struct t_config *config = mg_user_data->config;
 
     switch(ev) {
-        case MG_EV_ACCEPT:
+        case MG_EV_OPEN:
             mg_user_data->connection_count++;
+            break;
+        case MG_EV_ACCEPT:
             //check connection count
-            if (mg_user_data->connection_count > HTTP_CONNECTIONS_MAX) {
-                MYMPD_LOG_DEBUG("Connections: %d", mg_user_data->connection_count);
-                MYMPD_LOG_ERROR("Concurrent connections limit exceeded: %d", mg_user_data->connection_count);
-                webserver_send_error(nc, 429, "Concurrent connections limit exceeded");
-                nc->is_draining = 1;
+            if (check_conn_limit(nc, mg_user_data->connection_count) == false) {
                 break;
             }
             //check acl
@@ -536,7 +665,7 @@ static void ev_handler_redirect(struct mg_connection *nc, int ev, void *ev_data,
             break;
         case MG_EV_HTTP_MSG: {
             struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-            if (mg_http_match_uri(hm, "/browse/webradios/*")) {
+            if (mg_http_match_uri(hm, "/browse/webradios/*") == true) {
                 //we serve the webradio directory without https to avoid ssl configuration for the mpd curl plugin
                 static struct mg_http_serve_opts s_http_server_opts;
                 s_http_server_opts.extra_headers = EXTRA_HEADERS_UNSAFE;
@@ -576,3 +705,21 @@ static void ev_handler_redirect(struct mg_connection *nc, int ev, void *ev_data,
     }
 }
 #endif
+
+/**
+ * Mongoose logging function
+ * @param ch character to log
+ * @param param 
+ */
+static void mongoose_log(char ch, void *param) {
+    static char buf[256];
+    static size_t len;
+    buf[len++] = ch;
+    if (ch == '\n' ||
+        len >= sizeof(buf))
+    {
+        MYMPD_LOG_DEBUG("%.*s", (int) len, buf); //Send logs
+        len = 0;
+    }
+    (void)param;
+}

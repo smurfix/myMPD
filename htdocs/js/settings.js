@@ -45,7 +45,7 @@ function initSettings() {
 
     document.getElementById('btnJukeboxModeGroup').addEventListener('mouseup', function () {
         setTimeout(function() {
-            const value = getData(document.getElementById('btnJukeboxModeGroup').getElementsByClassName('active')[0], 'value');
+            const value = getBtnGroupValueId('btnJukeboxModeGroup');
             if (value === 'off') {
                 elDisableId('inputJukeboxQueueLength');
                 elDisableId('selectJukeboxPlaylist');
@@ -54,7 +54,6 @@ function initSettings() {
                 elDisableId('inputJukeboxQueueLength');
                 elDisableId('selectJukeboxPlaylist');
                 elDisable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
-                elDisableId('inputJukeboxLastPlayed');
                 document.getElementById('selectJukeboxPlaylist').value = 'Database';
                 setDataId('selectJukeboxPlaylist', 'value', 'Database');
             }
@@ -62,7 +61,6 @@ function initSettings() {
                 elEnableId('inputJukeboxQueueLength');
                 elEnableId('selectJukeboxPlaylist');
                 elEnable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
-                elEnableId('inputJukeboxLastPlayed');
             }
             if (value !== 'off') {
                 toggleBtnChkId('btnConsume', true);
@@ -90,7 +88,7 @@ function togglePlaymode(option) {
         case 'consume':
         case 'random':
         case 'repeat':
-            if (settings[option] === true) {
+            if (settings.partition[option] === true) {
                 value = false;
                 title = 'Disable ' + option;
             }
@@ -100,15 +98,15 @@ function togglePlaymode(option) {
             }
             break;
         case 'single':
-            if (settings.single === '0') {
+            if (settings.partition.single === '0') {
                 value = 'oneshot';
                 title = 'Enable single oneshot';
             }
-            else if (settings.single === 'oneshot') {
+            else if (settings.partition.single === 'oneshot') {
                 value = '1';
                 title = 'Enable single mode';
             }
-            else if (settings.single === '1') {
+            else if (settings.partition.single === '1') {
                 value = '0';
                 title = 'Disable single mode';
             }
@@ -116,7 +114,7 @@ function togglePlaymode(option) {
     }
     const params = {};
     params[option] = value;
-    sendAPI("MYMPD_API_PLAYER_OPTIONS_SET", params);
+    sendAPI('MYMPD_API_PLAYER_OPTIONS_SET', params);
     showNotification(tn(title), '', 'queue', 'info');
 }
 
@@ -168,7 +166,6 @@ function saveConnection() {
     const mpdPortEl = document.getElementById('inputMpdPort');
     const mpdPassEl = document.getElementById('inputMpdPass');
     const playlistDirectoryEl = document.getElementById('inputPlaylistDirectory');
-    const mpdStreamPortEl = document.getElementById('inputMpdStreamPort');
     const mpdBinarylimitEl = document.getElementById('inputMpdBinarylimit');
     const mpdTimeoutEl = document.getElementById('inputMpdTimeout');
     const musicDirectoryEl = document.getElementById('selectMusicDirectory');
@@ -181,7 +178,7 @@ function saveConnection() {
 
     if (musicDirectory === 'custom') {
         const musicDirectoryValueEl = document.getElementById('inputMusicDirectory');
-        if (!validatePath(musicDirectoryValueEl)) {
+        if (validatePath(musicDirectoryValueEl) === false) {
             formOK = false;
         }
         musicDirectory = musicDirectoryValueEl.value;
@@ -189,37 +186,33 @@ function saveConnection() {
     if (mpdPortEl.value === '') {
         mpdPortEl.value = '6600';
     }
-    if (!validateIntRange(mpdPortEl, 1024, 65535)) {
+    if (validateIntRange(mpdPortEl, 1024, 65535) === false) {
         formOK = false;
     }
     if (mpdHostEl.value.indexOf('/') !== 0) {
-        if (!validateInt(mpdPortEl)) {
+        if (validateInt(mpdPortEl) === false) {
             formOK = false;
         }
-        if (!validateHost(mpdHostEl)) {
+        if (validateHost(mpdHostEl) === false) {
             formOK = false;
         }
     }
-    if (!validatePath(playlistDirectoryEl)) {
+    if (validatePath(playlistDirectoryEl) === false) {
         formOK = false;
     }
-    if (!validateIntRange(mpdStreamPortEl, 1024, 65535)) {
+    if (validateIntRange(mpdBinarylimitEl, 4, 256) === false) {
         formOK = false;
     }
-    if (!validateIntRange(mpdBinarylimitEl, 4, 256)) {
-        formOK = false;
-    }
-    if (!validateIntRange(mpdTimeoutEl, 1, 1000)) {
+    if (validateIntRange(mpdTimeoutEl, 1, 1000) === false) {
         formOK = false;
     }
     if (formOK === true) {
-        sendAPI("MYMPD_API_CONNECTION_SAVE", {
+        sendAPIpartition('default', 'MYMPD_API_CONNECTION_SAVE', {
             "mpdHost": mpdHostEl.value,
             "mpdPort": Number(mpdPortEl.value),
             "mpdPass": mpdPassEl.value,
             "musicDirectory": musicDirectory,
             "playlistDirectory": playlistDirectoryEl.value,
-            "mpdStreamPort": Number(mpdStreamPortEl.value),
             "mpdBinarylimit": Number(mpdBinarylimitEl.value) * 1024,
             "mpdTimeout": Number(mpdTimeoutEl.value) * 1000,
             "mpdKeepalive": (document.getElementById('btnMpdKeepalive').classList.contains('active') ? true : false)
@@ -239,7 +232,7 @@ function saveConnectionClose(obj) {
 
 function getSettings(onerror) {
     settingsParsed = 'no';
-    sendAPI("MYMPD_API_SETTINGS_GET", {}, parseSettings, onerror);
+    sendAPI('MYMPD_API_SETTINGS_GET', {}, parseSettings, onerror);
 }
 
 function checkConsume() {
@@ -257,7 +250,7 @@ function parseSettings(obj) {
     if (obj.error) {
         settingsParsed = 'error';
         if (appInited === false) {
-            showAppInitAlert(obj === '' ? tn('Can not parse settings') : tn(obj.error.message));
+            showAppInitAlert(obj.error.message === undefined ? tn('Can not parse settings') : tn(obj.error.message));
         }
         return;
     }
@@ -272,12 +265,6 @@ function parseSettings(obj) {
     //set webuiSettings defaults
     for (const key in webuiSettingsDefault) {
         if (settings.webuiSettings[key] === undefined) {
-            settings.webuiSettings[key] = webuiSettingsDefault[key].defaultValue;
-        }
-        else if (webuiSettingsDefault[key].contentType === 'integer' &&
-            typeof settings.webuiSettings[key] !== 'number')
-        {
-            //enforce number type
             settings.webuiSettings[key] = webuiSettingsDefault[key].defaultValue;
         }
     }
@@ -370,12 +357,12 @@ function parseSettings(obj) {
         elHideId('btnStop');
     }
     
-    if (settings.jukeboxMode !== 'off') {
+    if (settings.partition.jukeboxMode !== 'off') {
         document.getElementById('btnNext').removeAttribute('disabled');
     }
 
     //parse mpd settings if connected
-    if (settings.mpdConnected === true) {
+    if (settings.partition.mpdConnected === true) {
         parseMPDSettings();
     }
 
@@ -384,7 +371,7 @@ function parseSettings(obj) {
         settings.mpdHost + ':' + settings.mpdPort : settings.mpdHost;
 
     document.documentElement.style.setProperty('--mympd-thumbnail-size', settings.webuiSettings.uiThumbnailSize + "px");
-    document.documentElement.style.setProperty('--mympd-highlightcolor', settings.webuiSettings.uiHighlightColor);
+    document.documentElement.style.setProperty('--mympd-highlightcolor', settings.partition.highlightColor);
 
     //default limit for all cards
     let limit = settings.webuiSettings.uiMaxElementsPerPage;
@@ -408,9 +395,9 @@ function parseSettings(obj) {
         const selectTimerAction = document.getElementById('selectTimerAction');
         elClearId('selectTimerAction');
         selectTimerAction.appendChild(
-            elCreateNodes('optgroup', {"data-value": "player", "label": tn('Playback')}, [
-                elCreateText('option', {"value": "startplay"}, tn('Start playback')),
-                elCreateText('option', {"value": "stopplay"}, tn('Stop playback'))
+            elCreateNodes('optgroup', {"data-value": "player", "data-label-phrase": "Playback", "label": tn('Playback')}, [
+                elCreateText('option', {"value": "startplay", "data-phrase": "Start playback"}, tn('Start playback')),
+                elCreateText('option', {"value": "stopplay", "data-phrase": "Stop playback"}, tn('Stop playback'))
             ])
         );
 
@@ -427,7 +414,7 @@ function parseSettings(obj) {
     document.getElementById('volumeBar').setAttribute('min', settings.volumeMin);
     document.getElementById('volumeBar').setAttribute('max', settings.volumeMax);
 
-    //update columns and handle quick playback/remove buttons
+    //set translations for pregenerated elements
     pEl.actionTdMenu.firstChild.title = tn('Actions');
 
     pEl.actionTdMenuPlay.firstChild.title = tn(webuiSettingsDefault.clickQuickPlay.validValues[settings.webuiSettings.clickQuickPlay]);
@@ -440,6 +427,7 @@ function parseSettings(obj) {
     pEl.actionQueueTd = settings.webuiSettings.uiQuickRemoveButton === false ? pEl.actionTdMenu : pEl.actionTdMenuRemove;
     pEl.coverPlayBtn.title = tn(webuiSettingsDefault.clickQuickPlay.validValues[settings.webuiSettings.clickQuickPlay]);
 
+    //goto view
     appRoute();
 
     //mediaSession support
@@ -491,6 +479,7 @@ function setCssVars(theme) {
 
 function setLocale(newLocale) {
     if (newLocale === 'default') {
+        //auto detection
         locale = navigator.language || navigator.userLanguage;
         if (locale.length === 2) {
             locale += '-';
@@ -499,76 +488,80 @@ function setLocale(newLocale) {
     else {
         locale = newLocale;
     }
+    //check if locale is available
     let localeFound = false;
-    for (const l of locales) {
-        if (l.code.indexOf(locale) === 0) {
-            locale = l.code;
+    for (const l in i18n) {
+        if (l === 'default') {
+            continue;
+        }
+        if (l.indexOf(locale) === 0) {
+            locale = l;
             localeFound = true;
             break;
         }
     }
+    //fallback to default locale
     if (localeFound === false) {
         logError('Locale "' + locale + '" not defined');
         locale = 'en-US';
     }
-
-    i18nHtml(domCache.body);
+    //get phrases and translate dom
+    httpGet(subdir + '/assets/i18n/' + locale + '.json', function(obj) {
+        phrases = obj;
+        i18nHtml(domCache.body);
+    }, true);
 }
 
 function populateQueueSettingsFrm() {
-    toggleBtnGroupValueCollapse(document.getElementById('btnJukeboxModeGroup'), 'collapseJukeboxMode', settings.jukeboxMode);
+    toggleBtnGroupValueCollapse(document.getElementById('btnJukeboxModeGroup'), 'collapseJukeboxMode', settings.partition.jukeboxMode);
     addTagListSelect('selectJukeboxUniqueTag', 'tagListBrowse');
 
-    document.getElementById('selectJukeboxUniqueTag').value = settings.jukeboxUniqueTag;
-    document.getElementById('inputJukeboxQueueLength').value = settings.jukeboxQueueLength;
-    document.getElementById('inputJukeboxLastPlayed').value = settings.jukeboxLastPlayed;
-    if (settings.jukeboxMode === 'off') {
+    document.getElementById('selectJukeboxUniqueTag').value = settings.partition.jukeboxUniqueTag;
+    document.getElementById('inputJukeboxQueueLength').value = settings.partition.jukeboxQueueLength;
+    document.getElementById('inputJukeboxLastPlayed').value = settings.partition.jukeboxLastPlayed;
+    if (settings.partition.jukeboxMode === 'off') {
         elDisableId('inputJukeboxQueueLength');
         elDisableId('selectJukeboxPlaylist');
     }
-    else if (settings.jukeboxMode === 'album') {
+    else if (settings.partition.jukeboxMode === 'album') {
         elDisableId('inputJukeboxQueueLength');
         elDisableId('selectJukeboxPlaylist');
-        elDisableId('inputJukeboxLastPlayed');
         elDisable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
         document.getElementById('selectJukeboxPlaylist').value = 'Database';
     }
-    else if (settings.jukeboxMode === 'song') {
+    else if (settings.partition.jukeboxMode === 'song') {
         elEnableId('inputJukeboxQueueLength');
         elEnableId('selectJukeboxPlaylist');
         elEnable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
-        elEnableId('inputJukeboxLastPlayed');
     }
 
     document.getElementById('selectJukeboxPlaylist').filterInput.value = '';
 
-    if (settings.mpdConnected === true) {
+    if (settings.partition.mpdConnected === true) {
         if (features.featPlaylists === true) {
-            filterPlaylistsSelect(0, 'selectJukeboxPlaylist', '', settings.jukeboxPlaylist);
-            setDataId('selectJukeboxPlaylist', 'value', settings.jukeboxPlaylist);
+            filterPlaylistsSelect(0, 'selectJukeboxPlaylist', '', settings.partition.jukeboxPlaylist);
+            setDataId('selectJukeboxPlaylist', 'value', settings.partition.jukeboxPlaylist);
         }
         else {
             document.getElementById('selectJukeboxPlaylist').value = tn('Database');
             setDataId('selectJukeboxPlaylist', 'value', 'Database');
         }
-        toggleBtnChkId('btnRandom', settings.random);
-        toggleBtnChkId('btnConsume', settings.consume);
-        toggleBtnChkId('btnRepeat', settings.repeat);
-        toggleBtnChkId('btnAutoPlay', settings.autoPlay);
-        toggleBtnGroupValue(document.getElementById('btnSingleGroup'), settings.single);
-        toggleBtnGroupValue(document.getElementById('btnReplaygainGroup'), settings.replaygain);
-        document.getElementById('inputCrossfade').value = settings.crossfade;
-        document.getElementById('inputMixrampDb').value = settings.mixrampDb;
-        document.getElementById('inputMixrampDelay').value = settings.mixrampDelay;
+        toggleBtnChkId('btnRandom', settings.partition.random);
+        toggleBtnChkId('btnConsume', settings.partition.consume);
+        toggleBtnChkId('btnRepeat', settings.partition.repeat);
+        toggleBtnChkId('btnAutoPlay', settings.partition.autoPlay);
+        toggleBtnGroupValue(document.getElementById('btnSingleGroup'), settings.partition.single);
+        toggleBtnGroupValue(document.getElementById('btnReplaygainGroup'), settings.partition.replaygain);
+        document.getElementById('inputCrossfade').value = settings.partition.crossfade;
+        document.getElementById('inputMixrampDb').value = settings.partition.mixrampDb;
+        document.getElementById('inputMixrampDelay').value = settings.partition.mixrampDelay;
         if (features.featStickers === false) {
             elShowId('warnPlaybackStatistics');
             elDisableId('inputJukeboxLastPlayed');
         }
         else {
             elHideId('warnPlaybackStatistics');
-            if (settings.jukeboxMode === 'song') {
-                elEnableId('inputJukeboxLastPlayed');
-            }
+            elEnableId('inputJukeboxLastPlayed');
         }
     }
     checkConsume();
@@ -579,7 +572,6 @@ function populateConnectionFrm() {
     document.getElementById('inputMpdPort').value = settings.mpdPort;
     document.getElementById('inputMpdPass').value = settings.mpdPass;
     document.getElementById('inputPlaylistDirectory').value = settings.playlistDirectory;
-    document.getElementById('inputMpdStreamPort').value = settings.mpdStreamPort;
     document.getElementById('inputMpdBinarylimit').value = settings.mpdBinarylimit / 1024;
     document.getElementById('inputMpdTimeout').value = settings.mpdTimeout / 1000;
 
@@ -629,14 +621,19 @@ function populateSettingsFrm() {
 
     toggleThemeInputs(settings.webuiSettings.uiTheme);
 
+    //partition specific settings
+    document.getElementById('inputHighlightColor').value = settings.partition.highlightColor;
+    document.getElementById('inputMpdStreamPort').value = settings.partition.mpdStreamPort;
+    document.getElementById('inputStreamUri').value = settings.partition.streamUri;
+
     //locales
     const localeList = document.getElementById('inputWebUIsettinguiLocale');
     elClear(localeList);
-    for (const l of locales) {
+    for (const l in i18n) {
         localeList.appendChild(
-            elCreateText('option', {"value": l.code}, l.desc + ' (' + l.code + ')')
+            elCreateText('option', {"value": l}, i18n[l].desc + ' (' + l + ')')
         );
-        if (l.code === settings.webuiSettings.uiLocale) {
+        if (l === settings.webuiSettings.uiLocale) {
             localeList.lastChild.setAttribute('selected', 'selected');
         }
     }
@@ -681,11 +678,10 @@ function populateSettingsFrm() {
     document.getElementById('inputBookletName').value = settings.bookletName;
     document.getElementById('inputCoverimageNames').value = settings.coverimageNames;
     document.getElementById('inputThumbnailNames').value = settings.thumbnailNames;
-    document.getElementById('inputCovercacheKeepDays').value = settings.covercacheKeepDays;
     document.getElementById('inputListenbrainzToken').value = settings.listenbrainzToken;
 
     //smart playlists
-    if (settings.featSmartpls === true) {
+    if (settings.features.featPlaylists === true) {
         elEnableId('btnSmartpls');
         toggleBtnChkCollapseId('btnSmartpls', 'collapseSmartpls', settings.smartpls);
         elHideId('warnSmartpls');
@@ -720,10 +716,10 @@ function populateSettingsFrm() {
     initTagMultiSelect('inputGeneratePlsTags', 'listGeneratePlsTags', settings.tagListBrowse, settings.smartplsGenerateTagList);
 
     //features - show or hide warnings - use settings object
-    setFeatureBtnId('btnEnableLyrics', settings.featLibrary);
-    setFeatureBtnId('inputWebUIsettingenableScripting', settings.featScripting);
-    setFeatureBtnId('inputWebUIsettingenableMounts', settings.featMounts);
-    setFeatureBtnId('inputWebUIsettingenablePartitions', settings.featPartitions);
+    setFeatureBtnId('btnEnableLyrics', settings.features.featLibrary);
+    setFeatureBtnId('inputWebUIsettingenableScripting', settings.features.featScripting);
+    setFeatureBtnId('inputWebUIsettingenableMounts', settings.features.featMounts);
+    setFeatureBtnId('inputWebUIsettingenablePartitions', settings.features.featPartitions);
 }
 
 function setFeatureBtnId(id, value) {
@@ -763,10 +759,10 @@ function _createSettingsFrm(fields, defaults, prefix) {
         if (defaults[key].inputType === 'section') {
             if (defaults[key].title !== undefined) {
                 advFrm[form].appendChild(elCreateEmpty('hr', {}));
-                advFrm[form].appendChild(elCreateText('h4', {}, tn(defaults[key].title)));
+                advFrm[form].appendChild(elCreateText('h4', {"data-phrase": defaults[key].title}, tn(defaults[key].title)));
             }
             else if (defaults[key].subtitle !== undefined) {
-                advFrm[form].appendChild(elCreateText('h4', {}, tn(defaults[key].subtitle)));
+                advFrm[form].appendChild(elCreateText('h4', {"data-phrase": defaults[key].subtitle}, tn(defaults[key].subtitle)));
             }
             continue;
         }
@@ -778,7 +774,7 @@ function _createSettingsFrm(fields, defaults, prefix) {
                 if (defaults[key].contentType === 'integer') {
                     value = Number(value);
                 }
-                select.appendChild(elCreateText('option', {"value": value}, tn(defaults[key].validValues[value])));
+                select.appendChild(elCreateText('option', {"value": value, "data-phrase": defaults[key].validValues[value]}, tn(defaults[key].validValues[value])));
                 if (fields[key] === value) {
                     select.lastChild.setAttribute('selected', 'selected');
                 }
@@ -860,38 +856,31 @@ function _createSettingsFrm(fields, defaults, prefix) {
 
 function setFeatures() {
     //web ui features
-    features.featCacert = settings.featCacert;
+    features.featCacert = settings.features.featCacert;
     features.featHome = settings.webuiSettings.enableHome;
     features.featLocalPlayback = settings.webuiSettings.enableLocalPlayback === true ?
-        (settings.mpdStreamPort > 0 ? true : false) : false;
+        (settings.partition.mpdStreamPort > 0 || settings.partition.streamUri.length > 0 ? true : false) : false;
     features.featScripting = settings.webuiSettings.enableScripting === true ?
-        (settings.featScripting === true ? true : false) : false;
+        settings.features.featScripting : false;
     features.featTimer = settings.webuiSettings.enableTimer;
     features.featTrigger = settings.webuiSettings.enableTrigger;
 
     //mpd features
-    if (settings.mpdConnected === true) {
-        features.featAdvsearch = settings.featAdvsearch;
-        features.featLibrary = settings.featLibrary;
-        features.featLyrics = settings.webuiSettings.enableLyrics === true ?
-            (settings.featLibrary === true ? true : false) : false;
-        features.featMounts = settings.webuiSettings.enableMounts === true ?
-            (settings.featMounts === true ? true : false) : false;
-        features.featNeighbors = settings.webuiSettings.enableMounts === true ?
-            (settings.featNeighbors === true ? true : false) : false;
-        features.featPartitions = settings.webuiSettings.enablePartitions === true ?
-            (settings.featPartitions === true ? true : false) : false;
-        features.featPlaylists = settings.featPlaylists;
-        features.featSingleOneshot = settings.featSingleOneshot;
-        features.featSmartpls = settings.featSmartpls === true ?
-            (settings.smartpls === true ? true : false) : false;
-        features.featStickers = settings.featStickers;
-        features.featTags = settings.featTags;
-        features.featBinarylimit = settings.featBinarylimit;
-        features.featFingerprint = settings.featFingerprint;
-        features.featPlaylistRmRange = settings.featPlaylistRmRange;
-        features.featWhence = settings.featWhence;
-        features.featAdvqueue = settings.featAdvqueue;
+    if (settings.partition.mpdConnected === true) {
+        features.featLibrary = settings.features.featLibrary;
+        features.featLyrics = settings.webuiSettings.enableLyrics === true ? settings.features.featLibrary : false;
+        features.featMounts = settings.webuiSettings.enableMounts === true ? settings.features.featMounts : false;
+        features.featNeighbors = settings.webuiSettings.enableMounts === true ? settings.features.featNeighbors : false;
+        features.featPartitions = settings.webuiSettings.enablePartitions === true ? settings.features.featPartitions : false;
+        features.featPlaylists = settings.features.featPlaylists;
+        features.featSmartpls = settings.features.featPlaylists === true ? settings.smartpls : false;
+        features.featStickers = settings.features.featStickers;
+        features.featTags = settings.features.featTags;
+        features.featBinarylimit = settings.features.featBinarylimit;
+        features.featFingerprint = settings.features.featFingerprint;
+        features.featPlaylistRmRange = settings.features.featPlaylistRmRange;
+        features.featWhence = settings.features.featWhence;
+        features.featAdvqueue = settings.features.featAdvqueue;
     }
 }
 
@@ -907,7 +896,7 @@ function applyFeatures() {
 }
 
 function parseMPDSettings() {
-    document.getElementById('partitionName').textContent = settings.partition;
+    document.getElementById('partitionName').textContent = localSettings.partition;
 
     if (settings.webuiSettings.uiBgCover === true) {
         setBackgroundImage(domCache.body, currentSongObj.uri);
@@ -920,7 +909,7 @@ function parseMPDSettings() {
     elClear(triggerEventList);
     for (const event in settings.triggerEvents) {
         triggerEventList.appendChild(
-            elCreateText('option', {"value": settings.triggerEvents[event]}, tn(event))
+            elCreateText('option', {"value": settings.triggerEvents[event], "data-phrase": event}, tn(event))
         );
     }
 
@@ -948,7 +937,9 @@ function parseMPDSettings() {
     setCols('BrowseRadioRadiobrowser');
 
     //enforce disc for album details view
-    if (settings.colsBrowseDatabaseDetailFetch.includes('Disc') === false && settings.tagList.includes('Disc')) {
+    if (settings.colsBrowseDatabaseDetailFetch.includes('Disc') === false &&
+        settings.tagList.includes('Disc'))
+    {
         settings.colsBrowseDatabaseDetailFetch.push('Disc');
     }
 
@@ -1013,18 +1004,6 @@ function parseMPDSettings() {
         }
     }
 
-    if (features.featAdvsearch === false) {
-        //disable tag based features
-        if (app.cards.Browse.active === 'Database') {
-            app.cards.Browse.active = 'Filesystem';
-        }
-
-        const tagEls = document.getElementById('cardPlaybackTags').getElementsByTagName('p');
-        for (let i = 0, j = tagEls.length; i < j; i++) {
-            tagEls[i].classList.remove('clickable');
-        }
-    }
-
     addTagList('BrowseDatabaseByTagDropdown', 'tagListBrowse');
     addTagList('BrowseNavPlaylistsDropdown', 'tagListBrowse');
     addTagList('BrowseNavFilesystemDropdown', 'tagListBrowse');
@@ -1037,14 +1016,8 @@ function parseMPDSettings() {
     addTagList('searchDatabaseTags', 'tagListBrowse');
     addTagList('databaseSortTagsList', 'tagListBrowse');
     addTagList('dropdownSortPlaylistTags', 'tagList');
-    addTagList('saveSmartPlaylistSort', 'tagList');
 
     addTagListSelect('saveSmartPlaylistSort', 'tagList');
-}
-
-//eslint-disable-next-line no-unused-vars
-function resetSettings() {
-    sendAPI("MYMPD_API_SETTINGS_RESET", {}, getSettings);
 }
 
 //eslint-disable-next-line no-unused-vars
@@ -1054,32 +1027,32 @@ function saveSettings(closeModal) {
 
     for (const inputId of ['inputWebUIsettinguiThumbnailSize', 'inputSettinglastPlayedCount',
         'inputSmartplsInterval', 'inputSettingvolumeMax', 'inputSettingvolumeMin',
-        'inputSettingvolumeStep', 'inputCovercacheKeepDays'])
+        'inputSettingvolumeStep'])
     {
         const inputEl = document.getElementById(inputId);
-        if (!validateUint(inputEl)) {
+        if (validateUint(inputEl) === false) {
             formOK = false;
         }
     }
 
     const inputCoverimageNames = document.getElementById('inputCoverimageNames');
-    if (!validateFilenameList(inputCoverimageNames)) {
+    if (validateFilenameList(inputCoverimageNames) === false) {
         formOK = false;
     }
     const inputThumbnailNames = document.getElementById('inputThumbnailNames');
-    if (!validateFilenameList(inputThumbnailNames)) {
+    if (validateFilenameList(inputThumbnailNames) === false) {
         formOK = false;
     }
 
     const inputBookletName = document.getElementById('inputBookletName');
-    if (!validateFilename(inputBookletName)) {
+    if (validateFilename(inputBookletName) === false) {
         formOK = false;
     }
 
     const inputScaleRatio = document.getElementById('inputScaleRatio');
     //handle scaleRatio only for mobile browsers
     if (userAgentData.isMobile === true) {
-        if (!validateFloat(inputScaleRatio)) {
+        if (validateFloat(inputScaleRatio) === false) {
             formOK = false;
         }
     }
@@ -1150,16 +1123,15 @@ function saveSettings(closeModal) {
             "lyricsSyltExt": document.getElementById('inputSettinglyricsSyltExt').value,
             "lyricsVorbisUslt": document.getElementById('inputSettinglyricsVorbisUslt').value,
             "lyricsVorbisSylt": document.getElementById('inputSettinglyricsVorbisSylt').value,
-            "covercacheKeepDays": Number(document.getElementById('inputCovercacheKeepDays').value),
             "listenbrainzToken": document.getElementById('inputListenbrainzToken').value,
             "webuiSettings": webuiSettings
         };
 
         if (closeModal === true) {
-            sendAPI("MYMPD_API_SETTINGS_SET", params, saveSettingsClose, true);
+            sendAPIpartition('default', 'MYMPD_API_SETTINGS_SET', params, saveSettingsClose, true);
         }
         else {
-            sendAPI("MYMPD_API_SETTINGS_SET", params, saveSettingsApply, true);
+            sendAPIpartition('default', 'MYMPD_API_SETTINGS_SET', params, saveSettingsApply, true);
         }
     }
 }
@@ -1169,8 +1141,8 @@ function saveSettingsClose(obj) {
         showModalAlert(obj);
     }
     else {
-        getSettings(true);
-        uiElements.modalSettings.hide();
+        savePartitionSettings(true);
+        
     }
 }
 
@@ -1179,8 +1151,56 @@ function saveSettingsApply(obj) {
         showModalAlert(obj);
     }
     else {
+        savePartitionSettings(false);
+    }
+}
+
+//eslint-disable-next-line no-unused-vars
+function savePartitionSettings(closeModal) {
+    let formOK = true;
+    const mpdStreamPortEl = document.getElementById('inputMpdStreamPort');
+    const streamUriEl = document.getElementById('inputStreamUri');
+    if (validateIntRange(mpdStreamPortEl, 0, 65535) === false) {
+        formOK = false;
+    }
+    if (streamUriEl.value.length > 0 &&
+        validateStream(streamUriEl) === false)
+    {
+        formOK = false;
+    }
+
+    if (formOK === true) {
+        const params = {
+            "highlightColor": document.getElementById('inputHighlightColor').value,
+            "mpdStreamPort": Number(mpdStreamPortEl.value),
+            "streamUri": streamUriEl.value
+        };
+        if (closeModal === true) {
+            sendAPI('MYMPD_API_PARTITION_SAVE', params, savePartitionSettingsClose, true);
+        }
+        else {
+            sendAPI('MYMPD_API_PARTITION_SAVE', params, savePartitionSettingsApply, true);
+        }
+    }
+}
+
+function savePartitionSettingsApply(obj) {
+    if (obj.error) {
+        showModalAlert(obj);
+    }
+    else {
         btnWaiting(document.getElementById('btnApplySettings'), true);
         getSettings(true);
+    }
+}
+
+function savePartitionSettingsClose(obj) {
+    if (obj.error) {
+        showModalAlert(obj);
+    }
+    else {
+        getSettings(true);
+        uiElements.modalSettings.hide();
     }
 }
 
@@ -1442,10 +1462,15 @@ function filterImageSelect(elId, searchstr) {
 function warnLocale(value) {
     const warnEl = document.getElementById('warnMissingPhrases');
     elClear(warnEl);
-    if (missingPhrases[value] !== undefined) {
-        warnEl.appendChild(elCreateText('p', {}, tn('Missing translations', missingPhrases[value])));
-        warnEl.appendChild(elCreateText('a', {"class": ["alert-link", "external"], "target": "_blank",
-            "href": "https://github.com/jcorporation/myMPD/discussions/167"}, tn('Help to improve myMPD')));
+    if (i18n[value].missingPhrases > 0) {
+        warnEl.appendChild(
+            elCreateText('p', {}, tn('Missing translations', i18n[value].missingPhrases))
+        );
+        warnEl.appendChild(
+            elCreateText('a', {"class": ["alert-link", "external"], "target": "_blank",
+                "href": "https://github.com/jcorporation/myMPD/discussions/167"}, tn('Help to improve myMPD')
+            )
+        );
         elShow(warnEl);
     }
     else {
@@ -1461,4 +1486,10 @@ function setLoglevel() {
     }, function() {
         settings.loglevel = loglevel
     }, false);
+}
+
+function resetLocalSettings() {
+    for (const key in localSettings) {
+        localStorage.removeItem(key);
+    }
 }

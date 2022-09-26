@@ -4,7 +4,7 @@
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
 #include "http_client.h"
 
 #include "../../dist/mongoose/mongoose.h"
@@ -14,11 +14,20 @@
 
 #include <errno.h>
 
-//private definitions
-static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data,
+/**
+ * Private definitions
+ */
+static void http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data,
     void *fn_data);
 
-//public functions
+/**
+ * Public functions
+ */
+
+/**
+ * Reads the dns server from resolv.conf
+ * @return newly allocated sds string with first nameserver
+ */
 sds get_dnsserver(void) {
     //read resolv.conf directly - musl does not support res_init
     sds buffer = sdsempty();
@@ -66,14 +75,17 @@ sds get_dnsserver(void) {
     return buffer;
 }
 
+/**
+ * Makes a http request
+ * @param mg_client_request pointer to mg_client_request_t struct
+ * @param mg_client_response pointer to mg_client_response_t struct to populate
+ */
 void http_client_request(struct mg_client_request_t *mg_client_request,
     struct mg_client_response_t *mg_client_response)
 {
     struct mg_mgr mgr_client;
     mg_mgr_init(&mgr_client);
-    #ifdef DEBUG
-    mg_log_set("1");
-    #endif
+    mg_log_set(1);
     //set dns server
     sds dns_uri = get_dnsserver();
     MYMPD_LOG_DEBUG("Setting dns server to %s", dns_uri);
@@ -81,7 +93,7 @@ void http_client_request(struct mg_client_request_t *mg_client_request,
 
     mgr_client.userdata = mg_client_request;
     MYMPD_LOG_DEBUG("HTTP client connecting to \"%s\"", mg_client_request->uri);
-    mg_http_connect(&mgr_client, mg_client_request->uri, _http_client_ev_handler, mg_client_response);
+    mg_http_connect(&mgr_client, mg_client_request->uri, http_client_ev_handler, mg_client_response);
     while (mg_client_response->rc == -1) {
         mg_mgr_poll(&mgr_client, 1000);
     }
@@ -89,16 +101,26 @@ void http_client_request(struct mg_client_request_t *mg_client_request,
     mg_mgr_free(&mgr_client);
 }
 
-//private functions
-static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data,
+/**
+ * Private functions
+ */
+
+/**
+ * Event handler for the http request made by http_client_request
+ * @param nc mongoose network connection
+ * @param ev event id
+ * @param ev_data event data (http response)
+ * @param fn_data struct mg_client_response
+ */
+static void http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data,
     void *fn_data)
 {
     struct mg_client_request_t *mg_client_request = (struct mg_client_request_t *) nc->mgr->userdata;
     if (ev == MG_EV_CONNECT) {
-        // Connected to server. Extract host name from URL
+        //Connected to server. Extract host name from URL
         struct mg_str host = mg_url_host(mg_client_request->uri);
 
-        // If s_url is https://, tell client connection to use TLS
+        //If uri is https://, tell client connection to use TLS
         if (mg_url_is_ssl(mg_client_request->uri)) {
             struct mg_tls_opts tls_opts = {
                 .srvname = host

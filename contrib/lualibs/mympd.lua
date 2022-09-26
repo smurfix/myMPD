@@ -6,7 +6,7 @@
 -- https://github.com/jcorporation/mympd
 --
 
-mympd = { _version = "0.2.1" }
+mympd = { _version = "0.3.0" }
 
 --
 -- Function to retrieve mympd_state

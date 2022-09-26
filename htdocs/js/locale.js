@@ -15,23 +15,19 @@ function tn(phrase, number, data) {
         return phrase;
     }
     if (phrase === undefined) {
-        logDebug('Phrase is undefined');
+        logError('Phrase is undefined');
         return 'undefinedPhrase';
     }
-    let result = undefined;
+    let result = phrases[phrase];
+/*debug*/    if (result !== undefined &&
+/*debug*/        locale !== 'en-US')
+/*debug*/    {
+/*debug*/        logDebug('Phrase "' + phrase + '" for locale ' + locale + ' not found');
+/*debug*/    }
 
-    if (phrases[phrase]) {
-        result = phrases[phrase][locale];
-        if (result === undefined) {
-/*debug*/   if (locale !== 'en-US') {
-/*debug*/       logDebug('Phrase "' + phrase + '" for locale ' + locale + ' not found');
-/*debug*/   }
-            result = phrases[phrase]['en-US'];
-        }
-    }
+    //fallback if phrase is not translated
     if (result === undefined) {
-        //fallback if phrase is not translated
-        result = phrase;
+        result = phrasesDefault[phrase] !== undefined ? phrasesDefault[phrase] : phrase;
     }
 
     if (isNaN(number)) {
@@ -84,6 +80,7 @@ function i18nHtml(root) {
     const attributes = [
         ['data-phrase', 'textContent'],
         ['data-title-phrase', 'title'],
+        ['data-label-phrase', 'label'],
         ['data-placeholder-phrase', 'placeholder']
     ];
     for (let i = 0, j = attributes.length; i < j; i++) {

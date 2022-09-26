@@ -4,13 +4,18 @@
 // https://github.com/jcorporation/mympd
 
 function setStateIcon() {
+    const logoBgs = document.getElementsByClassName('logoBg');
     if (websocketConnected === false ||
-        settings.mpdConnected === false)
+        settings.partition.mpdConnected === false)
     {
-        document.getElementById('logoBg').setAttribute('fill', '#6c757d');
+        for (const logoBg of logoBgs) {
+            logoBg.setAttribute('fill', '#6c757d');
+        }
     }
     else {
-        document.getElementById('logoBg').setAttribute('fill', settings.webuiSettings.uiHighlightColor);
+        for (const logoBg of logoBgs) {
+            logoBg.setAttribute('fill', settings.partition.highlightColor);
+        }
     }
 }
 
@@ -52,20 +57,20 @@ const severities = {
 };
 
 const facilities = {
-    "player": "Player",
-    "queue": "Queue",
-    "general": "General",
     "database": "Database",
+    "general":  "General",
+    "home":     "Home",
+    "jukebox":  "Jukebox",
+    "lyrics":   "Lyrics",
+    "mpd":      "MPD",
     "playlist": "Playlist",
-    "mpd": "MPD",
-    "lyrics": "Lyrics",
-    "jukebox": "Jukebox",
-    "trigger": "Trigger",
-    "script": "Script",
-    "sticker": "Sticker",
-    "home": "Home",
-    "timer": "Timer",
-    "session": "Session"
+    "player":   "Player",
+    "queue":    "Queue",
+    "session":  "Session",
+    "script":   "Script",
+    "sticker":  "Sticker",
+    "timer":    "Timer",
+    "trigger":  "Trigger"
 };
 
 function getSeverityIcon(severity) {
@@ -74,6 +79,12 @@ function getSeverityIcon(severity) {
 }
 
 function showNotification(title, text, facility, severity) {
+    if (appInited === false) {
+        showAppInitAlert(
+            title + (text === '' ? '' : ': ' + text)
+        );
+        return;
+    }
     setStateIcon();
     logMessage(title, text, facility, severity);
     if (severity === 'info') {
@@ -197,7 +208,7 @@ function setElsState(selector, state) {
 function toggleUI() {
     let state = 'disabled';
     if (websocketConnected === true &&
-        settings.mpdConnected === true)
+        settings.partition.mpdConnected === true)
     {
         state = 'enabled';
     }
@@ -218,7 +229,7 @@ function toggleUI() {
         uiEnabled = enabled;
     }
 
-    if (settings.mpdConnected === true) {
+    if (settings.partition.mpdConnected === true) {
         toggleAlert('alertMpdState', false, '');
     }
     else {

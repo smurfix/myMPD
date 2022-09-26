@@ -4,15 +4,13 @@
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
 
 #include "../dist/sds/sds.h"
 #include "log.h"
 
 #include <string.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
 #include <time.h>
 
 int loglevel;

@@ -50,11 +50,15 @@ function saveTrigger() {
             args[getData(argEls[i], 'name')] = argEls[i].value;
         }
 
+        let partition = getBtnGroupValueId('btnTriggerPartitionGroup');
+        partition = partition === '!all!' ? partition : localSettings.partition;
+
         sendAPI("MYMPD_API_TRIGGER_SAVE", {
             "id": Number(document.getElementById('inputTriggerId').value),
             "name": nameEl.value,
             "event": Number(getSelectValueId('selectTriggerEvent')),
             "script": getSelectValueId('selectTriggerScript'),
+            "partition": partition,
             "arguments": args
         }, saveTriggerCheckError, true);
     }
@@ -78,17 +82,19 @@ function showEditTrigger(id) {
     elShowId('newTriggerFooter');
 
     const nameEl = document.getElementById('inputTriggerName');
-    nameEl.value = '';
     setFocus(nameEl);
-    document.getElementById('inputTriggerId').value = '-1';
-    document.getElementById('selectTriggerEvent').selectedIndex = 0;
-    document.getElementById('selectTriggerScript').selectedIndex = 0;
+
     if (id > -1) {
         sendAPI("MYMPD_API_TRIGGER_GET", {
             "id": id
         }, parseTriggerEdit, false);
     }
     else {
+        nameEl.value = '';
+        document.getElementById('inputTriggerId').value = '-1';
+        document.getElementById('selectTriggerEvent').selectedIndex = 0;
+        document.getElementById('selectTriggerScript').selectedIndex = 0;
+        toggleBtnGroupValueId('btnTriggerPartitionGroup', 'this');
         selectTriggerActionChange();
     }
 }
@@ -98,6 +104,8 @@ function parseTriggerEdit(obj) {
     document.getElementById('inputTriggerName').value = obj.result.name;
     document.getElementById('selectTriggerEvent').value = obj.result.event;
     document.getElementById('selectTriggerScript').value = obj.result.script;
+    const partition = obj.result.partition === '!all!' ? obj.result.partition : 'this';
+    toggleBtnGroupValueId('btnTriggerPartitionGroup', partition);
     selectTriggerActionChange(obj.result.arguments);
 }
 
@@ -139,14 +147,6 @@ function showListTrigger() {
     sendAPI("MYMPD_API_TRIGGER_LIST", {}, parseTriggerList, true);
 }
 
-function deleteTrigger(el, id) {
-    showConfirmInline(el.parentNode.previousSibling, tn('Do you really want to delete the trigger?'), tn('Yes, delete it'), function() {
-        sendAPI("MYMPD_API_TRIGGER_RM", {
-            "id": id
-        }, saveTriggerCheckError, true);
-    });
-}
-
 function parseTriggerList(obj) {
     const tbody = document.getElementById('listTriggerList');
     if (checkResult(obj, tbody) === false) {
@@ -155,7 +155,9 @@ function parseTriggerList(obj) {
     elClear(tbody);
     for (let i = 0; i < obj.result.returnedEntities; i++) {
         const row = elCreateNodes('tr', {}, [
-            elCreateText('td', {}, obj.result.data[i].name),
+            elCreateText('td', {}, obj.result.data[i].name + 
+                (obj.result.data[i].partition === '!all!' ? ' (' + tn('All partitions') + ')' : '')
+            ),
             elCreateText('td', {}, tn(obj.result.data[i].eventName)),
             elCreateText('td', {}, obj.result.data[i].script),
             elCreateNode('td', {"data-col": "Action"},
@@ -165,4 +167,12 @@ function parseTriggerList(obj) {
         setData(row, 'trigger-id', obj.result.data[i].id);
         tbody.appendChild(row);
     }
+}
+
+function deleteTrigger(el, id) {
+    showConfirmInline(el.parentNode.previousSibling, tn('Do you really want to delete the trigger?'), tn('Yes, delete it'), function() {
+        sendAPI("MYMPD_API_TRIGGER_RM", {
+            "id": id
+        }, saveTriggerCheckError, true);
+    });
 }

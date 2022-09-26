@@ -93,27 +93,19 @@ CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-id-dependent-backward-branch"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-unroll-loops"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-struct-pack-align,-clang-analyzer-optin.performance.Padding"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-easily-swappable-parameters"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-macro-parentheses"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-reserved-identifier,-cert-dcl37-c,-cert-dcl51-cpp"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-signal-handler,-cert-sig30-c"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-integer-division"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-clang-diagnostic-invalid-command-line-argument"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-concurrency-mt-unsafe"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-cppcoreguidelines*"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-hicpp-*"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-llvm-header-guard"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-llvm-include-order"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-llvmlibc-restrict-system-libc-headers"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-misc-misplaced-const"
+CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-identifier-length"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-function-cognitive-complexity,-google-readability-function-size,-readability-function-size"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-magic-numbers"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-avoid-const-params-in-decls"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-non-const-parameter"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-isolate-declaration"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-identifier-length"
 
-#save startpath
-STARTPATH=$(pwd)
+#save script path
+STARTPATH=$(dirname "$(realpath "$0")")
 
 #set umask
 umask 0022
@@ -161,7 +153,7 @@ setversion() {
   DATE_F3=$(date --date=@"${TS}" +"%d %b %Y")
   echo "Setting version to ${VERSION} and date to ${DATE_F2}"
 
-  for F in htdocs/sw.js contrib/packaging/alpine/APKBUILD contrib/packaging/arch/PKGBUILD \
+  for F in contrib/packaging/alpine/APKBUILD contrib/packaging/arch/PKGBUILD \
   		contrib/packaging/rpm/mympd.spec contrib/packaging/debian/changelog \
   		contrib/packaging/openwrt/Makefile contrib/man/mympd.1 contrib/man/mympd-script.1
   do
@@ -200,7 +192,16 @@ minify() {
   elif [ "$TYPE" = "js" ]
   then
     #shellcheck disable=SC2016
-    if ! perl -pe 's/^\s*//gm; s/^\/\/.+$//g; s/^logDebug\(.*$//g; s/\/\*debug\*\/.*$//g; s/\s*$//gm;' "$SRC" > "${DST}.tmp"
+    if ! perl -pe 's/^\s*//gm; s/^\s*\/?\*.*$//g; s/^\/\/.+$//g; s/^logDebug\(.*$//g; s/\/\*debug\*\/.*$//g; s/\s*$//gm;' "$SRC" > "${DST}.tmp"
+    then
+      rm -f "${DST}.tmp"
+      echo_error "Error minifying $SRC"
+      exit 1
+    fi
+  elif [ "$TYPE" = "json" ]
+  then
+    #shellcheck disable=SC2016
+    if ! jq -r tostring "$SRC" > "${DST}.tmp"
     then
       rm -f "${DST}.tmp"
       echo_error "Error minifying $SRC"
@@ -224,6 +225,8 @@ minify() {
 }
 
 createassets() {
+  check_cmd jq
+
   [ -z "${MYMPD_BUILDDIR+x}" ] && MYMPD_BUILDDIR="release"
 
   echo "Creating assets in $MYMPD_BUILDDIR"
@@ -231,11 +234,11 @@ createassets() {
   rm -fr "$MYMPD_BUILDDIR/htdocs"
   install -d "$MYMPD_BUILDDIR/htdocs/js"
   install -d "$MYMPD_BUILDDIR/htdocs/css"
-  install -d "$MYMPD_BUILDDIR/htdocs/assets"
+  install -d "$MYMPD_BUILDDIR/htdocs/assets/i18n"
 
   #Create translation phrases file
-  createi18n "../../$MYMPD_BUILDDIR/htdocs/js/i18n.min.js" "" 2>/dev/null
-  transstatus $MYMPD_BUILDDIR/htdocs/js/i18n.min.js
+  createi18n "$MYMPD_BUILDDIR" 2>/dev/null
+  minify js "$MYMPD_BUILDDIR/htdocs/js/i18n.js" "$MYMPD_BUILDDIR/htdocs/js/i18n.min.js"
 
   echo "Minifying javascript"
   JSSRCFILES=""
@@ -296,12 +299,20 @@ createassets() {
   $ZIP "$MYMPD_BUILDDIR/htdocs/css/combined.css"
 
   echo "Compressing fonts"
-  FONTFILES="dist/material-icons/MaterialIcons-Regular.woff2"
+  FONTFILES="dist/material-icons/MaterialIcons-Regular.woff2 dist/material-icons/ligatures.json"
   for FONT in $FONTFILES
   do
     DST=$(basename "${FONT}")
     $ZIPCAT "$FONT" > "$MYMPD_BUILDDIR/htdocs/assets/${DST}.gz"
   done
+
+  echo "Compressing i18n json"
+  jq -r "select(.missingPhrases < 100) | keys[]" "$STARTPATH/src/i18n/json/i18n.json" | grep -v "default" | \
+    while read -r CODE
+    do
+      minify json "$STARTPATH/src/i18n/json/${CODE}.json" "$MYMPD_BUILDDIR/htdocs/assets/i18n/${CODE}.min.json"
+      $ZIPCAT "$MYMPD_BUILDDIR/htdocs/assets/i18n/${CODE}.min.json" > "$MYMPD_BUILDDIR/htdocs/assets/i18n/${CODE}.json.gz"
+    done
 
   echo "Minifying and compressing html"
   minify html htdocs/index.html "$MYMPD_BUILDDIR/htdocs/index.html"
@@ -325,8 +336,9 @@ buildrelease() {
   echo "Compiling myMPD"
   install -d release
   cd release || exit 1
-  #force rebuild of web_server with embedded assets
-  rm -vf CMakeFiles/mympd.dir/src/web_server/web_server_utility.c.o
+  #force rebuild of objects with embedded assets
+  rm -vf CMakeFiles/mympd.dir/src/web_server/utility.c.o
+  rm -vf CMakeFiles/mympd.dir/src/mympd_api/scripts.c.o
   #set INSTALL_PREFIX and build myMPD
   export INSTALL_PREFIX="${MYMPD_INSTALL_PREFIX:-/usr}"
   #shellcheck disable=SC2086
@@ -382,22 +394,32 @@ installrelease() {
 }
 
 builddebug() {
-  install -d debug/htdocs/js
-  createi18n ../../debug/htdocs/js/i18n.js pretty 2>/dev/null
-  transstatus debug/htdocs/js/i18n.js
+  check_cmd jq
+
+  MYMPD_BUILDDIR="debug"
+  createi18n "$MYMPD_BUILDDIR"
+
   check_docs
   check_includes
 
   if [ "$EMBEDDED_ASSETS" = "OFF" ]
   then
     echo "Copy dist assets"
-    cp "$PWD/dist/bootstrap/compiled/custom.css" "$PWD/htdocs/css/bootstrap.css"
-    cp "$PWD/dist/bootstrap-native/bootstrap-native.js" "$PWD/htdocs/js/bootstrap-native.js"
-    cp "$PWD/dist/long-press-event/long-press-event.js" "$PWD/htdocs/js/long-press-event.js"
-    cp "$PWD/dist/material-icons/MaterialIcons-Regular.woff2" "$PWD/htdocs/assets/MaterialIcons-Regular.woff2"
-    cp "$PWD/debug/htdocs/js/i18n.js" "$PWD/htdocs/js/i18n.js"
+    cp -v "$STARTPATH/dist/bootstrap/compiled/custom.css" "$STARTPATH/htdocs/css/bootstrap.css"
+    cp -v "$STARTPATH/dist/bootstrap-native/bootstrap-native.js" "$STARTPATH/htdocs/js/bootstrap-native.js"
+    cp -v "$STARTPATH/dist/long-press-event/long-press-event.js" "$STARTPATH/htdocs/js/long-press-event.js"
+    cp -v "$STARTPATH/dist/material-icons/MaterialIcons-Regular.woff2" "$STARTPATH/htdocs/assets/MaterialIcons-Regular.woff2"
+    cp -v "$STARTPATH/dist/material-icons/ligatures.json" "$STARTPATH/htdocs/assets/ligatures.json"
+    #translation files
+    cp -v "$STARTPATH/debug/htdocs/js/i18n.js" "$STARTPATH/htdocs/js/i18n.js"
+    rm -fr "$STARTPATH/htdocs/assets/i18n/"
+    install -d "$STARTPATH/htdocs/assets/i18n"
+    jq -r "select(.missingPhrases < 100) | keys[]" "$STARTPATH/src/i18n/json/i18n.json" | grep -v "default" | \
+      while read -r CODE
+      do
+        cp -v "$STARTPATH/src/i18n/json/$CODE.json" "$STARTPATH/htdocs/assets/i18n/"
+      done
   else
-    MYMPD_BUILDDIR="debug"
     createassets
   fi
 
@@ -436,11 +458,18 @@ cleanup() {
   rm -rf test/build
 
   #htdocs
+  rm -f htdocs/sw.js
   rm -f htdocs/js/bootstrap-native.js
   rm -f htdocs/js/long-press-event.js
   rm -f htdocs/js/i18n.js
   rm -f htdocs/css/bootstrap.css
   rm -f htdocs/assets/MaterialIcons-Regular.woff2
+  rm -f htdocs/assets/ligatures.json
+  rm -rf htdocs/assets/i18n
+
+  #generated documentation
+  rm -rf docs/doxygen
+  rm -rf docs/jsdoc
 
   #compilation database
   rm -f src/compile_commands.json
@@ -477,17 +506,18 @@ check_docs() {
 
 check_includes() {
   rc=0
-  find src/ -name \*.c | while IFS= read -r FILE
+  FILES=$(find src/ -name \*.c)
+  for FILE in $FILES
   do
-    if ! grep -m1 "#include" "$FILE" | grep -q "mympd_config_defs.h"
+    if ! grep -m1 "#include" "$FILE" | grep -q "compile_time.h"
     then
-      echo_warn "First include is not mympd_config_defs.h: $FILE"
+      echo_warn "First include is not compile_time.h: $FILE"
       rc=1
     fi
-    SRCDIR=$(dirname "$FILE")
 
-    grep "#include \"" "$FILE" | grep -v "mympd_config_defs.h" | cut -d\" -f2 | \
-    while IFS= read -r INCLUDE
+    SRCDIR=$(dirname "$FILE")
+    INCLUDES=$(grep "#include \"" "$FILE" | grep -v "mympd_config_defs.h" | cut -d\" -f2)
+    for INCLUDE in $INCLUDES
     do
       if ! realpath "$SRCDIR/$INCLUDE" > /dev/null 2>&1
       then
@@ -495,6 +525,13 @@ check_includes() {
         rc=1
       fi
     done
+    INCLUDES=$(grep -r "#include \"src" src/* || true)
+    if [ -n "$INCLUDES" ]
+    then
+      echo_error "Wrong includes:"
+      echo "$INCLUDES"
+      rc=1
+    fi
     return "$rc"
   done
 }
@@ -530,7 +567,7 @@ check_file() {
 
   if check_cmd clang-tidy
   then
-    echo "Running clang-tidy, output goes to clang-tidy.out"
+    echo "Running clang-tidy"
     rm -f clang-tidy.out
     clang-tidy --checks="$CLANG_TIDY_CHECKS" \
     	"$FILE" > ../clang-tidy.out 2>/dev/null
@@ -547,8 +584,8 @@ check() {
     [ -z "${CPPCHECKOPTS+z}" ] && CPPCHECKOPTS="-q --force --enable=warning"
     find ./src/ -name \*.c | while read -r FILE
     do
-      [ "$FILE" = "./src/mympd_api/mympd_api_scripts_lualibs.c" ] && continue
-      [ "$FILE" = "./src/web_server/web_server_embedded_files.c" ] && continue
+      [ "$FILE" = "./src/mympd_api/scripts_lualibs.c" ] && continue
+      [ "$FILE" = "./src/web_server/embedded_files.c" ] && continue
       #shellcheck disable=SC2086
       if ! cppcheck $CPPCHECKOPTS --error-exitcode=1 "$FILE"
       then
@@ -596,7 +633,7 @@ check() {
 
   if check_cmd clang-tidy
   then
-    echo "Running clang-tidy, output goes to clang-tidy.out"
+    echo "Running clang-tidy"
     rm -f clang-tidy.out
     cd src || exit 1
     find ./ -name '*.c' -exec clang-tidy \
@@ -626,7 +663,7 @@ check() {
 
 prepare() {
   cleanup
-  SRC=$(ls -d "$PWD"/* -1)
+  SRC=$(ls -d "$STARTPATH"/* -1)
   mkdir -p package/build
   cd package/build || exit 1
   for F in $SRC
@@ -829,41 +866,46 @@ installdeps() {
   echo "Platform: $(uname -m)"
   if [ -f /etc/debian_version ]
   then
-    #we install lua5.3 but lua 5.4 works also
     apt-get update
+    if ! apt-get install -y --no-install-recommends liblua5.4-dev
+    then
+      #fallback to lua 5.3 for older debian versions
+      apt-get install -y --no-install-recommends liblua5.3-dev
+    fi
     apt-get install -y --no-install-recommends \
 	    gcc cmake perl libssl-dev libid3tag0-dev libflac-dev \
-	    build-essential liblua5.3-dev pkg-config libpcre2-dev jq gzip
+	    build-essential pkg-config libpcre2-dev gzip jq
   elif [ -f /etc/arch-release ]
   then
     #arch
-    pacman -S gcc cmake perl openssl libid3tag flac lua pkgconf pcre2 jq gzip
+    pacman -S gcc cmake perl openssl libid3tag flac lua pkgconf pcre2 gzip jq
   elif [ -f /etc/alpine-release ]
   then
     #alpine
     apk add cmake perl openssl-dev libid3tag-dev flac-dev lua5.4-dev \
-    	alpine-sdk linux-headers pkgconf pcre2-dev jq gzip
+    	alpine-sdk linux-headers pkgconf pcre2-dev gzip jq
   elif [ -f /etc/SuSE-release ]
   then
     #suse
     zypper install gcc cmake pkgconfig perl openssl-devel libid3tag-devel flac-devel \
-	    lua-devel unzip pcre2-devel jq gzip
+	    lua-devel unzip pcre2-devel gzip jq
   elif [ -f /etc/redhat-release ]
   then
     #fedora
     yum install gcc cmake pkgconfig perl openssl-devel libid3tag-devel flac-devel \
-	    lua-devel unzip pcre2-devel jq gzip
+	    lua-devel unzip pcre2-devel gzip jq
   else
     echo_warn "Unsupported distribution detected."
     echo "You should manually install:"
     echo "  - gcc"
     echo "  - cmake"
     echo "  - perl"
+    echo "  - gzip"
     echo "  - jq"
     echo "  - openssl (devel)"
     echo "  - flac (devel)"
     echo "  - libid3tag (devel)"
-    echo "  - liblua5.3 or liblua5.4 (devel)"
+    echo "  - liblua5.4 or liblua5.3 (devel)"
     echo "  - libpcre2 (devel)"
   fi
 }
@@ -872,7 +914,6 @@ updatelibmympdclient() {
   check_cmd git meson
 
   cd dist/libmpdclient || exit 1
-  STARTDIR=$(pwd)
 
   TMPDIR=$(mktemp -d)
   cd "$TMPDIR" || exit 1
@@ -880,7 +921,7 @@ updatelibmympdclient() {
   cd libmpdclient || exit 1
   meson . output -Dbuffer_size=8192
 
-  cd "$STARTDIR" || exit 1
+  cd "$STARTPATH/dist/libmpdclient" || exit 1
   install -d src
   install -d include/mpd/
 
@@ -899,25 +940,24 @@ updatelibmympdclient() {
 updatebootstrapnative() {
   check_cmd git npm
   cd dist/bootstrap-native || exit 1
-  STARTDIR=$(pwd)
 
   TMPDIR=$(mktemp -d)
   cd "$TMPDIR" || exit 1
   git clone --depth=1 -b master https://github.com/thednp/bootstrap.native
   cd bootstrap.native
   npm install @rollup/plugin-buble
-  cp "$STARTDIR/mympd-config.js" src/
-  cp "$STARTDIR/mympd-init.js" src/util/
+  cp "$STARTPATH/dist/bootstrap-native/mympd-config.js" src/
+  cp "$STARTPATH/dist/bootstrap-native/mympd-init.js" src/util/
   npm run custom INPUTFILE:src/mympd-config.js,OUTPUTFILE:dist/bootstrap-mympd.js,MIN:false,FORMAT:umd
   npm run custom INPUTFILE:src/mympd-config.js,OUTPUTFILE:dist/bootstrap-mympd.min.js,MIN:true,FORMAT:umd
 
-  cp dist/bootstrap-mympd.js "$STARTDIR/bootstrap-native.js"
-  cp dist/bootstrap-mympd.min.js "$STARTDIR/bootstrap-native.min.js"
+  cp dist/bootstrap-mympd.js "$STARTPATH/dist/bootstrap-native/bootstrap-native.js"
+  cp dist/bootstrap-mympd.min.js "$STARTPATH/dist/bootstrap-native/bootstrap-native.min.js"
 
-  cd "$STARTDIR" || exit 1
+  cd "$STARTPATH" || exit 1
   rm -rf "$TMPDIR"
 
-  if [ -d ../../debug ]
+  if [ -d debug ]
   then
   	cp bootstrap-native.js ../../htdocs/js/
   fi
@@ -1013,33 +1053,25 @@ purge() {
 }
 
 createi18n() {
-  DST=$1
-  PRETTY=$2
-  cd src/i18n || exit 1
+  MYMPD_BUILD_DIR="$1"
+  install -d "$MYMPD_BUILD_DIR/htdocs/js"
   echo "Creating i18n json"
-  if ! perl ./tojson.pl "$PRETTY" > "$DST"
+  if ! perl ./src/i18n/translate.pl
   then
     echo "Error creating translation files"
     exit 1
   fi
-  cd ../.. || exit 1
-}
-
-transstatus() {
-  if check_cmd_silent jq
-  then
-    TFILE=$1
-    MISSING=$(grep missingPhrases "$TFILE" | sed -e 's/.*missingPhrases=//' -e 's/;//' | jq '.' -r -M)
-    if [ "$MISSING" = "{}" ]
-    then
-      echo "All translation phrased found"
-    else
-      echo_warn "Missing translation phrases ($TFILE):"
-      echo "$MISSING"
-    fi
-  else
-    echo_warn "jq not found - can not print translation statistics"
-  fi
+  #json to js
+  printf "const i18n = " > "$MYMPD_BUILD_DIR/htdocs/js/i18n.js"
+  head -c -1 "src/i18n/json/i18n.json" >> "$MYMPD_BUILD_DIR/htdocs/js/i18n.js"
+  echo ";" >> "$MYMPD_BUILD_DIR/htdocs/js/i18n.js"
+  #Update serviceworker
+  TO_CACHE=""
+  for CODE in $(jq -r "select(.missingPhrases < 100) | keys[]" "$STARTPATH/src/i18n/json/i18n.json" | grep -v "default")
+    do
+      TO_CACHE="${TO_CACHE}\nsubdir + '/assets/i18n/${CODE}.json',"
+    done
+  sed -e "s|__VERSION__|${VERSION}|g" -e "s|__I18NASSETS__|${TO_CACHE}|g" htdocs/sw.js.in > htdocs/sw.js
 }
 
 materialicons() {
@@ -1062,24 +1094,24 @@ materialicons() {
     exit 1
   fi
   sed -i '1d' metadata.json
-  printf "const materialIcons={" > "ligatures.js"
+  printf "{" > "ligatures.json"
   I=0
   for CAT in $(jq -r ".icons[].categories | .[]" < metadata.json | sort -u)
   do
-    [ "$I" -gt 0 ] && printf "," >> "ligatures.js"
-    printf "\"%s\":[" "$CAT" >> "ligatures.js"
+    [ "$I" -gt 0 ] && printf "," >> "ligatures.json"
+    printf "\"%s\":[" "$CAT" >> "ligatures.json"
     J=0
     for ICON in $(jq -r ".icons[] | select(.categories[]==\"$CAT\") | .name" < metadata.json)
     do
-      [ "$J" -gt 0 ] && printf "," >> "ligatures.js"
-      printf "\"%s\"" "$ICON" >> "ligatures.js"
+      [ "$J" -gt 0 ] && printf "," >> "ligatures.json"
+      printf "\"%s\"" "$ICON" >> "ligatures.json"
       J=$((J+1))
     done
-    printf "]" >> "ligatures.js"
+    printf "]" >> "ligatures.json"
     I=$((I+1))
   done
-  echo "};"  >> "ligatures.js"
-  cp ligatures.js "$STARTPATH/htdocs/js/"
+  echo "}"  >> "ligatures.json"
+  cp ligatures.json "$STARTPATH/dist/material-icons/"
   cp MaterialIcons-Regular.woff2 "$STARTPATH/dist/material-icons/"
   cd "$STARTPATH"
   rm -fr "$TMPDIR"
@@ -1206,6 +1238,12 @@ run_eslint() {
       rc=1
   	fi
   done
+  echo "Check for subdir usage"
+  if grep -q -P "subdir\s*\+\s*\'[^/]" htdocs/js/*.js
+  then
+    echo_error "Wrong path found"
+    rc=1
+  fi
   return "$rc"
 }
 
@@ -1253,6 +1291,22 @@ luascript_index() {
   done
   printf "]}\n" >&3
   exec 3>&-
+}
+
+run_doxygen() {
+  if ! check_cmd doxygen
+  then
+    return 1
+  fi
+  doxygen
+}
+
+run_jsdoc() {
+  if ! check_cmd jsdoc
+  then 
+    return 1
+  fi
+  jsdoc htdocs/js/ -c jsdoc.json -d docs/jsdoc/
 }
 
 case "$ACTION" in
@@ -1347,11 +1401,10 @@ case "$ACTION" in
 	  purge
 	;;
 	translate)
-	  createi18n ../../htdocs/js/i18n.js pretty
+	  src/i18n/translate.pl verbose
 	;;
 	transstatus)
-    createi18n ../../htdocs/js/i18n.js pretty 2>/dev/null
-	  transstatus htdocs/js/i18n.js
+	  src/i18n/translate.pl
 	;;
 	materialicons)
 		materialicons
@@ -1373,12 +1426,10 @@ case "$ACTION" in
     then
       exit 1
     fi
-    pwd
     if ! run_eslint
     then
       exit 1
     fi
-    pwd
     if ! run_stylelint
     then
       exit 1
@@ -1395,6 +1446,18 @@ case "$ACTION" in
 	;;
   luascript_index)
     luascript_index
+  ;;
+  api_doc)
+    if ! run_doxygen
+    then
+      echo "Could not create backend api documentation"
+      exit 1
+    fi
+    if ! run_jsdoc
+    then
+      echo "Could not create frontend api documentation"
+      exit 1
+    fi
   ;;
 	*)
     echo "Usage: $0 <option>"
@@ -1486,6 +1549,8 @@ case "$ACTION" in
     echo "Misc options:"
     echo "  addmympduser:     adds mympd group and user"
     echo "  luascript_index:  creates the json index of lua scripts"
+    echo "  api_doc:          generates the backend api documentation with doxygen"
+    echo "                    generated the frontend api documentation with jsdoc"
     echo ""
     echo "Source update options:"
     echo "  bootstrap:        updates bootstrap"

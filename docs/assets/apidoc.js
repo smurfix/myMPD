@@ -94,15 +94,15 @@ const APIparams = {
         "example": "{\"argname1\": \"argvalue1\"}",
         "desc": "Script arguments"
     },
-    "partName": {
-        "type": "text",
-        "example": "partition1",
-        "desc": "Name of the new partition."
-    },
     "triggerId": {
         "type": "uint",
         "example": 1,
         "desc": "id of the trigger"
+    },
+    "partition": {
+        "type": "text",
+        "example": "default",
+        "desc": "MPD partition"
     },
     "pos": {
         "type": "uint",
@@ -122,7 +122,7 @@ const APIparams = {
 };
 
 const APImethods = {
-    "MYMPD_API_DATABASE_SEARCH_ADV": {
+    "MYMPD_API_DATABASE_SEARCH": {
         "desc": "Searches for songs in the database.",
         "params": {
             "offset": APIparams.offset,
@@ -130,16 +130,6 @@ const APImethods = {
             "expression": APIparams.expression,
             "sort": APIparams.sort,
             "sortdesc": APIparams.sortdesc,
-            "cols": APIparams.cols
-        }
-    },
-    "MYMPD_API_DATABASE_SEARCH": {
-        "desc": "Searches for songs in the database (deprecated interface).",
-        "params": {
-            "offset": APIparams.offset,
-            "limit": APIparams.limit,
-            "filter": APIparams.filter,
-            "searchstr": APIparams.searchstr,
             "cols": APIparams.cols
         }
     },
@@ -226,19 +216,19 @@ const APImethods = {
         "desc": "Shows MPD database statistics.",
         "params": {}
     },
-    "MYMPD_API_DATABASE_SONGDETAILS": {
+    "MYMPD_API_SONG_DETAILS": {
         "desc": "Shows all details of a song.",
         "params": {
             "uri": APIparams.uri
         }
     },
-    "MYMPD_API_DATABASE_COMMENTS": {
+    "MYMPD_API_SONG_COMMENTS": {
         "desc": "Shows comments of uri.",
         "params": {
             "uri": APIparams.uri
         }
     },
-    "MYMPD_API_DATABASE_FINGERPRINT": {
+    "MYMPD_API_SONG_FINGERPRINT": {
         "desc": "Calculates the chromaprint fingerprint",
         "params": {
             "uri": APIparams.uri
@@ -433,7 +423,7 @@ const APImethods = {
             "songId": APIparams.songId
         }
     },
-    "MYMPD_API_QUEUE_LAST_PLAYED": {
+    "MYMPD_API_LAST_PLAYED_LIST": {
         "desc": "Lists the last played songs.",
         "params": {
             "offset": APIparams.offset,
@@ -672,13 +662,23 @@ const APImethods = {
             "songId": APIparams.songId
         }
     },
+    "MYMPD_API_PLAYER_VOLUME_CHANGE": {
+        "desc": "Changes the volume.",
+        "params": {
+            "volume": {
+                "type": "int",
+                "example": 5,
+                "desc": "Volume percent"
+            }
+        }
+    },
     "MYMPD_API_PLAYER_VOLUME_SET": {
         "desc": "Sets the volume.",
         "params": {
             "volume": {
                 "type": "uint",
                 "example": 50,
-                "desc": "volume percent"
+                "desc": "Volume percent"
             }
         }
     },
@@ -727,13 +727,7 @@ const APImethods = {
     },
     "MYMPD_API_PLAYER_OUTPUT_LIST": {
         "desc": "Lists the MPD outputs.",
-        "params": {
-            "partition": {
-                "type": "text",
-                "example": "",
-                "desc": "MPD partition, blank for default partition"
-            }
-        }
+        "params": {}
     },
     "MYMPD_API_PLAYER_OUTPUT_TOGGLE": {
         "desc": "Toggles the output state.",
@@ -808,7 +802,7 @@ const APImethods = {
             }
         }
     },
-    "MYMPD_API_URLHANDLERS": {
+    "MYMPD_API_MOUNT_URLHANDLER_LIST": {
         "desc": "Lists all known url handlers of MPD.",
         "params": {}
     },
@@ -838,11 +832,6 @@ const APImethods = {
                 "example": "/var/lib/mpd/playlists",
                 "desc": "absolut path of playlist directory"
             },
-            "mpdStreamPort": {
-                "type": "uint",
-                "example": 8000,
-                "desc": "port of mpd http stream for local playback"
-            },
             "mpdBinarylimit": {
                 "type": "uint",
                 "example": 8192,
@@ -867,6 +856,11 @@ const APImethods = {
                 "type": "text",
                 "example": "folder,cover",
                 "desc": "Comma separated list of coverimages, basenames or full names"
+            },
+            "thumbnailNames": {
+                "type": "text",
+                "example": "folder-sm,cover-sm",
+                "desc": "Comma separated list of coverimage thumbnails, basenames or full names"
             },
             "lastPlayedCount": {
                 "type": "uint",
@@ -953,10 +947,10 @@ const APImethods = {
                 "example": "SYNCEDLYRICS",
                 "desc": "Vorbis tag for synced lyrics"
             },
-            "covercacheKeepDays": {
-                "type": "uint",
-                "example": 7,
-                "desc": "Days before deleting cover cache files."
+            "listenbrainzToken": {
+                "type": "text",
+                "example": "token",
+                "desc": "Your ListenBrainz token"
             },
             "webuiSettings": {
                 "params": {
@@ -1055,6 +1049,21 @@ const APImethods = {
                         "example": 50,
                         "desc": "max. elements for lists: 25, 50, 100, 200 or 0 for unlimited"
                     },
+                    "uiSmallWidthTagRows": {
+                        "type": "bool",
+                        "example": true,
+                        "desc": "Display tags in rows for small displays"
+                    },
+                    "uiQuickPlayButton": {
+                        "type": "bool",
+                        "example": false,
+                        "title": "Show quick play button"
+                    },
+                    "uiQuickRemoveButton": {
+                        "type": "bool",
+                        "example": false,
+                        "title": "Show quick remove button"
+                    },
                     "enableHome": {
                         "type": "bool",
                         "example": true,
@@ -1100,11 +1109,6 @@ const APImethods = {
                         "example": "theme-dark",
                         "desc": "\"theme-dark\", \"theme-light\" or \"theme-default\""
                     },
-                    "uiHighlightColor": {
-                        "type": "text",
-                        "example": "#28a745",
-                        "desc": "Highlight color"
-                    },
                     "uiThumbnailSize": {
                         "type": "int",
                         "example": 175,
@@ -1134,6 +1138,11 @@ const APImethods = {
                         "type": "text",
                         "example": "de-DE",
                         "desc": "Language code or \"auto\" for browser default."
+                    },
+                    "uiStartupView": {
+                        "type": "text",
+                        "example": "Home",
+                        "desc": "Startup view"
                     }
                 }
             }
@@ -1172,6 +1181,16 @@ const APImethods = {
                 "example": 0,
                 "desc": "MPD crossfade in seconds"
             },
+            "mixrampDb": {
+                "type": "float",
+                "example": 0,
+                "desc": "Mixramp threshold in dB"
+            },
+            "mixrampDelay": {
+                "type": "float",
+                "example": 0,
+                "desc": "Mixrampdelay in seconds"
+            },
             "jukeboxMode": {
                 "type": "text",
                 "example": "off",
@@ -1180,7 +1199,7 @@ const APImethods = {
             "jukeboxPlaylist": {
                 "type": "text",
                 "example": "Database",
-                "desc": "Playlist for jukebox or \"Databas\" for whole database."
+                "desc": "Playlist for jukebox or \"Database\" for whole database."
             },
             "jukeboxQueueLength": {
                 "type": "uint",
@@ -1287,8 +1306,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_TIMER_LIST": {
-        "desc": "Lists all timers",
-        "params": {}
+        "desc": "Lists all timers"
     },
     "MYMPD_API_TIMER_GET": {
         "desc": "Gets options from a timer",
@@ -1390,20 +1408,35 @@ const APImethods = {
         "desc": "Creates a new MPD partition",
         "protected": true,
         "params": {
-            "name": APIparams.partName
+            "name": APIparams.partition
         }
     },
-    "MYMPD_API_PARTITION_SWITCH": {
-        "desc": "Switch mpd client to this partition",
+    "MYMPD_API_PARTITION_SAVE": {
+        "desc": "Saves MPD partition settings",
+        "protected": true,
         "params": {
-            "name": APIparams.partName
+            "highlightColor": {
+                "type": "text",
+                "example": "#28a745",
+                "desc": "Highlight color for this partition"
+            },
+            "mpdStreamPort": {
+                "type": "uint",
+                "example": 8000,
+                "desc": "Port of MPD http stream for local playback"
+            },
+            "streamuri": {
+                "type": "text",
+                "exampe": "http://custom/stream/uri",
+                "desc": "Custom stream uri, overrides automatic stream uri calculation (MPD host + mpdStreamPort)"
+            }
         }
     },
     "MYMPD_API_PARTITION_RM": {
         "desc": "Removes a mpd partition.",
         "protected": true,
         "params": {
-            "name": APIparams.partName
+            "name": APIparams.partition
         }
     },
     "MYMPD_API_PARTITION_OUTPUT_MOVE": {
@@ -1418,8 +1451,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_TRIGGER_LIST": {
-        "desc": "Lists all triggers",
-        "params": {}
+        "desc": "Lists all triggers"
     },
     "MYMPD_API_TRIGGER_GET": {
         "desc": "Get the options from a trigger",
@@ -1447,6 +1479,7 @@ const APImethods = {
                 "example": "test script",
                 "desc": "Script to execute"
             },
+            "partition": APIparams.partition,
             "arguments": APIparams.scriptArguments
         }
     },
@@ -1473,7 +1506,7 @@ const APImethods = {
             }
         }
     },
-    "MYMPD_API_HOME_LIST": {
+    "MYMPD_API_HOME_ICON_LIST": {
         "desc": "Lists all home icons",
         "params": {}
     },

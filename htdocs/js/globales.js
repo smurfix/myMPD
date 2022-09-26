@@ -47,12 +47,16 @@ let webradioDb = null;
 const webradioDbPicsUri = 'https://jcorporation.github.io/webradiodb/db/pics/';
 const imageExtensions = ['webp', 'png', 'jpg', 'jpeg', 'svg', 'avif'];
 let locale = navigator.language || navigator.userLanguage;
+let materialIcons = {};
+let phrasesDefault = {};
+let phrases = {};
 
 //this settings are saved in the browsers localStorage
 const localSettings = {
     "scaleRatio": "1.0",
     "localPlaybackAutoplay": false,
-    "enforceMobile": false
+    "enforceMobile": false,
+    "partition": "default"
 };
 
 //get local settings
@@ -645,12 +649,18 @@ const webuiSettingsDefault = {
         "form": "enableFeaturesFrm",
         "warn": "MPD does not support mounts"
     },
+    "enableLocalPlayback": {
+        "defaultValue": false
+    },
     "enablePartitions": {
         "defaultValue": false,
         "inputType": "checkbox",
         "title": "Partitions",
         "form": "enableFeaturesFrm",
         "warn": "MPD does not support partitions"
+    },
+    "enableLyrics": {
+        "defaultValue": true
     },
     "uiTheme": {
         "defaultValue": "theme-dark",
@@ -663,13 +673,6 @@ const webuiSettingsDefault = {
         "title": "Theme",
         "form": "themeFrm",
         "onChange": "eventChangeTheme"
-    },
-    "uiHighlightColor": {
-        "defaultValue": "#28a745",
-        "inputType": "color",
-        "title": "Highlight color",
-        "form": "themeFrm",
-        "reset": true
     },
     "uiThumbnailSize": {
         "defaultValue": 175,
@@ -724,7 +727,7 @@ const webuiSettingsDefault = {
             "Browse/Database": "Database",
             "Browse/Playlists": "Playlists",
             "Browse/Filesystem": "Filesystem",
-            "Browse/Radio": "Radio Favorites",
+            "Browse/Radio": "Webradios",
             "Search": "Search"
         },
         "inputType": "select",
@@ -736,7 +739,6 @@ const webuiSettingsDefault = {
 
 //features
 const features = {
-    "featAdvsearch": true,
     "featCacert": false,
     "featHome": true,
     "featLibrary": false,
@@ -746,7 +748,6 @@ const features = {
     "featNeighbors": true,
     "featPartitions": true,
     "featPlaylists": true,
-    "featSingleOneShot": true,
     "featScripting": true,
     "featSmartpls": true,
     "featStickers": false,
@@ -798,11 +799,13 @@ const keymap = {
 //cache often accessed dom elements
 const domCache = {};
 domCache.body = document.getElementsByTagName('body')[0];
+domCache.main = document.getElementsByTagName('main')[0];
 domCache.counter = document.getElementById('counter');
 domCache.progress = document.getElementById('footerProgress');
 domCache.progressBar = document.getElementById('footerProgressBar');
 domCache.progressPos = document.getElementById('footerProgressPos');
 domCache.notificationCount = document.getElementById('notificationCount');
+domCache.volumeBar = document.getElementById('volumeBar');
 
 //Get BSN object references for fast access
 const uiElements = {};

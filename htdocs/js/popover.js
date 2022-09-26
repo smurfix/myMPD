@@ -108,7 +108,7 @@ function createPopoverBody(template) {
                        elCreateEmpty('div', {"class": ["tab-pane", "pt-2", "active", "show"], "id": "popoverTab0"}),
                        elCreateEmpty('div', {"class": ["tab-pane", "pt-2"], "id": "popoverTab1"})
                    ])
-               ])
+               ]);
     }
     return elCreateEmpty('div', {"class": ["popover-body"]})
 }
@@ -258,8 +258,8 @@ function addMenuItemsNavbarActions(popoverBody, el) {
             addMenuItem(popoverBody, {"cmd": "appGoto", "options": ["Queue", "Jukebox", undefined]}, 'Show jukebox queue');
             break;
         case 'NavbarBrowse':
-            addMenuItem(popoverBody, {"cmd": "updateDB", "options": ["", true, false]}, 'Update database');
-            addMenuItem(popoverBody, {"cmd": "updateDB", "options": ["", true, true]}, 'Rescan database');
+            addMenuItem(popoverBody, {"cmd": "updateDB", "options": ["", true, false, false]}, 'Update database');
+            addMenuItem(popoverBody, {"cmd": "updateDB", "options": ["", true, false, true]}, 'Rescan database');
             addDivider(popoverBody);
             addMenuItem(popoverBody, {"cmd": "appGoto", "options": ["Browse", "Database", undefined]}, 'Show browse database');
             addMenuItem(popoverBody, {"cmd": "appGoto", "options": ["Browse", "Playlists", undefined]}, 'Show browse playlists');
@@ -286,19 +286,16 @@ function addMenuItemsDiscActions(popoverBody, el) {
 }
 
 function addMenuItemsSingleActions(popoverBody) {
-    if (settings.single === '0') {
-        if (settings.repeat === true &&
-            settings.consume === false)
+    if (settings.partition.single === '0') {
+        if (settings.partition.repeat === true &&
+            settings.partition.consume === false)
         {
             //repeat one song can only work with consume disabled
-            if (features.featSingleOneshot === true) {
-                addMenuItem(popoverBody, {"cmd": "clickSingle", "options": [2]}, 'Repeat current song once');
-            }
+            addMenuItem(popoverBody, {"cmd": "clickSingle", "options": [2]}, 'Repeat current song once');
             addMenuItem(popoverBody, {"cmd": "clickSingle", "options": [1]}, 'Repeat current song');
         }
-        else if (features.featSingleOneshot === true &&
-                 settings.repeat === true &&
-                 settings.autoPlay === false)
+        else if (settings.partition.repeat === true &&
+                 settings.partition.autoPlay === false)
         {
             //single one-shot works only with disabled auto play
             addMenuItem(popoverBody, {"cmd": "clickSingle", "options": [2]}, 'Stop playback after current song');
@@ -465,8 +462,8 @@ function addMenuItemsDirectoryActions(tabContent, baseuri) {
     }
     if (app.id === 'BrowseFilesystem') {
         addDivider(tabContent);
-        addMenuItem(tabContent, {"cmd": "updateDB", "options": [baseuri, false, true, false]}, 'Update directory');
-        addMenuItem(tabContent, {"cmd": "updateDB", "options": [baseuri, false, true, true]}, 'Rescan directory');
+        addMenuItem(tabContent, {"cmd": "updateDB", "options": [baseuri, false, false, false]}, 'Update directory');
+        addMenuItem(tabContent, {"cmd": "updateDB", "options": [baseuri, false, false, true]}, 'Rescan directory');
     }
     addDivider(tabContent);
     addMenuItem(tabContent, {"cmd": "gotoFilesystem", "options": [baseuri, "dir"]}, 'Open directory');
@@ -638,10 +635,10 @@ function createMenuLists(el, tabHeader, tabContent) {
         }
         case 'QueueJukebox': {
             const pos = Number(getData(dataNode, 'pos'));
-            if (settings.jukeboxMode === 'song') {
+            if (settings.partition.jukeboxMode === 'song') {
                 addMenuItemsSongActions(tabContent, dataNode, uri, type, name);
             }
-            else if (settings.jukeboxMode === 'album') {
+            else if (settings.partition.jukeboxMode === 'album') {
                 addMenuItemsAlbumActions(tabContent, dataNode)
             }
             addDivider(tabContent);
@@ -670,7 +667,7 @@ function createMenuListsSecondary(el, tabHeader, tabContent) {
                 (app.id === 'BrowseFilesystem' && type === 'dir') ||
                 (app.id === 'BrowseFilesystem' && type === 'plist') ||
                 (app.id === 'BrowseFilesystem' && type === 'smartpls') ||
-                (app.id === 'QueueJukebox' && settings.jukeboxMode === 'album'))
+                (app.id === 'QueueJukebox' && settings.partition.jukeboxMode === 'album'))
             {
                 return false;
             }
@@ -724,6 +721,8 @@ function createMenuHome(dataNode, tabHeader, tabContent) {
     switch(type) {
         case 'plist':
         case 'smartpls':
+            addMenuItemsPlaylistActions(tabContent, dataNode, type, href.options[1], href.options[1]);
+            break;
         case 'webradio':
             addMenuItemsPlaylistActions(tabContent, dataNode, type, href.options[1], href.options[1]);
             addMenuItemsWebradioFavoritesHomeActions(tabContent, href.options[1].substr(17));

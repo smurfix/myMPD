@@ -196,11 +196,10 @@ function filterHomeIconLigatures() {
     }
 }
 
-function parseHome(obj) {
+function parseHomeIcons(obj) {
     const cardContainer = document.getElementById('HomeList');
+    unsetUpdateView(cardContainer);
     const cols = cardContainer.getElementsByClassName('col');
-    cardContainer.classList.remove('opacity05');
-    setScrollViewHeight(cardContainer);
 
     if (obj.error !== undefined) {
         elReplaceChild(cardContainer,
@@ -285,6 +284,7 @@ function parseHome(obj) {
     for (let i = cols.length - 1; i >= obj.result.returnedEntities; i--) {
         cols[i].remove();
     }
+    setScrollViewHeight(cardContainer);
 }
 
 function showDropoverIcon(from, to) {
@@ -382,9 +382,7 @@ function dragAndDropHome() {
                     isNaN(from) === false &&
                     from !== to)
                 {
-                    sendAPI("MYMPD_API_HOME_ICON_MOVE", {"from": from, "to": to}, function(obj) {
-                        parseHome(obj);
-                    });
+                    sendAPI("MYMPD_API_HOME_ICON_MOVE", {"from": from, "to": to});
                 }
             }
         }
@@ -670,17 +668,12 @@ function saveHomeIconClose(obj) {
     }
     else {
         uiElements.modalEditHomeIcon.hide();
-        sendAPI("MYMPD_API_HOME_LIST", {}, function(obj2) {
-            parseHome(obj2);
-        });
     }
 }
 
 //eslint-disable-next-line no-unused-vars
 function deleteHomeIcon(pos) {
-    sendAPI("MYMPD_API_HOME_ICON_RM", {"pos": pos}, function(obj) {
-        parseHome(obj);
-    });
+    sendAPI("MYMPD_API_HOME_ICON_RM", {"pos": pos});
 }
 
 function showHomeIconCmdOptions(values) {

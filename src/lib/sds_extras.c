@@ -4,18 +4,13 @@
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
 #include "sds_extras.h"
 
 #include "../../dist/mongoose/mongoose.h"
 #include "../../dist/utf8/utf8.h"
-#include "log.h"
 
-#include <ctype.h>
-#include <inttypes.h>
-#include <string.h>
-
-#define HEXTOI(x) (x >= '0' && x <= '9' ? x - '0' : x - 'W')
+#define HEXTOI(x) ((x) >= '0' && (x) <= '9' ? (x) - '0' : (x) - 'W')
 
 /**
  * Splits a comma separated string and trims whitespaces from single values
@@ -52,7 +47,7 @@ sds sds_hash(const char *p) {
 
 /**
  * Reads the integer from start of the string, the integer is removed from string
- * @param s sds string
+ * @param s sds string to modify in place
  * @return the number at the beginning of the sds string
  */
 int sds_toimax(sds s) {
@@ -69,7 +64,7 @@ int sds_toimax(sds s) {
 
 /**
  * Makes the string lower case (utf8 aware)
- * @params s sds string
+ * @param s sds string to modify in place
  */
 void sds_utf8_tolower(sds s) {
     utf8_int32_t cp;

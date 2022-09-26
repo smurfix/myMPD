@@ -58,12 +58,6 @@ body.not-mobile .featMobile {
   color: var(--bs-gray-100);
 }
 
-.bg-gray-800,
-.bg-gray-800:hover {
-  border-color: var(--bs-gray-800);
-  background-color: var(--bs-gray-800);
-}
-
 .highlight {
   color: var(--mympd-highlightcolor) !important;
 }
@@ -81,9 +75,9 @@ button.active,
 .btn-success,
 .btn-success:focus,
 .btn-success:hover {
-  color: var(--mympd-highlightcolor-contrast);
-  background-color: var(--mympd-highlightcolor);
-  border-color: var(--mympd-highlightcolor);
+  color: var(--mympd-highlightcolor-contrast) !important;
+  background-color: var(--mympd-highlightcolor) !important;
+  border-color: var(--mympd-highlightcolor) !important;
 }
 
 .btn-success:disabled,
@@ -107,7 +101,7 @@ a.text-success:focus {
 }
 
 #splashScreen {
-  background: linear-gradient(0deg, #28a745 0%, #1e7e34 100%);
+  background: radial-gradient(at 100% 0%, #32d156 0%, #28a745 30%, #155724 100%);
   width: 100vw;
   height: 100vh;
   z-index: 2000;
@@ -157,7 +151,7 @@ html {
 
 body {
   min-height: 100vh;
-  padding-top: 3rem;
+  padding-top: 3.5rem;
   padding-bottom: 5rem;
   background-color: var(--mympd-backgroundcolor);
   background-position: center center;
@@ -167,7 +161,7 @@ body {
 }
 
 main {
-  padding-top: 0.5rem;
+  border-top: 3px solid transparent;
 }
 
 .navbar {
@@ -233,10 +227,6 @@ div > .albumartbg {
   body {
     padding-top: 0;
     padding-left: 4rem;
-  }
-
-  main {
-    padding-top: 0;
   }
 
   #headerLeft {
@@ -522,6 +512,17 @@ div#homeActions {
   padding: 0.5rem;
 }
 
+@media only screen and (max-width: 400px) and (min-width: 300px) {
+  .card-grid {
+    width: calc((100vw - 4rem) / 2);
+  }
+
+  .album-cover-grid {
+    width: calc((100vw - 4rem) / 2);
+    height: calc((100vw - 4rem) / 2);
+  }
+}
+
 .album-cover-loading {
   background-image: url("../assets/coverimage-mympd.svg");
 }
@@ -687,10 +688,6 @@ tfoot td {
   animation-iteration-count: infinite;
 }
 
-.menu-indent {
-  padding-left: 1rem;
-}
-
 div.key {
   border: 1px solid var(--bs-gray-200);
   background-color: var(--bs-gray-600);
@@ -741,7 +738,7 @@ textarea.small {
 
 .btn:not(:disabled):not(.disabled).active,
 .show > .btn.dropdown-toggle {
-  color: var(--bs-white);
+  color: var(--bs-white) !important;
   background-color: var(--mympd-highlightcolor) !important;
   border-color: var(--mympd-highlightcolor) !important;
 }
@@ -981,6 +978,22 @@ a.download::before {
   margin-right: 0.5rem;
 }
 
+a.launch::before {
+  content: "launch";
+  font-family: "Material Icons";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 1.4rem;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  vertical-align: top;
+  text-rendering: optimizelegibility;
+  font-feature-settings: "liga";
+  margin-right: 0.5rem;
+}
+
 /* inner button for inputs */
 button.input-inner-button,
 button.input-inner-button:hover,
@@ -995,7 +1008,7 @@ button.input-inner-button:focus {
   right: 0;
   padding-right: 0.5rem;
   padding-left: 0.5rem;
-  z-index: 3;
+  z-index: 5;
 }
 
 button.select-inner-button {
@@ -1122,4 +1135,38 @@ input.innerButton {
 
 form#outputs {
   overflow: auto;
+}
+
+button.weekday {
+  min-width: 3rem;
+}
+
+@keyframes flash-border {
+  0% {
+    border-color: var(--mympd-highlightcolor);
+  }
+
+  50% {
+    border-color: transparent;
+  }
+
+  100% {
+    border-color: var(--mympd-highlightcolor);
+  }
+}
+
+.border-progress {
+  border-top: 3px solid var(--mympd-highlightcolor);
+  animation-name: flash-border;
+  animation-duration: 2s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  -webkit-animation-name: flash_border;
+  -webkit-animation-duration: 2s;
+  -webkit-animation-timing-function: linear;
+  -webkit-animation-iteration-count: infinite;
+  -moz-animation-name: flash_border;
+  -moz-animation-duration: 2s;
+  -moz-animation-timing-function: linear;
+  -moz-animation-iteration-count: infinite;
 }

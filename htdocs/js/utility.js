@@ -120,6 +120,24 @@ function setFocus(el) {
     }
 }
 
+function setUpdateViewId(id) {
+    setUpdateView(document.getElementById(id));
+}
+
+function setUpdateView(el) {
+    el.classList.add('opacity05');
+    domCache.main.classList.add('border-progress');
+}
+
+function unsetUpdateViewId(id) {
+    unsetUpdateView(document.getElementById(id));
+}
+
+function unsetUpdateView(el) {
+    el.classList.remove('opacity05');
+    domCache.main.classList.remove('border-progress');
+}
+
 //replaces special characters with underscore
 function r(x) {
     return x.replace(/[^\w-]/g, '_');
@@ -571,12 +589,12 @@ function basename(uri, removeQuery) {
     return uri.split('/').reverse()[0];
 }
 
- function splitFilename(filename) {
-     const parts = filename.match(/^(.*)\.([^.]+)$/);
-     return {
+function splitFilename(filename) {
+    const parts = filename.match(/^(.*)\.([^.]+)$/);
+    return {
         "file": parts[1],
         "ext": parts[2]
-     };
+    };
  }
 
 function isCoverfile(uri) {
@@ -705,7 +723,7 @@ function addTagList(elId, list) {
         elId === 'BrowseNavWebradiodbDropdown' ||
         elId === 'BrowseNavRadiobrowserDropdown')
     {
-        if (features.featTags === true && features.featAdvsearch === true) {
+        if (features.featTags === true) {
             elClear(stack);
             stack.appendChild(elCreateText('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Database"}, tn('Database')));
         }
@@ -756,8 +774,10 @@ function addTagList(elId, list) {
 
 function addTagListSelect(elId, list) {
     const select = document.getElementById(elId);
-    select.options.length = 0;
-    if (elId === 'saveSmartPlaylistSort' || elId === 'selectSmartplsSort') {
+    elClear(select);
+    if (elId === 'saveSmartPlaylistSort' ||
+        elId === 'selectSmartplsSort')
+    {
         select.appendChild(elCreateText('option', {"value": ""}, tn('Disabled')));
         select.appendChild(elCreateText('option', {"value": "shuffle"}, tn('Shuffle')));
         const optGroup = elCreateEmpty('optgroup', {"label": tn('Sort by tag')});
@@ -767,7 +787,9 @@ function addTagListSelect(elId, list) {
         }
         select.appendChild(optGroup);
     }
-    else if (elId === 'selectJukeboxUniqueTag' && settings.tagListBrowse.includes('Title') === false) {
+    else if (elId === 'selectJukeboxUniqueTag' &&
+        settings.tagListBrowse.includes('Title') === false)
+    {
         //Title tag should be always in the list
         select.appendChild(elCreateText('option', {"value": "Title"}, tn('Song')));
         for (let i = 0, j = settings[list].length; i < j; i++) {
@@ -833,6 +855,9 @@ function btnWaiting(btn, waiting) {
         //add a small delay, user should notice the change
         setTimeout(function() {
             elEnable(btn);
+            if (btn.firstChild === null) {
+                return;
+            }
             if (btn.firstChild.nodeName === 'SPAN' &&
                 btn.firstChild.classList.contains('spinner-border'))
             {
@@ -896,6 +921,7 @@ function toggleBtnGroup(btn) {
 function getBtnGroupValueId(id) {
     let activeBtn = document.getElementById(id).getElementsByClassName('active');
     if (activeBtn.length === 0) {
+        //fallback to first button
         activeBtn = document.getElementById(id).getElementsByTagName('button');
     }
     return getData(activeBtn[0], 'value');
@@ -1263,7 +1289,7 @@ function createSearchCrumbs(searchStr, searchEl, crumbEl) {
 }
 
 function createSearchCrumb(filter, op, value) {
-    const btn = elCreateNodes('button', {"class": ["btn", "btn-secondary", "bg-gray-800", "me-2"]}, [
+    const btn = elCreateNodes('button', {"class": ["btn", "btn-dark", "me-2"]}, [
         document.createTextNode(filter + ' ' + op + ' \'' + value + '\''),
         elCreateText('span', {"class": ["ml-2", "badge", "bg-secondary"]}, '×')
     ]);
@@ -1366,6 +1392,7 @@ function printValue(key, value) {
         case 'AlbumArtist':
         case 'AlbumArtistSort':
         case 'Composer':
+        case 'ComposerSort':
         case 'Performer':
         case 'Conductor':
         case 'Ensemble':
@@ -1681,6 +1708,7 @@ function httpGet(uri, callback, json) {
                 catch(error) {
                     showNotification(tn('Can not parse response to json object'), '', 'general', 'error');
                     logError('Can not parse response to json object:' + ajaxRequest.responseText);
+                    logError(error);
                 }
             }
             else {

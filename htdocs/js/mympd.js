@@ -50,7 +50,7 @@ function appPrepare() {
     }
     const list = document.getElementById(app.id + 'List');
     if (list) {
-        list.classList.add('opacity05');
+        setUpdateView(list);
     }
 }
 
@@ -207,7 +207,7 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
 
     switch(app.id) {
         case 'Home': {
-            sendAPI("MYMPD_API_HOME_LIST", {}, parseHome);
+            sendAPI("MYMPD_API_HOME_ICON_LIST", {}, parseHomeIcons);
             break;
         }
         case 'Playback': {
@@ -228,7 +228,9 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
                 document.getElementById('searchQueueStr').value = '';
             }
             if (features.featAdvqueue === true) {
-                if (app.current.sort.tag === '-') {
+                if (app.current.sort.tag === '-' ||
+                    app.current.sort.tag === 'Pos')
+                {
                     app.current.sort.tag = 'Priority';
                 }
                 sendAPI("MYMPD_API_QUEUE_SEARCH_ADV", {
@@ -237,7 +239,7 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
                     "sort": app.current.sort.tag,
                     "sortdesc": app.current.sort.desc,
                     "expression": app.current.search,
-                    "cols": settings.colsSearchFetch
+                    "cols": settings.colsQueueCurrentFetch
                 }, parseQueue, true);
                 if (app.current.filter === 'prio') {
                     elShowId('priorityMatch');
@@ -258,14 +260,14 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
                     "limit": app.current.limit,
                     "filter": app.current.filter,
                     "searchstr": app.current.search,
-                    "cols": settings.colsSearchFetch
+                    "cols": settings.colsQueueCurrentFetch
                 }, parseQueue, true);
             }
             else {
                 sendAPI("MYMPD_API_QUEUE_LIST", {
                     "offset": app.current.offset,
                     "limit": app.current.limit,
-                    "cols": settings.colsSearchFetch
+                    "cols": settings.colsQueueCurrentFetch
                 }, parseQueue, true);
             }
             selectTag('searchQueueTags', 'searchQueueTagsDesc', app.current.filter);
@@ -273,7 +275,7 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
         }
         case 'QueueLastPlayed': {
             setFocusId('searchQueueLastPlayedStr');
-            sendAPI("MYMPD_API_QUEUE_LAST_PLAYED", {
+            sendAPI("MYMPD_API_LAST_PLAYED_LIST", {
                 "offset": app.current.offset,
                 "limit": app.current.limit,
                 "cols": settings.colsQueueLastPlayedFetch,
@@ -503,50 +505,36 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             break;
         }
         case 'Search': {
-            setFocusId('searchStr');
-            if (features.featAdvsearch) {
-                createSearchCrumbs(app.current.search, document.getElementById('searchStr'), document.getElementById('searchCrumb'));
-            }
-            else if (document.getElementById('searchStr').value === '' &&
-                     app.current.search !== '')
-            {
-                document.getElementById('searchStr').value = app.current.search;
-            }
+            const searchStrEl = document.getElementById('searchStr');
+            const searchCrumbEl = document.getElementById('searchCrumb');
+            setFocus(searchStrEl);
+            createSearchCrumbs(app.current.search, searchStrEl, searchCrumbEl);
+            
             if (app.current.search === '') {
                 document.getElementById('searchStr').value = '';
             }
-            if (document.getElementById('searchStr').value.length >= 2 ||
-                document.getElementById('searchCrumb').children.length > 0)
+            if (searchStrEl.value.length >= 2 ||
+                searchCrumbEl.children.length > 0)
             {
-                if (features.featAdvsearch === true) {
-                    if (app.current.sort.tag === '-') {
-                        app.current.sort.tag = settings.tagList.includes('Title') ? 'Title' : '-';
-                    }
-                    sendAPI("MYMPD_API_DATABASE_SEARCH_ADV", {
-                        "offset": app.current.offset,
-                        "limit": app.current.limit,
-                        "sort": app.current.sort.tag,
-                        "sortdesc": app.current.sort.desc,
-                        "expression": app.current.search,
-                        "cols": settings.colsSearchFetch
-                    }, parseSearch, true);
+                if (app.current.sort.tag === '-') {
+                    app.current.sort.tag = settings.tagList.includes('Title') ? 'Title' : '-';
                 }
-                else {
-                    sendAPI("MYMPD_API_DATABASE_SEARCH", {
-                        "offset": app.current.offset,
-                        "limit": app.current.limit,
-                        "filter": app.current.filter,
-                        "searchstr": app.current.search,
-                        "cols": settings.colsSearchFetch
-                    }, parseSearch, true);
-                }
+                sendAPI("MYMPD_API_DATABASE_SEARCH", {
+                    "offset": app.current.offset,
+                    "limit": app.current.limit,
+                    "sort": app.current.sort.tag,
+                    "sortdesc": app.current.sort.desc,
+                    "expression": app.current.search,
+                    "cols": settings.colsSearchFetch
+                }, parseSearch, true);
             }
             else {
-                elClear(document.getElementById('SearchList').getElementsByTagName('tbody')[0]);
-                elClear(document.getElementById('SearchList').getElementsByTagName('tfoot')[0]);
+                const SearchListEl = document.getElementById('SearchList');
+                elClear(SearchListEl.getElementsByTagName('tbody')[0]);
+                elClear(SearchListEl.getElementsByTagName('tfoot')[0]);
                 elDisableId('searchAddAllSongs');
                 elDisableId('searchAddAllSongsBtn');
-                document.getElementById('SearchList').classList.remove('opacity05');
+                unsetUpdateViewId('SearchList');
                 setPagination(0, 0);
             }
             selectTag('searchTags', 'searchTagsDesc', app.current.filter);
@@ -572,12 +560,21 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
 function showAppInitAlert(text) {
     const spa = document.getElementById('splashScreenAlert');
     elClear(spa);
-    spa.appendChild(elCreateText('p', {"class": ["text-danger"]}, tn(text)));
-    const btn = elCreateText('button', {"class": ["btn", "btn-danger"]}, tn('Reload'));
-    btn.addEventListener('click', function() {
+    spa.appendChild(elCreateText('p', {"class": ["text-light"]}, tn(text)));
+    const reloadBtn = elCreateText('button', {"class": ["btn", "btn-light", "me-2"], "data-phrase": "Reload"}, tn('Reload'));
+    reloadBtn.addEventListener('click', function() {
         clearAndReload();
     }, false);
-    spa.appendChild(elCreateNode('p', {}, btn));
+    const resetBtn = elCreateText('button', {"class": ["btn", "btn-light"], "data-phrase": "Reset"}, tn('Reset'));
+    resetBtn.addEventListener('click', function() {
+        resetLocalSettings();
+        clearAndReload();
+    }, false);
+    spa.appendChild(elCreateNodes('p', {}, [
+            reloadBtn,
+            resetBtn
+        ])
+    );
 }
 
 function clearCache() {
@@ -693,7 +690,7 @@ function appInitStart() {
                     serviceWorkerExists = true;
                 }
             }).catch(function(err) {
-                logError('Service Worker unregistration failed: ', err);
+                logError('Service Worker unregistration failed: ' + err);
             });
             if (serviceWorkerExists === true) {
                 clearAndReload();
@@ -739,6 +736,7 @@ function appInitStart() {
 }
 
 function appInit() {
+    getAssets();
     //collaps arrows for submenus
     const collapseArrows = document.querySelectorAll('.subMenu');
     for (const collapseArrow of collapseArrows) {
@@ -886,7 +884,7 @@ function initGlobalModals() {
             tab.appendChild(
                 elCreateNode('div', {"class": ["row", "mb-2", "mt-3"]},
                     elCreateNode('div', {"class": ["col-12"]},
-                        elCreateText('h5', {}, tn(keymap[key].desc))
+                        elCreateText('h5', {"data-phrase": keymap[key].desc}, tn(keymap[key].desc))
                     )
                 )
             );
@@ -899,7 +897,7 @@ function initGlobalModals() {
             k.classList.add('mi', 'mi-small');
         }
         col.appendChild(k);
-        col.appendChild(elCreateText('div', {}, tn(keymap[key].desc)));
+        col.appendChild(elCreateText('div', {"data-phrase": keymap[key].desc}, tn(keymap[key].desc)));
         tab.lastChild.appendChild(col);
     }
 
@@ -1021,24 +1019,31 @@ function initNavs() {
     }, false);
 }
 
+function getAssets() {
+    httpGet(subdir + '/assets/i18n/en-US.json', function(obj) {
+        phrasesDefault = obj;
+    }, true);
+
+    httpGet(subdir + '/assets/ligatures.json', function(obj) {
+        materialIcons = obj;
+    }, true);
+}
+
 //Handle javascript errors
 if (debugMode === false) {
     window.onerror = function(msg, url, line) {
         logError('JavaScript error: ' + msg + ' (' + url + ': ' + line + ')');
         if (settings.loglevel >= 4) {
-            if (appInited === true) {
-                showNotification(tn('JavaScript error'), msg + ' (' + url + ': ' + line + ')', 'general', 'error');
-            }
-            else {
-                showAppInitAlert(tn('JavaScript error') + ': ' + msg + ' (' + url + ': ' + line + ')');
-            }
+            showNotification(tn('JavaScript error'), msg + ' (' + url + ': ' + line + ')', 'general', 'error');
         }
         return true;
     };
 }
 
 //allow service worker registration
-if (window.trustedTypes && window.trustedTypes.createPolicy) {
+if (window.trustedTypes &&
+    window.trustedTypes.createPolicy)
+{
     window.trustedTypes.createPolicy('default', {
         createScriptURL(dirty) {
             if (dirty === 'sw.js') {

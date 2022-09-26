@@ -6,6 +6,10 @@ title: Scripting
 
 myMPD integrates [Lua](http://www.lua.org) for scripting purposes. Script execution can be triggered in the main menu, with timers or triggers. Scripts are executed asynchronously, therefore scripts can not block the main threads of myMPD. The script output is printed to STDOUT and the return value is broadcasted to all connected clients.
 
+## Arguments
+
+Script arguments are populated in the lua table `arguments`. myMPD populates automatically the global `partition` variable.
+
 ## Accessing myMPD and MPD status informations
 
 Accessing myMPD requires the mympd lua library to be loaded.
@@ -99,11 +103,11 @@ return output
 
 `mympd-script` is a small commandline tool to submit scripts to myMPD. It reads the script from STDIN and submits it to myMPD for execution. `Key=Value` parameters can be used to fill the arguments table in the Lua script.
 
-For security reasons this function is disabled in the default configuration, you must set `remotescripting = true` (mympd section) in the configuration file. Additionally there is a IP ACL option `scriptacl` (webserver section) set to `-0.0.0.0/0,+127.0.0.0/8` to prevent misuse of this feature.
+For security reasons this function has a default acl of `-0.0.0.0/0,+127.0.0.0/8` in the default configuration. There is a IP ACL option `scriptacl` in the config folder to   override the default acl.
 
 **Script from STDIN:**
 ```
-mympd-script https://localhost - key1=value1 <<< 'print arguments["key1"]'
+mympd-script https://localhost default - key1=value1 <<< 'print arguments["key1"]'
 ```
 
 **Call available script (test.lua):**
@@ -111,7 +115,7 @@ mympd-script https://localhost - key1=value1 <<< 'print arguments["key1"]'
 mympd-script can also call existing scripts. This API call is not controlled by the remote scripts configuration options.
 
 ```
-mympd-script https://localhost test key1=value1 
+mympd-script https://localhost default test key1=value1 
 ```
 
 ## LUA standard libraries

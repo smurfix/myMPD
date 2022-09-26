@@ -6,10 +6,10 @@
 function initJukebox() {
     document.getElementById('QueueJukeboxList').addEventListener('click', function(event) {
         if (event.target.nodeName === 'TD') {
-            if (settings.jukeboxMode === 'song') {
+            if (settings.partition.jukeboxMode === 'song') {
                 clickSong(getData(event.target.parentNode, 'uri'), getData(event.target.parentNode, 'name'));
             }
-            else if (settings.jukeboxMode === 'album') {
+            else if (settings.partition.jukeboxMode === 'album') {
                 clickAlbumPlay(getData(event.target.parentNode, 'AlbumArtist'), getData(event.target.parentNode, 'Album'));
             }
         }
@@ -60,20 +60,22 @@ function delQueueJukeboxSong(pos) {
 
 function parseJukeboxList(obj) {
     if (checkResultId(obj, 'QueueJukeboxList') === false) {
-        if (obj.result !== undefined &&
-            obj.result.jukeboxMode === 'off')
-        {
-            elHideId('QueueJukeboxList');
-            elShowId('QueueJukeboxDisabled');
+        if (obj.result !== undefined) {
+            if (obj.result.jukeboxMode === 'off') {
+                elHideId('QueueJukeboxList');
+                elShowId('QueueJukeboxDisabled');
+            }
+            else {
+                elHideId('QueueJukeboxDisabled');
+            }
         }
-        setPagination(0,0);
         return;
     }
 
     elHideId('QueueJukeboxDisabled');
     elShowId('QueueJukeboxList');
 
-    const rowTitle = settings.jukeboxMode === 'song' ?
+    const rowTitle = settings.partition.jukeboxMode === 'song' ?
         webuiSettingsDefault.clickSong.validValues[settings.webuiSettings.clickSong] :
         webuiSettingsDefault.clickQuickPlay.validValues[settings.webuiSettings.clickQuickPlay];
     updateTable(obj, 'QueueJukebox', function(row, data) {

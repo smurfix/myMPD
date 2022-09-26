@@ -14,7 +14,7 @@ title: Compiling
 | other branches | unstable | development branches for new major and minor releases |
 {: .table .table-sm }
 
-Get the appropriated tarball or clone the git repository and switch to the wanted branch.
+Get the appropriated tarball or clone the git repository and checkout the wanted branch.
 
 **Example: Clone and use devel branch:**
 ```
@@ -33,15 +33,15 @@ myMPD has only a few dependencies beside the standard c libraries. Not installin
 - cmake >= 3.4
 - libasan3 - for memcheck builds only
 - Perl - to create translation files
-- jq - to show translation statistics
 - gzip - to precompress assets
+- jq - json parsing
 - Devel packages:
   - pcre2 - for pcre support
   - Optional: 
     - OpenSSL >= 1.1.0 - for https support
     - libid3tag - to extract embedded coverimages
     - flac - to extract embedded coverimages
-    - liblua >= 5.3.0 - for scripting myMPD
+    - liblua >= 5.3.0 - for myMPD scripting
 
 You can type `./build.sh installdeps` as root to install the dependencies (works only for supported distributions). For all other distributions you must install the packages manually.
 
@@ -67,10 +67,10 @@ Compile time options are set through environment variables.
 
 | ENVIRONMENT | DEFAULT | DESCRIPTION |
 | ----------- | ------- | ----------- |
-| EMBEDDED_ASSETS | - | ON = Embeds assets in binary, default ON for release else OFF |
+| EMBEDDED_ASSETS | - | ON = Embeds assets in binary, default ON for release, else OFF |
 | ENABLE_FLAC | ON | ON = Enables flac usage for extracting coverimages |
 | ENABLE_IPV6 | OFF | ON = Enables IPv6 |
-| ENABLE_LIBASAN | - | ON = compile with libasan, default ON for memcheck else OFF |
+| ENABLE_LIBASAN | - | ON = compile with libasan, default ON for memcheck, else OFF |
 | ENABLE_LIBID3TAG | ON | ON = Enables libid3tag usage for extracting coverimages |
 | ENABLE_LUA | ON | ON = Enables scripting support with lua |
 | ENABLE_SSL | ON | ON = Enables SSL, requires OpenSSL >= 1.1.0 |
@@ -118,7 +118,7 @@ To run the unit tests:
 
 ## Advanced Options
 
-For advanced options type ``./build.sh help``.
+For advanced options type `./build.sh help`.
 
 ## Cross compiling with Debian
 

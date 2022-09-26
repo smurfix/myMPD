@@ -6,7 +6,7 @@ title: API
 
 myMPD uses a json-rpc 2 api for the communication between frontend and backend.
 
-**API endpoint:** /api/
+**API endpoint:** `/api/<partition>`
 
 - [API reference]({{ site.baseurl }}/references/api/methods)
 
@@ -22,7 +22,7 @@ myMPD uses a json-rpc 2 api for the communication between frontend and backend.
 
 ## Pin protection
 
-If myMPD is protected with a pin some methods require authentication with a bearer token.
+If myMPD is protected with a pin some methods require authentication with a special header.
 
 ### Authenticate
 
@@ -34,17 +34,17 @@ Use the session string in the response for authenticated requests. The session i
 
 ### Authenticated request
 
-To send a request with authentication data add an authorization header to it.
+To send a request with authentication data add an `X-myMPD-Session` header to it.
 
 ```
-Authorization: Bearer <token>
+X-myMPD-Session: <token>
 ```
 
 ### Validate the token
 
 ```
 Content-Type: application/json
-Authorization: Bearer <token>
+X-myMPD-Session: <token>
 
 {"jsonrpc":"2.0","id":0,"method":"MYMPD_API_SESSION_VALIDATE","params":{}}
 ```
@@ -53,7 +53,7 @@ Authorization: Bearer <token>
 
 ```
 Content-Type: application/json
-Authorization: Bearer <token>
+X-myMPD-Session: <token>
 
 {"jsonrpc":"2.0","id":0,"method":"MYMPD_API_SESSION_LOGOUT","params":{}}
 ```
@@ -62,7 +62,7 @@ Authorization: Bearer <token>
 
 myMPD uses the idle protocol from mpd to detect state changes. These status changes are broadcasted to all open websocket connections.
 
-**Websocket endpoint:** /ws/
+**Websocket endpoint:** `/ws/<partition>`
 
 | MPD IDLE EVENT | MYMPD NOTIFY |
 |----------------|--------------|
@@ -78,4 +78,5 @@ myMPD uses the idle protocol from mpd to detect state changes. These status chan
 | n/a | mpd_connected |
 | n/a | update_lastplayed |
 | n/a | update_jukebox |
+| n/a | update_home |
 {: .table .table-sm }

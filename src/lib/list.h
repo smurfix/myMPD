@@ -11,18 +11,24 @@
 
 #include <stdbool.h>
 
+/**
+ * List node struct holding list key/value and additional data
+ */
 struct t_list_node {
-    sds key;
-    sds value_p;
-    long long value_i;
-    void *user_data;
-    struct t_list_node *next;
+    sds key;                   //!< key string
+    sds value_p;               //!< string value
+    long long value_i;         //!< long long value
+    void *user_data;           //!< custom data
+    struct t_list_node *next;  //!< pointer to next node
 };
 
+/**
+ * List struct itself
+ */
 struct t_list {
-    long length;
-    struct t_list_node *head;
-    struct t_list_node *tail;
+    long length;               //!< length of the list
+    struct t_list_node *head;  //!< pointer to first node
+    struct t_list_node *tail;  //!< pointer to last node
 };
 
 typedef void (*user_data_callback) (struct t_list_node *current);
@@ -36,7 +42,6 @@ void list_clear_user_data(struct t_list *l, user_data_callback free_cb);
 void *list_free_user_data(struct t_list *l, user_data_callback free_cb);
 void list_free_cb_ignore_user_data(struct t_list_node *current);
 void list_free_cb_sds_user_data(struct t_list_node *current);
-void list_free_cb_t_list_user_data(struct t_list_node *current);
 void *list_node_free_user_data(struct t_list_node *n, user_data_callback free_cb);
 void *list_node_free(struct t_list_node *n);
 

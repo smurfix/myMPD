@@ -4,13 +4,6 @@
 // https://github.com/jcorporation/mympd
 
 function initLocalPlayback() {
-    //do not hide volume menu on click on volume change buttons
-    for (const elName of ['btnLocalPlaybackChVolumeDown', 'btnLocalPlaybackChVolumeUp', 'localPlaybackVolumeBar']) {
-        document.getElementById(elName).addEventListener('click', function(event) {
-            event.stopPropagation();
-        }, false);
-    }
-
     document.getElementById('localPlaybackVolumeBar').addEventListener('change', function(event) {
         setLocalPlaybackVolume(Number(event.target.value));
     }, false);
@@ -118,8 +111,13 @@ function createLocalPlaybackEl(createEvent) {
         curState === 'stop')
     {
         //load and play
-        localPlayer.src = window.location.protocol + '//' + window.location.hostname +
-            (window.location.port !== '' ? ':' + window.location.port : '') + subdir + '/stream/';
+        if (settings.partition.streamUri === '') {
+            localPlayer.src = window.location.protocol + '//' + window.location.hostname +
+                (window.location.port !== '' ? ':' + window.location.port : '') + subdir + '/stream/' + localSettings.partition;
+        }
+        else {
+            localPlayer.src = settings.partition.streamUri;
+        }
         localPlayer.load();
         localPlayer.play();
         elClear(el);

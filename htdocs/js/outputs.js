@@ -4,21 +4,12 @@
 // https://github.com/jcorporation/mympd
 
 function initOutputs() {
-    //do not hide volume menu on click on volume change buttons
-    for (const elName of ['btnChVolumeDown', 'btnChVolumeUp', 'volumeBar']) {
-        document.getElementById(elName).addEventListener('click', function(event) {
-            event.stopPropagation();
-        }, false);
-    }
-
-    document.getElementById('volumeBar').addEventListener('change', function() {
-        sendAPI("MYMPD_API_PLAYER_VOLUME_SET", {"volume": Number(document.getElementById('volumeBar').value)});
+    domCache.volumeBar.addEventListener('change', function() {
+        setVolume();
     }, false);
 
     document.getElementById('volumeMenu').parentNode.addEventListener('show.bs.dropdown', function () {
-        sendAPI("MYMPD_API_PLAYER_OUTPUT_LIST", {
-            "partition": ""
-        }, parseOutputs, true);
+        sendAPI("MYMPD_API_PLAYER_OUTPUT_LIST", {}, parseOutputs, true);
     });
 
     document.getElementById('outputs').addEventListener('click', function(event) {
@@ -29,7 +20,6 @@ function initOutputs() {
         }
         else {
             const target = event.target.nodeName === 'BUTTON' ? event.target : event.target.parentNode;
-            event.stopPropagation();
             event.preventDefault();
             sendAPI("MYMPD_API_PLAYER_OUTPUT_TOGGLE", {
                 "outputId": Number(getData(target, 'output-id')),
@@ -87,9 +77,7 @@ function parseOutputs(obj) {
 function showListOutputAttributes(outputName) {
     cleanupModalId('modalOutputAttributes');
     uiElements.modalOutputAttributes.show();
-    sendAPI("MYMPD_API_PLAYER_OUTPUT_LIST", {
-        "partition": ""
-    }, function(obj) {
+    sendAPI("MYMPD_API_PLAYER_OUTPUT_LIST", {}, function(obj) {
         const tbody = document.getElementById('outputAttributesList');
         if (checkResult(obj, tbody) === false) {
             return;
@@ -173,25 +161,19 @@ function parseVolume(obj) {
             obj.result.volume === 0 ? 'volume_off' :
                 obj.result.volume < 50 ? 'volume_down' : 'volume_up';
     }
-    document.getElementById('volumeBar').value = obj.result.volume;
+    domCache.volumeBar.value = obj.result.volume;
 }
 
 //eslint-disable-next-line no-unused-vars
 function volumeStep(dir) {
-    chVolume(dir === 'up' ? settings.volumeStep : 0 - settings.volumeStep);
+    const step = dir === 'up' ? settings.volumeStep : 0 - settings.volumeStep;
+    sendAPI("MYMPD_API_PLAYER_VOLUME_CHANGE", {
+        "volume": step
+    });
 }
 
-function chVolume(increment) {
-    const volumeBar = document.getElementById('volumeBar');
-    let newValue = Number(volumeBar.value) + increment;
-    if (newValue < settings.volumeMin) {
-        newValue = settings.volumeMin;
-    }
-    else if (newValue > settings.volumeMax) {
-        newValue = settings.volumeMax;
-    }
-    volumeBar.value = newValue;
+function setVolume() {
     sendAPI("MYMPD_API_PLAYER_VOLUME_SET", {
-        "volume": newValue
+        "volume": Number(domCache.volumeBar.value)
     });
 }

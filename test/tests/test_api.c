@@ -4,7 +4,7 @@
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
 
 #include "../../dist/utest/utest.h"
 #include "../../src/lib/api.h"
@@ -45,16 +45,16 @@ UTEST(api, test_is_mympd_only_api_method) {
 }
 
 UTEST(api, test_request_result) {
-    struct t_work_request *request = create_request(1, 1, MYMPD_API_SETTINGS_SET, "test");
+    struct t_work_request *request = create_request(1, 1, MYMPD_API_SETTINGS_SET, "test", MPD_PARTITION_DEFAULT);
     bool rc = request == NULL ? false : true;
     ASSERT_TRUE(rc);
 
-    struct t_work_result *result = create_result(request);
-    rc = result == NULL ? false : true;
+    struct t_work_response *response = create_response(request);
+    rc = response == NULL ? false : true;
     ASSERT_TRUE(rc);
-    ASSERT_EQ(request->cmd_id, result->cmd_id);
-    ASSERT_STREQ(result->method, "MYMPD_API_SETTINGS_SET");
+    ASSERT_EQ(request->cmd_id, response->cmd_id);
+    ASSERT_STREQ(get_cmd_id_method_name(response->cmd_id), "MYMPD_API_SETTINGS_SET");
 
     free_request(request);
-    free_result(result);
+    free_response(response);
 }

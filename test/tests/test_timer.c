@@ -4,11 +4,12 @@
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
+#include "../utility.h"
 
 #include "../../dist/utest/utest.h"
-#include "../../src/mympd_api/mympd_api_timer.h"
-#include "../../src/mympd_api/mympd_api_timer_handlers.h"
+#include "../../src/mympd_api/timer.h"
+#include "../../src/mympd_api/timer_handlers.h"
 
 #include <sys/stat.h>
 
@@ -42,8 +43,8 @@ UTEST(timer, test_timer_parse_definition) {
     struct t_timer_definition *def1 = malloc(sizeof(struct t_timer_definition));
     ASSERT_TRUE(def1 == NULL ? false : true);
     sds e = sdsempty();
-    sds s1 = sdsnew("{\"params\":{\"timerid\":103,\"name\":\"example timer1\",\"interval\":86400,\"enabled\":true,\"startHour\":7,\"startMinute\":0,\"action\":\"player\",\"subaction\":\"startplay\",\"playlist\":\"Database\",\"volume\":50,\"jukeboxMode\":\"off\",\"weekdays\":[false,false,false,false,false,true,true],\"arguments\": {\"arg1\":\"value1\"}}}");
-    def1 = mympd_api_timer_parse(def1, s1, &e);
+    sds s1 = sdsnew("{\"params\":{\"partition\":\"default\",\"timerid\":103,\"name\":\"example timer1\",\"interval\":86400,\"enabled\":true,\"startHour\":7,\"startMinute\":0,\"action\":\"player\",\"subaction\":\"startplay\",\"playlist\":\"Database\",\"volume\":50,\"jukeboxMode\":\"off\",\"weekdays\":[false,false,false,false,false,true,true],\"arguments\": {\"arg1\":\"value1\"}}}");
+    def1 = mympd_api_timer_parse(def1, s1, MPD_PARTITION_DEFAULT, &e);
     ASSERT_STREQ("", e);
     bool rc = mympd_api_timer_add(&l, 10, 0, timer_handler_select, 103, def1);
     ASSERT_TRUE(rc);
@@ -51,8 +52,8 @@ UTEST(timer, test_timer_parse_definition) {
 
     struct t_timer_definition *def2 = malloc(sizeof(struct t_timer_definition));
     ASSERT_TRUE(def2 == NULL ? false : true);
-    sds s2 = sdsnew("{\"params\":{\"timerid\":103,\"name\":\"example timer2\",\"interval\":86400,\"enabled\":true,\"startHour\":7,\"startMinute\":0,\"action\":\"player\",\"subaction\":\"startplay\",\"playlist\":\"Database\",\"volume\":50,\"jukeboxMode\":\"off\",\"weekdays\":[false,false,false,false,false,true,true],\"arguments\": {\"arg1\":\"value1\"}}}");
-    def2 = mympd_api_timer_parse(def2, s2, &e);
+    sds s2 = sdsnew("{\"params\":{\"partition\":\"default\",\"timerid\":103,\"name\":\"example timer2\",\"interval\":86400,\"enabled\":true,\"startHour\":7,\"startMinute\":0,\"action\":\"player\",\"subaction\":\"startplay\",\"playlist\":\"Database\",\"volume\":50,\"jukeboxMode\":\"off\",\"weekdays\":[false,false,false,false,false,true,true],\"arguments\": {\"arg1\":\"value1\"}}}");
+    def2 = mympd_api_timer_parse(def2, s2, MPD_PARTITION_DEFAULT, &e);
     ASSERT_STREQ("", e);
     rc = mympd_api_timer_replace(&l, 10, 0, timer_handler_select, 103, def2);
     ASSERT_TRUE(rc);
@@ -74,26 +75,23 @@ UTEST(timer, test_timer_write_read) {
     struct t_timer_definition *def1 = malloc(sizeof(struct t_timer_definition));
     ASSERT_TRUE(def1 == NULL ? false : true);
     sds e = sdsempty();
-    sds s1 = sdsnew("{\"params\":{\"timerid\":103,\"name\":\"example timer1\",\"interval\":86400,\"enabled\":true,\"startHour\":7,\"startMinute\":0,\"action\":\"player\",\"subaction\":\"startplay\",\"playlist\":\"Database\",\"volume\":50,\"jukeboxMode\":\"off\",\"weekdays\":[false,false,false,false,false,true,true],\"arguments\": {\"arg1\":\"value1\"}}}");
-    def1 = mympd_api_timer_parse(def1, s1, &e);
+    sds s1 = sdsnew("{\"params\":{\"partition\":\"default\",\"timerid\":103,\"name\":\"example timer1\",\"interval\":86400,\"enabled\":true,\"startHour\":7,\"startMinute\":0,\"action\":\"player\",\"subaction\":\"startplay\",\"playlist\":\"Database\",\"volume\":50,\"jukeboxMode\":\"off\",\"weekdays\":[false,false,false,false,false,true,true],\"arguments\": {\"arg1\":\"value1\"}}}");
+    def1 = mympd_api_timer_parse(def1, s1, MPD_PARTITION_DEFAULT, &e);
     ASSERT_STREQ("", e);
     bool rc = mympd_api_timer_add(&l, 10, 0, timer_handler_select, 103, def1);
     ASSERT_TRUE(rc);
 
-    sds w = sdsnew("/tmp");
-    mkdir("/tmp/state", 0770);
-    rc = mympd_api_timer_file_save(&l, w);
+    rc = mympd_api_timer_file_save(&l, workdir);
     ASSERT_TRUE(rc);
     mympd_api_timer_timerlist_clear(&l);
 
-    rc = mympd_api_timer_file_read(&l, w);
+    rc = mympd_api_timer_file_read(&l, workdir);
+    ASSERT_EQ(1, l.length);
     ASSERT_TRUE(rc);
     ASSERT_STREQ("example timer1", l.list->definition->name);
 
     mympd_api_timer_timerlist_clear(&l);
-    unlink("/tmp/state/timer_list");
-    rmdir("/tmp/state");
-    sdsfree(w);
+    unlink("/tmp/mympd-test/state/timer_list");
     sdsfree(e);
     sdsfree(s1);
 }

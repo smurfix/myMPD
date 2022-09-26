@@ -264,9 +264,6 @@ function navBrowseHandler(event) {
 }
 
 function gotoBrowse(event) {
-    if (features.featAdvsearch === false) {
-        return;
-    }
     let target = event.target;
     let tag = getData(target, 'tag');
     let name = getData(target, 'name');
@@ -406,9 +403,8 @@ function parseFilesystem(obj) {
 
 function parseDatabase(obj) {
     const cardContainer = document.getElementById('BrowseDatabaseListList');
-
+    unsetUpdateView(cardContainer);
     const cols = cardContainer.getElementsByClassName('col');
-    cardContainer.classList.remove('opacity05');
 
     if (obj.error !== undefined) {
         elReplaceChild(cardContainer,
@@ -486,11 +482,7 @@ function parseDatabase(obj) {
         }
 
         if (userAgentData.hasIO === true) {
-            const options = {
-                root: null,
-                rootMargin: '0px',
-            };
-            const observer = new IntersectionObserver(setGridImage, options);
+            const observer = new IntersectionObserver(setGridImage, {root: null, rootMargin: '0px'});
             observer.observe(col);
         }
         else {

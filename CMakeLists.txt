@@ -8,8 +8,8 @@ project (mympd C)
 
 #update myMPD version here and run ./build.sh setversion to update
 #the source files
-set(CPACK_PACKAGE_VERSION_MAJOR "9")
-set(CPACK_PACKAGE_VERSION_MINOR "4")
+set(CPACK_PACKAGE_VERSION_MAJOR "10")
+set(CPACK_PACKAGE_VERSION_MINOR "0")
 set(CPACK_PACKAGE_VERSION_PATCH "1")
 
 #minimal cmake version needed for correct GNUInstallDirs
@@ -56,31 +56,31 @@ endif()
 message("Executables in: ${CMAKE_INSTALL_FULL_BINDIR}")
 
 if("${CMAKE_INSTALL_PREFIX}" MATCHES "/usr/local")
-  set(VARLIB_PATH "/${CMAKE_INSTALL_LOCALSTATEDIR}${SUBDIRLIB}${SUBDIR}")
+  set(WORK_DIR "/${CMAKE_INSTALL_LOCALSTATEDIR}${SUBDIRLIB}${SUBDIR}")
 else()
-  set(VARLIB_PATH "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}${SUBDIRLIB}${SUBDIR}")
+  set(WORK_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}${SUBDIRLIB}${SUBDIR}")
 endif()
-message("Workdir: ${VARLIB_PATH}")
+message("Workdir: ${WORK_DIR}")
 
 if("${CMAKE_INSTALL_PREFIX}" MATCHES "/usr/local")
-  set(VARCACHE_PATH "/${CMAKE_INSTALL_LOCALSTATEDIR}${SUBDIRCACHE}${SUBDIR}")
+  set(CACHE_DIR "/${CMAKE_INSTALL_LOCALSTATEDIR}${SUBDIRCACHE}${SUBDIR}")
 else()
-  set(VARCACHE_PATH "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}${SUBDIRCACHE}${SUBDIR}")
+  set(CACHE_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}${SUBDIRCACHE}${SUBDIR}")
 endif()
-message("Cachedir: ${VARCACHE_PATH}")
+message("Cachedir: ${CACHE_DIR}")
 
 #default is to deliver embedded assets for release
 #and assets in htdocs for debug
 if("${EMBEDDED_ASSETS}" MATCHES "ON")
-  set(ASSETS_PATH "${VARLIB_PATH}/empty")
+  set(DOC_ROOT "${WORK_DIR}/empty")
   set(LUALIBS_PATH "")
   message("Embedding assets in binary")
 else()
-  set(ASSETS_PATH "${PROJECT_SOURCE_DIR}/htdocs")
+  set(DOC_ROOT "${PROJECT_SOURCE_DIR}/htdocs")
   set(LUALIBS_PATH "${PROJECT_SOURCE_DIR}/contrib/lualibs")
   message("Serving assets from filesystem")
 endif()
-message("Document root: ${ASSETS_PATH}")
+message("Document root: ${DOC_ROOT}")
 
 #set debug define for source
 if(CMAKE_BUILD_TYPE MATCHES RELEASE)
@@ -166,8 +166,39 @@ else()
   message("Lua is disabled by user")
 endif()
 
+#translation files
+if("${EMBEDDED_ASSETS}" MATCHES "ON")
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/de-DE.json.gz")
+    set(I18N_de_DE "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/en-US.json.gz")
+    set(I18N_en_US "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/es-VE.json.gz")
+    set(I18N_es_VE "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/fi-FI.json.gz")
+    set(I18N_fi_FI "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/fr-FR.json.gz")
+    set(I18N_fr_FR "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/it-IT.json.gz")
+    set(I18N_it_IT "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/ko-KR.json.gz")
+    set(I18N_ko_KR "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/nl-NL.json.gz")
+    set(I18N_nl_NL "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/zh-CN.json.gz")
+    set(I18N_zh_CN "ON")
+  endif()
+endif()
+
 #configure some files - version and path information
-configure_file(src/mympd_config_defs.h.in ${PROJECT_BINARY_DIR}/mympd_config_defs.h)
+configure_file(src/compile_time.h.in ${PROJECT_BINARY_DIR}/compile_time.h)
 configure_file(cmake/CopyConfig.cmake.in cmake/CopyConfig.cmake @ONLY)
 configure_file(contrib/initscripts/mympd.service.in contrib/initscripts/mympd.service @ONLY)
 configure_file(contrib/initscripts/mympd.sysVinit.in contrib/initscripts/mympd.sysVinit @ONLY)
@@ -202,6 +233,7 @@ if("${ENABLE_IPV6}" MATCHES "ON")
 else()
   message("IPv6 is disabled")
 endif()
+
 #set mjson feature flags
 set(MJSON_FLAGS "-D MJSON_ENABLE_PRINT=0 -D MJSON_ENABLE_BASE64=0 -D MJSON_ENABLE_RPC=0 \
   -D MJSON_ENABLE_PRETTY=0 -D MJSON_ENABLE_MERGE=0")
@@ -230,7 +262,7 @@ endforeach()
 
 #set debug/release flags
 if(CMAKE_BUILD_TYPE MATCHES RELEASE)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -fPIE -DMG_ENABLE_LOG=0")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -fPIE")
   set (CMAKE_EXE_LINKER_FLAGS "-Wl,-z,relro,-z,now,--gc-sections -pie -s")
 else()
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb -Og")
@@ -244,10 +276,12 @@ set(MYMPD_SOURCES
   dist/rax/rax.c
   dist/sds/sds.c
   dist/tinymt/tinymt32.c
-  src/handle_options.c
+  src/lib/album_cache.c
   src/lib/api.c
+  src/lib/config.c
   src/lib/covercache.c
   src/lib/filehandler.c
+  src/lib/handle_options.c
   src/lib/http_client.c
   src/lib/jsonrpc.c
   src/lib/list.c
@@ -255,64 +289,71 @@ set(MYMPD_SOURCES
   src/lib/lua_mympd_state.c
   src/lib/m3u.c
   src/lib/mimetype.c
-  src/lib/mympd_pin.c
-  src/lib/mympd_queue.c
+  src/lib/pin.c
+  src/lib/msg_queue.c
   src/lib/mympd_state.c
   src/lib/random.c
+  src/lib/rax_extras.c
   src/lib/sds_extras.c
+  src/lib/smartpls.c
   src/lib/state_files.c
+  src/lib/sticker_cache.c
   src/lib/utility.c
   src/lib/validate.c
   src/main.c
-  src/mpd_client/mpd_client_autoconf.c
-  src/mpd_client/mpd_client_connection.c
-  src/mpd_client/mpd_client_errorhandler.c
-  src/mpd_client/mpd_client_features.c
-  src/mpd_client/mpd_client_idle.c
-  src/mpd_client/mpd_client_jukebox.c
-  src/mpd_client/mpd_client_playlists.c
-  src/mpd_client/mpd_client_search.c
-  src/mpd_client/mpd_client_search_local.c
-  src/mpd_client/mpd_client_sticker.c
-  src/mpd_client/mpd_client_tags.c
-  src/mpd_client/mpd_client_volume.c
+  src/mpd_client/autoconf.c
+  src/mpd_client/connection.c
+  src/mpd_client/errorhandler.c
+  src/mpd_client/features.c
+  src/mpd_client/idle.c
+  src/mpd_client/jukebox.c
+  src/mpd_client/partitions.c
+  src/mpd_client/playlists.c
+  src/mpd_client/search.c
+  src/mpd_client/search_local.c
+  src/mpd_client/tags.c
+  src/mpd_client/volume.c
   src/mpd_worker/mpd_worker.c
-  src/mpd_worker/mpd_worker_api.c
-  src/mpd_worker/mpd_worker_cache.c
-  src/mpd_worker/mpd_worker_smartpls.c
-  src/mpd_worker/mpd_worker_state.c
+  src/mpd_worker/api.c
+  src/mpd_worker/cache.c
+  src/mpd_worker/smartpls.c
+  src/mpd_worker/state.c
   src/mympd_api/mympd_api.c
-  src/mympd_api/mympd_api_albumart.c
-  src/mympd_api/mympd_api_browse.c
-  src/mympd_api/mympd_api_extra_media.c
-  src/mympd_api/mympd_api_filesystem.c
+  src/mympd_api/albumart.c
+  src/mympd_api/browse.c
+  src/mympd_api/extra_media.c
+  src/mympd_api/filesystem.c
+  src/mympd_api/home.c
+  src/mympd_api/last_played.c
+  src/mympd_api/lyrics.c
+  src/mympd_api/mounts.c
   src/mympd_api/mympd_api_handler.c
-  src/mympd_api/mympd_api_home.c
-  src/mympd_api/mympd_api_lyrics.c
-  src/mympd_api/mympd_api_mounts.c
-  src/mympd_api/mympd_api_partitions.c
-  src/mympd_api/mympd_api_playlists.c
-  src/mympd_api/mympd_api_queue.c
-  src/mympd_api/mympd_api_scripts.c
-  src/mympd_api/mympd_api_settings.c
-  src/mympd_api/mympd_api_song.c
-  src/mympd_api/mympd_api_stats.c
-  src/mympd_api/mympd_api_status.c
-  src/mympd_api/mympd_api_sticker.c
-  src/mympd_api/mympd_api_timer.c
-  src/mympd_api/mympd_api_timer_handlers.c
-  src/mympd_api/mympd_api_trigger.c
-  src/mympd_api/mympd_api_webradios.c
-  src/mympd_config.c
+  src/mympd_api/outputs.c
+  src/mympd_api/partitions.c
+  src/mympd_api/pictures.c
+  src/mympd_api/playlists.c
+  src/mympd_api/queue.c
+  src/mympd_api/scripts.c
+  src/mympd_api/settings.c
+  src/mympd_api/smartpls.c
+  src/mympd_api/song.c
+  src/mympd_api/stats.c
+  src/mympd_api/status.c
+  src/mympd_api/sticker.c
+  src/mympd_api/timer.c
+  src/mympd_api/timer_handlers.c
+  src/mympd_api/trigger.c
+  src/mympd_api/volume.c
+  src/mympd_api/webradios.c
   src/web_server/web_server.c
-  src/web_server/web_server_albumart.c
-  src/web_server/web_server_handler.c
-  src/web_server/web_server_proxy.c
-  src/web_server/web_server_radiobrowser.c
-  src/web_server/web_server_sessions.c
-  src/web_server/web_server_tagart.c
-  src/web_server/web_server_utility.c
-  src/web_server/web_server_webradiodb.c
+  src/web_server/albumart.c
+  src/web_server/request_handler.c
+  src/web_server/proxy.c
+  src/web_server/radiobrowser.c
+  src/web_server/sessions.c
+  src/web_server/tagart.c
+  src/web_server/utility.c
+  src/web_server/webradiodb.c
 )
 
 if("${ENABLE_SSL}" MATCHES "ON")
@@ -382,20 +423,18 @@ set(LIBMPDCLIENT_SOURCES
 )
 
 #relax some compiler settings for dist sources
+
 #compiler flags for mongoose
-#-Wno-stringop-overflow: gcc 11.2.0 bug
-#-Wno-stringop-overread: gcc 12.0.1 bug
-set_property(SOURCE dist/mongoose/mongoose.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-conversion \
-  -Wno-stringop-overflow")
-#compiler flags for mjson
-set_property(SOURCE dist/mjson/mjson.c PROPERTY COMPILE_FLAGS "-Wno-conversion")
+set_property(SOURCE dist/mongoose/mongoose.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-conversion")
+
 #compiler flags for rax
 #-Wno-use-after-free: gcc 12.0.1 error
 set_property(SOURCE dist/rax/rax.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-conversion \
   -Wno-shadow -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers -Wno-use-after-free")
+
 #compiler flags for sds
-#-Wno-stringop-overflow: gcc 11.2.0 bug
-set_property(SOURCE dist/sds/sds.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-stringop-overflow -Wno-conversion")
+set_property(SOURCE dist/sds/sds.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-conversion")
+
 #compiler flags for libmpdclient
 set_property(SOURCE ${LIBMPDCLIENT_SOURCES} PROPERTY COMPILE_FLAGS "-Wno-conversion")
 
@@ -406,6 +445,7 @@ add_executable(mympd ${MYMPD_SOURCES} ${LIBMPDCLIENT_SOURCES} ${CERT_SOURCES})
 target_link_libraries(mympd ${CMAKE_THREAD_LIBS_INIT})
 target_link_libraries(mympd ${MATH_LIB})
 target_link_libraries(mympd ${PCRE2_LIBRARIES})
+
 #link optional dependencies
 if(OPENSSL_FOUND)
   target_link_libraries(mympd ${OPENSSL_LIBRARIES})
