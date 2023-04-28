@@ -1,7 +1,7 @@
 "use strict";
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -36,7 +36,7 @@ function setTest(cmd, state, response) {
 
 function sendAPI(method) {
     let ajaxRequest = new XMLHttpRequest();
-    ajaxRequest.open('POST', '/api/', true);
+    ajaxRequest.open('POST', '/api/default', true);
     ajaxRequest.setRequestHeader('Content-type', 'application/json');
     ajaxRequest.onreadystatechange = function() {
         if (ajaxRequest.readyState === 4) {
@@ -89,7 +89,9 @@ function apiParamsToObject(p) {
         if (p[param].params !== undefined) {
             args[param] = apiParamsToObject(p[param].params);
         }
-        else if (p[param].type === 'array' || p[param].type === 'object') {
+        else if (p[param].type === APItypes.array ||
+                 p[param].type === APItypes.object)
+        {
             args[param] = JSON.parse(p[param].example);
         }
         else {

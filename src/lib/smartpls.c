@@ -1,27 +1,26 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
-#include "smartpls.h"
+#include "compile_time.h"
+#include "src/lib/smartpls.h"
 
-#include "filehandler.h"
-#include "jsonrpc.h"
-#include "log.h"
-#include "sds_extras.h"
-#include "state_files.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/msg_queue.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/state_files.h"
 
 #include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 //privat definitions
-static bool _smartpls_save(sds workdir, const char *smartpltype,
-        const char *playlist, const char *expression, const int max_entries,
-        const int timerange, const char *sort);
+static bool smartpls_save(sds workdir, const char *smartpltype,
+        const char *playlist, const char *expression, int max_entries,
+        int timerange, const char *sort);
 
 //public functions
 
@@ -38,7 +37,7 @@ static bool _smartpls_save(sds workdir, const char *smartpltype,
 bool smartpls_save_sticker(sds workdir, const char *playlist, const char *sticker,
     int max_entries, int min_value, const char *sort)
 {
-    return _smartpls_save(workdir, "sticker", playlist, sticker, max_entries, min_value, sort);
+    return smartpls_save(workdir, "sticker", playlist, sticker, max_entries, min_value, sort);
 }
 
 /**
@@ -50,7 +49,7 @@ bool smartpls_save_sticker(sds workdir, const char *playlist, const char *sticke
  * @return true on success else false
  */
 bool smartpls_save_newest(sds workdir, const char *playlist, int timerange, const char *sort) {
-    return _smartpls_save(workdir, "newest", playlist, NULL, 0, timerange, sort);
+    return smartpls_save(workdir, "newest", playlist, NULL, 0, timerange, sort);
 }
 
 /**
@@ -62,7 +61,7 @@ bool smartpls_save_newest(sds workdir, const char *playlist, int timerange, cons
  * @return true on success else false
  */
 bool smartpls_save_search(sds workdir, const char *playlist, const char *expression, const char *sort) {
-    return _smartpls_save(workdir, "search", playlist, expression, 0, 0, sort);
+    return smartpls_save(workdir, "search", playlist, expression, 0, 0, sort);
 }
 
 /**
@@ -75,32 +74,24 @@ bool is_smartpls(sds workdir, const char *playlist) {
     bool smartpls = false;
     if (strchr(playlist, '/') == NULL) {
         //filename only
-        sds smartpls_file = sdscatfmt(sdsempty(), "%S/smartpls/%s", workdir, playlist);
-        if (access(smartpls_file, F_OK ) != -1) { /* Flawfinder: ignore */
-            smartpls = true;
-        }
+        sds smartpls_file = sdscatfmt(sdsempty(), "%S/%s/%s", workdir, DIR_WORK_SMARTPLS, playlist);
+        smartpls = testfile_read(smartpls_file);
         FREE_SDS(smartpls_file);
     }
     return smartpls;
 }
 
 /**
- * Returns the samrt playlist last modification time
+ * Returns the smart playlist last modification time
  * @param workdir myMPD working directory
  * @param playlist name of the playlist to check
  * @return last modification time
  */
 time_t smartpls_get_mtime(sds workdir, const char *playlist) {
-    sds plpath = sdscatfmt(sdsempty(), "%S/smartpls/%s", workdir, playlist);
-    struct stat attr;
-    errno = 0;
-    if (stat(plpath, &attr) != 0) {
-        MYMPD_LOG_ERROR("Error getting mtime for \"%s\"", plpath);
-        MYMPD_LOG_ERRNO(errno);
-        attr.st_mtime = 0;
-    }
+    sds plpath = sdscatfmt(sdsempty(), "%S/%s/%s", workdir, DIR_WORK_SMARTPLS, playlist);
+    time_t mtime = get_mtime(plpath);
     FREE_SDS(plpath);
-    return attr.st_mtime;
+    return mtime;
 }
 
 /**
@@ -110,7 +101,7 @@ time_t smartpls_get_mtime(sds workdir, const char *playlist) {
  */
 bool smartpls_default(sds workdir) {
     //try to get prefix from state file, fallback to default value
-    sds prefix = state_file_rw_string(workdir, "state", "smartpls_prefix", MYMPD_SMARTPLS_PREFIX, vcb_isname, false);
+    sds prefix = state_file_rw_string(workdir, DIR_WORK_STATE, "smartpls_prefix", MYMPD_SMARTPLS_PREFIX, vcb_isname, false);
 
     bool rc = true;
     sds playlist = sdscatfmt(sdsempty(), "%S-bestRated", prefix);
@@ -136,9 +127,9 @@ bool smartpls_default(sds workdir) {
  * @return true on success else false
  */
 bool smartpls_update(const char *playlist) {
-    struct t_work_request *request = create_request(-1, 0, MYMPD_API_SMARTPLS_UPDATE, NULL);
+    struct t_work_request *request = create_request(-1, 0, MYMPD_API_SMARTPLS_UPDATE, NULL, MPD_PARTITION_DEFAULT);
     request->data = tojson_char(request->data, "plist", playlist, false);
-    request->data = sdscatlen(request->data, "}}", 2);
+    request->data = jsonrpc_end(request->data);
     return mympd_queue_push(mympd_api_queue, request, 0);
 }
 
@@ -147,8 +138,8 @@ bool smartpls_update(const char *playlist) {
  * @return true on success else false
  */
 bool smartpls_update_all(void) {
-    struct t_work_request *request = create_request(-1, 0, MYMPD_API_SMARTPLS_UPDATE_ALL, NULL);
-    request->data = sdscatlen(request->data, "}}", 2);
+    struct t_work_request *request = create_request(-1, 0, MYMPD_API_SMARTPLS_UPDATE_ALL, NULL, MPD_PARTITION_DEFAULT);
+    request->data = jsonrpc_end(request->data);
     return mympd_queue_push(mympd_api_queue, request, 0);
 }
 
@@ -165,9 +156,9 @@ bool smartpls_update_all(void) {
  * @param sort mpd tag to sort or shuffle
  * @return true on success else false
  */
-static bool _smartpls_save(sds workdir, const char *smartpltype, const char *playlist,
-                              const char *expression, const int max_entries,
-                              const int timerange, const char *sort)
+static bool smartpls_save(sds workdir, const char *smartpltype, const char *playlist,
+                              const char *expression, int max_entries,
+                              int timerange, const char *sort)
 {
     sds line = sdscatlen(sdsempty(), "{", 1);
     line = tojson_char(line, "type", smartpltype, true);

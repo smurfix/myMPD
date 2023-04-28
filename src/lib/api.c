@@ -1,18 +1,18 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
-#include "api.h"
+#include "compile_time.h"
+#include "src/lib/api.h"
 
-#include "../../dist/mongoose/mongoose.h"
-#include "log.h"
-#include "mem.h"
-#include "sds_extras.h"
+#include "dist/libmympdclient/include/mpd/client.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/msg_queue.h"
+#include "src/lib/sds_extras.h"
 
-#include <mpd/client.h>
 #include <string.h>
 
 static const char *mympd_cmd_strs[] = { MYMPD_CMDS(GEN_STR) };
@@ -57,8 +57,9 @@ bool is_protected_api_method(enum mympd_cmd_ids cmd_id) {
         case MYMPD_API_MOUNT_UNMOUNT:
         case MYMPD_API_PARTITION_NEW:
         case MYMPD_API_PARTITION_RM:
+        case MYMPD_API_PARTITION_SAVE:
         case MYMPD_API_PARTITION_OUTPUT_MOVE:
-        case MYMPD_API_PLAYER_OUTPUT_ATTRIBUTS_SET:
+        case MYMPD_API_PLAYER_OUTPUT_ATTRIBUTES_SET:
         case MYMPD_API_PLAYLIST_RM_ALL:
         case MYMPD_API_SESSION_LOGOUT:
         case MYMPD_API_SESSION_VALIDATE:
@@ -112,10 +113,11 @@ bool is_mympd_only_api_method(enum mympd_cmd_ids cmd_id) {
 /**
  * Sends a websocket notification to the browser
  * @param message the message to send
+ * @param partition mpd partition
  */
-void ws_notify(sds message) {
+void ws_notify(sds message, const char *partition) {
     MYMPD_LOG_DEBUG("Push websocket notify to queue: \"%s\"", message);
-    struct t_work_response *response = create_response_new(0, 0, INTERNAL_API_WEBSERVER_NOTIFY);
+    struct t_work_response *response = create_response_new(0, 0, INTERNAL_API_WEBSERVER_NOTIFY, partition);
     response->data = sds_replace(response->data, message);
     mympd_queue_push(web_server_queue, response, 0);
 }
@@ -126,7 +128,7 @@ void ws_notify(sds message) {
  * @return the initialized t_work_response struct
  */
 struct t_work_response *create_response(struct t_work_request *request) {
-    struct t_work_response *response = create_response_new(request->conn_id, request->id, request->cmd_id);
+    struct t_work_response *response = create_response_new(request->conn_id, request->id, request->cmd_id, request->partition);
     return response;
 }
 
@@ -135,18 +137,18 @@ struct t_work_response *create_response(struct t_work_request *request) {
  * @param conn_id connection id (from webserver)
  * @param request_id id for the request
  * @param cmd_id myMPD API method
+ * @param partition mpd partition
  * @return the initialized t_work_response struct
  */
-struct t_work_response *create_response_new(long long conn_id, long request_id, enum mympd_cmd_ids cmd_id) {
+struct t_work_response *create_response_new(long long conn_id, long request_id, enum mympd_cmd_ids cmd_id, const char *partition) {
     struct t_work_response *response = malloc_assert(sizeof(struct t_work_response));
     response->conn_id = conn_id;
     response->id = request_id;
     response->cmd_id = cmd_id;
-    const char *method = get_cmd_id_method_name(cmd_id);
-    response->method = sdsnew(method);
     response->data = sdsempty();
     response->binary = sdsempty();
     response->extra = NULL;
+    response->partition = sdsnew(partition);
     return response;
 }
 
@@ -156,22 +158,22 @@ struct t_work_response *create_response_new(long long conn_id, long request_id, 
  * @param request_id id for the request
  * @param cmd_id myMPD API method
  * @param data jsonrpc request, if NULL the start of the request is added
+ * @param partition mpd partition
  * @return the initialized t_work_request struct
  */
-struct t_work_request *create_request(long long conn_id, long request_id, enum mympd_cmd_ids cmd_id, const char *data) {
+struct t_work_request *create_request(long long conn_id, long request_id, enum mympd_cmd_ids cmd_id, const char *data, const char *partition) {
     struct t_work_request *request = malloc_assert(sizeof(struct t_work_request));
     request->conn_id = conn_id;
     request->cmd_id = cmd_id;
     request->id = request_id;
-    const char *method = get_cmd_id_method_name(cmd_id);
-    request->method = sdsnew(method);
     if (data == NULL) {
-        request->data = sdscatfmt(sdsempty(), "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"%s\",\"params\":{", method);
+        request->data = sdscatfmt(sdsempty(), "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"%s\",\"params\":{", get_cmd_id_method_name(cmd_id));
     }
     else {
         request->data = sdsnew(data);
     }
     request->extra = NULL;
+    request->partition = sdsnew(partition);
     return request;
 }
 
@@ -182,20 +184,20 @@ struct t_work_request *create_request(long long conn_id, long request_id, enum m
 void free_request(struct t_work_request *request) {
     if (request != NULL) {
         FREE_SDS(request->data);
-        FREE_SDS(request->method);
+        FREE_SDS(request->partition);
         FREE_PTR(request);
     }
 }
 
 /**
- * Frees the reponse struct
+ * Frees the response struct
  * @param response response struct to free
  */
 void free_response(struct t_work_response *response) {
     if (response != NULL) {
         FREE_SDS(response->data);
-        FREE_SDS(response->method);
         FREE_SDS(response->binary);
+        FREE_SDS(response->partition);
         FREE_PTR(response);
     }
 }

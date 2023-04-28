@@ -1,58 +1,31 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
-#include "utility.h"
+#include "compile_time.h"
+#include "src/lib/utility.h"
 
-#include "api.h"
-#include "log.h"
-#include "sds_extras.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
 
-#include <dirent.h>
 #include <errno.h>
+#include <ifaddrs.h>
+#include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <time.h>
-#include <unistd.h>
-
-#include <arpa/inet.h>
-#include <ifaddrs.h>
-#include <libgen.h>
-#include <netdb.h>
-#include <sys/socket.h>
-
-//private definitions
-static sds get_local_ip(void);
-
-//public functions
 
 /**
- * Gets an environment variable and checks its length
- * @param env_var environment variable name
- * @param max_len maximum length
- * @return environment variable value or NULL if it is not set or to long
+ * Private definitions
  */
-const char *getenv_check(const char *env_var, size_t max_len) {
-    const char *env_value = getenv(env_var); /* Flawfinder: ignore */
-    if (env_value == NULL) {
-        MYMPD_LOG_DEBUG("Environment variable \"%s\" not set", env_var);
-        return NULL;
-    }
-    if (env_value[0] == '\0') {
-        MYMPD_LOG_DEBUG("Environment variable \"%s\" is empty", env_var);
-        return NULL;
-    }
-    if (strlen(env_value) > max_len) {
-        MYMPD_LOG_WARN("Environment variable \"%s\" is too long", env_var);
-        return NULL;
-    }
-    MYMPD_LOG_INFO("Got environment variable \"%s\" with value \"%s\"", env_var, env_value);
-    return env_value;
-}
+static sds get_mympd_host(sds mpd_host, sds http_host);
+static sds get_local_ip(void);
+
+/**
+ * Public functions
+ */
 
 /**
  * Sleep function
@@ -91,7 +64,7 @@ bool is_virtual_cuedir(sds music_directory, sds filename) {
 }
 
 /**
- * Checks if uri is realy uri or a local file
+ * Checks if uri is a remote uri or a local file
  * @param uri uri to check
  * @return true it is a uri else false
  */
@@ -130,17 +103,17 @@ const char *get_extension_from_filename(const char *filename) {
  * for uris the query string and hash is removed
  * @param uri sds string to modify in place
  */
-void basename_uri(sds s) {
-    size_t len = sdslen(s);
+void basename_uri(sds uri) {
+    size_t len = sdslen(uri);
     if (len == 0) {
         return;
     }
 
-    if (strstr(s, "://") == NULL) {
+    if (strstr(uri, "://") == NULL) {
         //filename, remove path
         for (int i = (int)len - 1; i >= 0; i--) {
-            if (s[i] == '/') {
-                sdsrange(s, i + 1, -1);
+            if (uri[i] == '/') {
+                sdsrange(uri, i + 1, -1);
                 break;
             }
         }
@@ -149,10 +122,10 @@ void basename_uri(sds s) {
 
     //uri, remove query and hash
     for (size_t i = 0; i < len; i++) {
-        if (s[i] == '#' ||
-            s[i] == '?')
+        if (uri[i] == '#' ||
+            uri[i] == '?')
         {
-            sdssubstr(s, 0, i);
+            sdssubstr(uri, 0, i);
             break;
         }
     }
@@ -160,33 +133,33 @@ void basename_uri(sds s) {
 
 /**
  * Strips all slashes from the end
- * @param s sds string to strip
+ * @param dirname sds string to strip
  */
-void strip_slash(sds s) {
-    char *sp = s;
-    char *ep = s + sdslen(s) - 1;
+void strip_slash(sds dirname) {
+    char *sp = dirname;
+    char *ep = dirname + sdslen(dirname) - 1;
     while(ep >= sp &&
           *ep == '/')
     {
         ep--;
     }
     size_t len = (size_t)(ep-sp)+1;
-    s[len] = '\0';
-    sdssetlen(s, len);
+    dirname[len] = '\0';
+    sdssetlen(dirname, len);
 }
 
 /**
  * Removes the file extension
- * @param s sds string to remove the extension
+ * @param filename sds string to remove the extension
  */
-void strip_file_extension(sds s) {
-    char *sp = s;
-    char *ep = s + sdslen(s) - 1;
+void strip_file_extension(sds filename) {
+    char *sp = filename;
+    char *ep = filename + sdslen(filename) - 1;
     while (ep >= sp) {
         if (*ep == '.') {
             size_t len = (size_t)(ep-sp);
-            s[len] = '\0';
-            sdssetlen(s, len);
+            filename[len] = '\0';
+            sdssetlen(filename, len);
             break;
         }
         ep --;
@@ -195,36 +168,92 @@ void strip_file_extension(sds s) {
 
 /**
  * Replaces the file extension
- * @param s sds string to replace the extension
+ * @param filename sds string to replace the extension
  * @param ext new file extension
  * @return newly allocated sds string with new file extension
  */
-sds replace_file_extension(sds s, const char *ext) {
-    sds n = sdsdup(s);
-    strip_file_extension(n);
-    if (sdslen(n) == 0) {
-        return n;
+sds replace_file_extension(sds filename, const char *ext) {
+    sds newname = sdsdup(filename);
+    strip_file_extension(newname);
+    if (sdslen(newname) == 0) {
+        return newname;
     }
-    n = sdscatfmt(n, ".%s", ext);
-    return n;
+    newname = sdscatfmt(newname, ".%s", ext);
+    return newname;
 }
 
 static const char *invalid_filename_chars = "<>/.:?&$!#=;\a\b\f\n\r\t\v\\|";
 
 /**
  * Replaces invalid filename characters with "_"
- * @param sds string to sanitize
+ * @param filename sds string to sanitize
  */
-void sanitize_filename(sds s) {
+void sanitize_filename(sds filename) {
     const size_t len = strlen(invalid_filename_chars);
     for (size_t i = 0; i < len; i++) {
-        for (size_t j = 0; j < sdslen(s); j++) {
-            if (s[j] == invalid_filename_chars[i]) {
-                s[j] = '_';
+        for (size_t j = 0; j < sdslen(filename); j++) {
+            if (filename[j] == invalid_filename_chars[i]) {
+                filename[j] = '_';
             }
         }
     }
 }
+
+/**
+ * List of special mympd uris to resolv
+ */
+struct t_mympd_uris {
+    const char *uri;       //!< mympd uri to resolv
+    const char *resolved;  //!< resolved path
+};
+
+const struct t_mympd_uris mympd_uris[] = {
+    {"mympd://webradio/", "/browse/webradios/"},
+    {"mympd://", "/"},
+    {NULL,                NULL}
+};
+
+/**
+ * Resolves mympd:// uris to the real myMPD host address and respects the mympd_uri config option
+ * @param uri uri to resolv
+ * @param mpd_host mpd host
+ * @param config pointer to config struct
+ * @return resolved uri
+ */
+sds resolv_mympd_uri(sds uri, sds mpd_host, struct t_config *config) {
+    const struct t_mympd_uris *p = NULL;
+    for (p = mympd_uris; p->uri != NULL; p++) {
+        size_t len = strlen(p->uri);
+        if (strncmp(uri, p->uri, len) == 0) {
+            sdsrange(uri, (ssize_t)len, -1);
+            sds new_uri = sdsempty();
+            if (strcmp(config->mympd_uri, "auto") != 0) {
+                //use defined uri
+                new_uri = sdscatfmt(new_uri, "%S%s%S", config->mympd_uri, p->resolved, uri);
+                FREE_SDS(uri);
+                return new_uri;
+            }
+            //calculate uri
+            sds host = get_mympd_host(mpd_host, config->http_host);
+            if (config->http == false) {
+                //use ssl port
+                new_uri = sdscatfmt(new_uri, "https://%S:%i%s%S", host, config->ssl_port, p->resolved, uri);
+            }
+            else {
+                new_uri = sdscatfmt(new_uri, "http://%S:%i%s%S", host, config->http_port, p->resolved, uri);
+            }
+            FREE_SDS(uri);
+            FREE_SDS(host);
+            return new_uri;
+        }
+    }
+    //uri could not be resolved
+    return uri;
+}
+
+/**
+ * Private functions
+ */
 
 /**
  * Gets the listening address of the embedded webserver
@@ -232,7 +261,7 @@ void sanitize_filename(sds s) {
  * @param http_host http_host config setting
  * @return address of the embedded webserver as sds string
  */
-sds get_mympd_host(sds mpd_host, sds http_host) {
+static sds get_mympd_host(sds mpd_host, sds http_host) {
     if (strcmp(http_host, "0.0.0.0") != 0) {
         //host defined in configuration
         return sdsdup(http_host);
@@ -245,8 +274,6 @@ sds get_mympd_host(sds mpd_host, sds http_host) {
     return get_local_ip();
 }
 
-//private functions
-
 /**
  * Gets the ip address of the first interface
  * @return ip address as sds string
@@ -258,7 +285,7 @@ static sds get_local_ip(void) {
 
     errno = 0;
     if (getifaddrs(&ifaddr) == -1) {
-        MYMPD_LOG_ERROR("Can not get list of inteface ip addresses");
+        MYMPD_LOG_ERROR("Can not get list of interface ip addresses");
         MYMPD_LOG_ERRNO(errno);
         return sdsempty();
     }

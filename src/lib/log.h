@@ -1,18 +1,21 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #ifndef MYMPD_LOG_H
 #define MYMPD_LOG_H
 
+#include "dist/sds/sds.h"
+
 #include <stdbool.h>
 #include <syslog.h>
 
-#include "../../dist/sds/sds.h"
-
-#ifdef DEBUG
+/**
+ * Macros for logging
+ */
+#ifdef MYMPD_DEBUG
     #define MYMPD_LOG_EMERG(...) mympd_log(LOG_EMERG, __FILE__, __LINE__, __VA_ARGS__)
     #define MYMPD_LOG_ALERT(...) mympd_log(LOG_ALERT, __FILE__, __LINE__, __VA_ARGS__)
     #define MYMPD_LOG_CRIT(...) mympd_log(LOG_CRIT, __FILE__, __LINE__, __VA_ARGS__)
@@ -23,7 +26,9 @@
     #define MYMPD_LOG_DEBUG(...) mympd_log(LOG_DEBUG, __FILE__, __LINE__, __VA_ARGS__)
     #define MYMPD_LOG_ERRNO(ERRNUM) mympd_log_errno(__FILE__, __LINE__, ERRNUM)
 #else
-    //release build should have no references to build dir
+    /**
+     * release build should have no references to build dir
+     */
     #define MYMPD_LOG_EMERG(...) mympd_log(LOG_EMERG, "", __LINE__, __VA_ARGS__)
     #define MYMPD_LOG_ALERT(...) mympd_log(LOG_ALERT, "", __LINE__, __VA_ARGS__)
     #define MYMPD_LOG_CRIT(...) mympd_log(LOG_CRIT, "", __LINE__, __VA_ARGS__)
@@ -35,6 +40,9 @@
     #define MYMPD_LOG_ERRNO(ERRNUM) mympd_log_errno("", __LINE__, ERRNUM)
 #endif
 
+/**
+ * Global log variables
+ */
 extern _Atomic int loglevel;
 extern bool log_on_tty;
 extern bool log_to_syslog;

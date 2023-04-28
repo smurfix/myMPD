@@ -1,13 +1,13 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
 
-#include "../../dist/utest/utest.h"
-#include "../../src/lib/api.h"
+#include "dist/utest/utest.h"
+#include "src/lib/api.h"
 
 UTEST(api, test_get_cmd_id) {
     enum mympd_cmd_ids cmd_id = get_cmd_id("MYMPD_API_COLS_SAVE");
@@ -45,7 +45,7 @@ UTEST(api, test_is_mympd_only_api_method) {
 }
 
 UTEST(api, test_request_result) {
-    struct t_work_request *request = create_request(1, 1, MYMPD_API_SETTINGS_SET, "test");
+    struct t_work_request *request = create_request(1, 1, MYMPD_API_SETTINGS_SET, "test", MPD_PARTITION_DEFAULT);
     bool rc = request == NULL ? false : true;
     ASSERT_TRUE(rc);
 
@@ -53,7 +53,7 @@ UTEST(api, test_request_result) {
     rc = response == NULL ? false : true;
     ASSERT_TRUE(rc);
     ASSERT_EQ(request->cmd_id, response->cmd_id);
-    ASSERT_STREQ(response->method, "MYMPD_API_SETTINGS_SET");
+    ASSERT_STREQ(get_cmd_id_method_name(response->cmd_id), "MYMPD_API_SETTINGS_SET");
 
     free_request(request);
     free_response(response);

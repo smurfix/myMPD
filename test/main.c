@@ -1,10 +1,10 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
 
 #include "../dist/utest/utest.h"
 #include "../src/lib/log.h"
@@ -12,8 +12,6 @@
 
 #include <sys/stat.h>
 #include <unistd.h>
-
-_Thread_local sds thread_logname;
 
 //message queues
 struct t_mympd_queue *web_server_queue;
@@ -32,6 +30,7 @@ int main(int argc, const char *const argv[]) {
     //create dirs for tests
     mkdir("/tmp/mympd-test", 0770);
     mkdir("/tmp/mympd-test/state", 0770);
+    mkdir("/tmp/mympd-test/state/default", 0770);
     mkdir("/tmp/mympd-test/webradios", 0770);
 
     //utest main
@@ -40,7 +39,9 @@ int main(int argc, const char *const argv[]) {
     //cleanup
     FREE_SDS(thread_logname);
     rmdir("/tmp/mympd-test/ssl");
+    rmdir("/tmp/mympd-test/state/default");
     rmdir("/tmp/mympd-test/state");
+    rmdir("/tmp/mympd-test/webradios");
     rmdir("/tmp/mympd-test");
     sdsfree(workdir);
     return rc;

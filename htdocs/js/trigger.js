@@ -1,21 +1,30 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
+/** @module trigger_js */
+
+/**
+ * Initialization function for trigger elements
+ * @returns {void}
+ */
 function initTrigger() {
     document.getElementById('listTriggerList').addEventListener('click', function(event) {
         event.stopPropagation();
         event.preventDefault();
-        if (event.target.nodeName === 'TD') {
-            showEditTrigger(getData(event.target.parentNode, 'trigger-id'));
-        }
-        else if (event.target.nodeName === 'A') {
+        if (event.target.nodeName === 'A') {
             const action = getData(event.target, 'action');
             const id = getData(event.target.parentNode.parentNode, 'trigger-id');
             if (action === 'delete') {
                 deleteTrigger(event.target, id);
             }
+            return;
+        }
+
+        const target = getParent(event.target, 'TR');
+        if (checkTargetClick(target) === true) {
+            showEditTrigger(getData(target, 'trigger-id'));
         }
     }, false);
 
@@ -28,38 +37,51 @@ function initTrigger() {
     });
 }
 
+/**
+ * Saves a trigger
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function saveTrigger() {
     cleanupModalId('modalTrigger');
     let formOK = true;
 
     const nameEl = document.getElementById('inputTriggerName');
-    if (!validatePlnameEl(nameEl)) {
+    if (!validatePlistEl(nameEl)) {
         formOK = false;
     }
 
     const scriptEl = document.getElementById('selectTriggerScript');
-    if (!validateSelect(scriptEl)) {
+    if (!validateSelectEl(scriptEl)) {
         formOK = false;
     }
 
     if (formOK === true) {
         const args = {};
-        const argEls = document.getElementById('triggerActionScriptArguments').getElementsByTagName('input');
+        const argEls = document.querySelectorAll('#triggerActionScriptArguments input');
         for (let i = 0, j = argEls.length; i < j; i ++) {
             args[getData(argEls[i], 'name')] = argEls[i].value;
         }
+
+        let partition = getBtnGroupValueId('btnTriggerPartitionGroup');
+        partition = partition === '!all!' ? partition : localSettings.partition;
 
         sendAPI("MYMPD_API_TRIGGER_SAVE", {
             "id": Number(document.getElementById('inputTriggerId').value),
             "name": nameEl.value,
             "event": Number(getSelectValueId('selectTriggerEvent')),
             "script": getSelectValueId('selectTriggerScript'),
+            "partition": partition,
             "arguments": args
         }, saveTriggerCheckError, true);
     }
 }
 
+/**
+ * Handler for the MYMPD_API_TRIGGER_SAVE jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function saveTriggerCheckError(obj) {
     if (obj.error) {
         showModalAlert(obj);
@@ -69,6 +91,11 @@ function saveTriggerCheckError(obj) {
     }
 }
 
+/**
+ * Shows the edit trigger tab
+ * @param {number} id trigger id
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function showEditTrigger(id) {
     cleanupModalId('modalTrigger');
@@ -78,29 +105,43 @@ function showEditTrigger(id) {
     elShowId('newTriggerFooter');
 
     const nameEl = document.getElementById('inputTriggerName');
-    nameEl.value = '';
     setFocus(nameEl);
-    document.getElementById('inputTriggerId').value = '-1';
-    document.getElementById('selectTriggerEvent').selectedIndex = 0;
-    document.getElementById('selectTriggerScript').selectedIndex = 0;
+
     if (id > -1) {
         sendAPI("MYMPD_API_TRIGGER_GET", {
             "id": id
         }, parseTriggerEdit, false);
     }
     else {
+        nameEl.value = '';
+        document.getElementById('inputTriggerId').value = '-1';
+        document.getElementById('selectTriggerEvent').selectedIndex = 0;
+        document.getElementById('selectTriggerScript').selectedIndex = 0;
+        toggleBtnGroupValueId('btnTriggerPartitionGroup', 'this');
         selectTriggerActionChange();
     }
 }
 
+/**
+ * Parses the MYMPD_API_TRIGGER_GET jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function parseTriggerEdit(obj) {
     document.getElementById('inputTriggerId').value = obj.result.id;
     document.getElementById('inputTriggerName').value = obj.result.name;
     document.getElementById('selectTriggerEvent').value = obj.result.event;
     document.getElementById('selectTriggerScript').value = obj.result.script;
+    const partition = obj.result.partition === '!all!' ? obj.result.partition : 'this';
+    toggleBtnGroupValueId('btnTriggerPartitionGroup', partition);
     selectTriggerActionChange(obj.result.arguments);
 }
 
+/**
+ * Calls showTriggerScriptArgs for the selected script
+ * @param {object} [values] array of values for the script arguments
+ * @returns {void}
+ */
 function selectTriggerActionChange(values) {
     const el = document.getElementById('selectTriggerScript');
     if (el.selectedIndex > -1) {
@@ -108,6 +149,12 @@ function selectTriggerActionChange(values) {
     }
 }
 
+/**
+ * Shows the list of arguments and values for the selected script
+ * @param {HTMLElement} option selected option from script select
+ * @param {object} values array of values for the script arguments
+ * @returns {void}
+ */
 function showTriggerScriptArgs(option, values) {
     if (values === undefined) {
         values = {};
@@ -130,6 +177,10 @@ function showTriggerScriptArgs(option, values) {
     }
 }
 
+/**
+ * Shows the trigger list tab
+ * @returns {void}
+ */
 function showListTrigger() {
     cleanupModalId('modalTrigger');
     document.getElementById('listTrigger').classList.add('active');
@@ -139,14 +190,11 @@ function showListTrigger() {
     sendAPI("MYMPD_API_TRIGGER_LIST", {}, parseTriggerList, true);
 }
 
-function deleteTrigger(el, id) {
-    showConfirmInline(el.parentNode.previousSibling, tn('Do you really want to delete the trigger?'), tn('Yes, delete it'), function() {
-        sendAPI("MYMPD_API_TRIGGER_RM", {
-            "id": id
-        }, saveTriggerCheckError, true);
-    });
-}
-
+/**
+ * Parses the MYMPD_API_TRIGGER_LIST jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function parseTriggerList(obj) {
     const tbody = document.getElementById('listTriggerList');
     if (checkResult(obj, tbody) === false) {
@@ -154,15 +202,31 @@ function parseTriggerList(obj) {
     }
     elClear(tbody);
     for (let i = 0; i < obj.result.returnedEntities; i++) {
-        const row = elCreateNodes('tr', {}, [
-            elCreateText('td', {}, obj.result.data[i].name),
-            elCreateText('td', {}, tn(obj.result.data[i].eventName)),
+        const row = elCreateNodes('tr', {"title": tn('Edit')}, [
+            elCreateText('td', {}, obj.result.data[i].name + 
+                (obj.result.data[i].partition === '!all!' ? ' (' + tn('All partitions') + ')' : '')
+            ),
+            elCreateTextTn('td', {}, obj.result.data[i].eventName),
             elCreateText('td', {}, obj.result.data[i].script),
             elCreateNode('td', {"data-col": "Action"},
-                elCreateText('a', {"href": "#", "title": tn("Delete"), "data-action": "delete", "class": ["mi", "color-darkgrey"]}, 'delete')
+                elCreateText('a', {"href": "#", "data-title-phrase": "Delete", "data-action": "delete", "class": ["mi", "color-darkgrey"]}, 'delete')
             )
         ]);
         setData(row, 'trigger-id', obj.result.data[i].id);
         tbody.appendChild(row);
     }
+}
+
+/**
+ * Deletes a trigger after confirmation
+ * @param {EventTarget} el triggering element
+ * @param {number} id trigger id
+ * @returns {void}
+ */
+function deleteTrigger(el, id) {
+    showConfirmInline(el.parentNode.previousSibling, tn('Do you really want to delete the trigger?'), tn('Yes, delete it'), function() {
+        sendAPI("MYMPD_API_TRIGGER_RM", {
+            "id": id
+        }, saveTriggerCheckError, true);
+    });
 }

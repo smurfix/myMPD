@@ -1,7 +1,7 @@
 "use strict";
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -84,7 +84,9 @@ function formToParams(p, k) {
         }
         else {
             let value = document.getElementById('input-' + k + param).value;
-            if (value.charAt(0) === '{' || value.charAt(0) === '[') {
+            if (value.charAt(0) === '{' ||
+                value.charAt(0) === '[')
+            {
                 request[param] = JSON.parse(value);
             }
             else {
@@ -110,8 +112,9 @@ function formToParams(p, k) {
 function sendAPI() {
     document.getElementById('resultState').textContent = 'Sending...';
     document.getElementById('resultText').textContent = '';
-    let select = document.getElementById('cmds');
+    const select = document.getElementById('cmds');
     let method = select.options[select.selectedIndex].value;
+    const partition = document.getElementById('partition').value;
     let request = {"jsonrpc": "2.0", "id": 0, "method": method, "params": {}};
     if (APImethods[method].params !== undefined) {
         request.params = formToParams(APImethods[method].params, '');
@@ -119,9 +122,9 @@ function sendAPI() {
     let time_start = 0;
     let time_end = 0;
     let ajaxRequest = new XMLHttpRequest();
-    ajaxRequest.open('POST', '/api/', true);
+    ajaxRequest.open('POST', '/api/' + partition, true);
     ajaxRequest.setRequestHeader('Content-type', 'application/json');
-    ajaxRequest.setRequestHeader('Authorization', 'Bearer ' + document.getElementById('session').value);
+    ajaxRequest.setRequestHeader('X-myMPD-Session', document.getElementById('session').value);
     ajaxRequest.onreadystatechange = function() {
         if (ajaxRequest.readyState === 4 && ajaxRequest.status == 200) {
             try {

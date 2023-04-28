@@ -1,19 +1,19 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #ifndef MYMPD_VALIDATE_H
 #define MYMPD_VALIDATE_H
 
-#include "../../dist/sds/sds.h"
+#include "dist/sds/sds.h"
 
 #include <stdbool.h>
 
 typedef bool (*validate_callback) (sds);
 
-bool validate_json(sds data);
+bool validate_json_object(sds data);
 bool validate_json_array(sds data);
 
 bool vcb_isalnum(sds data);

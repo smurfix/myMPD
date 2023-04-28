@@ -8,9 +8,7 @@
         "Atomics": "readonly",
         "SharedArrayBuffer": "readonly",
         "BSN": true,
-        "phrases": true,
-        "locales": true,
-        "missingPhrases": true,
+        "i18n": true,
         "MediaMetadata": true
     },
     "parserOptions": {

@@ -1,26 +1,15 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
+#include "test/utility.h"
 
-#include "../../dist/utest/utest.h"
-#include "../../src/lib/sds_extras.h"
-#include "../../src/lib/utility.h"
-#include "../utility.h"
-
-UTEST(utility, test_getenv_check) {
-    setenv("TESTVAR", "testvalue", 0);
-    const char *testvar = getenv_check("TESTVAR", 20);
-    ASSERT_STREQ(testvar, "testvalue");
-
-    const char *tolong = getenv_check("TESTVAR", 5);
-    bool rc = tolong == NULL ? true : false;
-    ASSERT_TRUE(rc);
-    unsetenv("TESTVAR");
-}
+#include "dist/utest/utest.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/utility.h"
 
 UTEST(utility, test_my_msleep) {
     struct timespec begin, end;
@@ -39,7 +28,7 @@ UTEST(utility, test_my_msleep) {
 
 UTEST(utility, test_is_virtual_cuedir) {
     sds dir = sdsnew(".");
-    sds file = sdsnew("test");
+    sds file = sdsnew("test/build/test");
     bool rc = is_virtual_cuedir(dir, file);
     ASSERT_TRUE(rc);
     sdsfree(dir);

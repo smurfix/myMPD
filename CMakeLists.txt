@@ -1,53 +1,89 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+# myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
 # https://github.com/jcorporation/mympd
 
-#myMPD is written in C
-#supported compilers: gcc, clang
-project (mympd C)
+# minimal cmake version needed for new option handling
+cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
+cmake_policy(SET CMP0003 NEW)
 
-#update myMPD version here and run ./build.sh setversion to update
-#the source files
-set(CPACK_PACKAGE_VERSION_MAJOR "9")
-set(CPACK_PACKAGE_VERSION_MINOR "5")
-set(CPACK_PACKAGE_VERSION_PATCH "0")
+# myMPD is written in C
+# supported compilers: gcc, clang
+project(mympd
+  VERSION 10.3.1
+  LANGUAGES C
+)
 
-#minimal cmake version needed for correct GNUInstallDirs
-cmake_minimum_required(VERSION 3.4)
+# output binaries in bin directory
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 message("Cmake version: ${CMAKE_VERSION}")
+message("Cmake src dir: ${PROJECT_SOURCE_DIR}")
+message("Cmake build dir: ${CMAKE_CURRENT_BINARY_DIR}")
+message("Cmake build type: ${CMAKE_BUILD_TYPE}")
+message("Compiler: ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
+message("CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
+message("CMAKE_EXE_LINKER_FLAGS: ${CMAKE_EXE_LINKER_FLAGS}")
 
-#available options
-option(EMBEDDED_ASSETS "Embeds assets in binary, default ON" ON)
-option(ENABLE_FLAC "Enables flac usage, default ON" ON)
-option(ENABLE_IPV6 "Enables IPv6, default ON" ON)
-option(ENABLE_LUA "Enables lua usage, default ON" ON)
-option(ENABLE_LIBASAN "Enables build with libasan, default OFF" OFF)
-option(ENABLE_LIBID3TAG "Enables libid3tag usage, default ON" ON)
-option(ENABLE_SSL "Enables OpenSSL usage, default ON" ON)
+# reset cmake default Release and Debug flags
+set(CMAKE_C_FLAGS_RELEASE "")
+set(CMAKE_C_FLAGS_DEBUG "")
 
-#cmake modules
-include(GNUInstallDirs)
-include(CheckCSourceCompiles)
-include(CheckCCompilerFlag)
-
-#custom cmake modules
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/")
-
-#clang compatibility
-if(CMAKE_C_COMPILER_ID MATCHES "Clang")
-  add_compile_options("-Wno-unknown-warning-option")
+# default is to deliver the assets from htdocs for Debug
+# and embedded assets for all other build types
+if(NOT DEFINED MYMPD_EMBEDDED_ASSETS)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(MYMPD_EMBEDDED_ASSETS "OFF")
+  else()
+    set(MYMPD_EMBEDDED_ASSETS "ON")
+  endif()
 endif()
 
-message("Compiler: ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
+# set debug define for source
+if(NOT DEFINED MYMPD_DEBUG)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(MYMPD_DEBUG "ON")
+  else()
+    set(MYMPD_DEBUG "OFF")
+  endif()
+endif()
 
-#calculate paths
-if("${CMAKE_INSTALL_PREFIX}" MATCHES "/usr")
+# available options
+option(MYMPD_DEBUG "Enables myMPD debug mode, default OFF, ON for Debug" "OFF")
+option(MYMPD_EMBEDDED_ASSETS "Embed assets in binary, default ON, OFF for Debug" "ON")
+option(MYMPD_ENABLE_FLAC "Enables flac support, default ON" "ON")
+option(MYMPD_ENABLE_IPV6 "Enables IPv6, default ON" "ON")
+option(MYMPD_ENABLE_LIBASAN "Enables build with libasan, default OFF" "OFF")
+option(MYMPD_ENABLE_LIBID3TAG "Enables libid3tag support, default ON" "ON")
+option(MYMPD_ENABLE_LUA "Enables lua support, default ON" "ON")
+option(MYMPD_ENABLE_SSL "Enables OpenSSL support, default ON" "ON")
+option(MYMPD_MANPAGES "Creates and installs manpages" "ON")
+option(MYMPD_MINIMAL "Enables minimal myMPD build, disables all MYMPD_ENABLE_* flags" "OFF")
+option(MYMPD_STRIP_BINARY "Enables stripping the binaries for Release, default ON" "ON")
+
+if(MYMPD_MINIMAL)
+  set(MYMPD_ENABLE_FLAC "OFF")
+  set(MYMPD_ENABLE_IPV6 "OFF")
+  set(MYMPD_ENABLE_LUA "OFF")
+  set(MYMPD_ENABLE_LIBID3TAG "OFF")
+  set(MYMPD_ENABLE_SSL "OFF")
+endif()
+
+# cmake modules
+include(CheckCCompilerFlag)
+include(CheckCSourceCompiles)
+include(CheckIPOSupported)
+include(GNUInstallDirs)
+
+# custom cmake modules
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/")
+
+# calculate paths
+if(CMAKE_INSTALL_PREFIX MATCHES "/usr")
   set(SUBDIR "/${PROJECT_NAME}")
   set(SUBDIRLIB "/lib")
   set(SUBDIRCACHE "/cache")
 else()
-  #for install in /opt
+  # for install in /opt
   set(SUBDIR "")
   set(SUBDIRLIB "")
   set(SUBDIRCACHE "")
@@ -55,364 +91,295 @@ endif()
 
 message("Executables in: ${CMAKE_INSTALL_FULL_BINDIR}")
 
-if("${CMAKE_INSTALL_PREFIX}" MATCHES "/usr/local")
-  set(VARLIB_PATH "/${CMAKE_INSTALL_LOCALSTATEDIR}${SUBDIRLIB}${SUBDIR}")
+if(CMAKE_INSTALL_PREFIX STREQUAL "/usr/local")
+  set(MYMPD_WORK_DIR "/${CMAKE_INSTALL_LOCALSTATEDIR}${SUBDIRLIB}${SUBDIR}")
+  set(MYMPD_CACHE_DIR "/${CMAKE_INSTALL_LOCALSTATEDIR}${SUBDIRCACHE}${SUBDIR}")
 else()
-  set(VARLIB_PATH "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}${SUBDIRLIB}${SUBDIR}")
+  set(MYMPD_WORK_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}${SUBDIRLIB}${SUBDIR}")
+  set(MYMPD_CACHE_DIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}${SUBDIRCACHE}${SUBDIR}")
 endif()
-message("Workdir: ${VARLIB_PATH}")
 
-if("${CMAKE_INSTALL_PREFIX}" MATCHES "/usr/local")
-  set(VARCACHE_PATH "/${CMAKE_INSTALL_LOCALSTATEDIR}${SUBDIRCACHE}${SUBDIR}")
-else()
-  set(VARCACHE_PATH "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}${SUBDIRCACHE}${SUBDIR}")
-endif()
-message("Cachedir: ${VARCACHE_PATH}")
+message("Workdir: ${MYMPD_WORK_DIR}")
+message("Cachedir: ${MYMPD_CACHE_DIR}")
 
-#default is to deliver embedded assets for release
-#and assets in htdocs for debug
-if("${EMBEDDED_ASSETS}" MATCHES "ON")
-  set(ASSETS_PATH "${VARLIB_PATH}/empty")
-  set(LUALIBS_PATH "")
+if(MYMPD_EMBEDDED_ASSETS)
   message("Embedding assets in binary")
+  set(MYMPD_DOC_ROOT "${MYMPD_WORK_DIR}/empty")
+  set(MYMPD_LUALIBS_PATH "")
+  set(ENV{MYMPD_BUILDDIR} "${CMAKE_CURRENT_BINARY_DIR}")
+  execute_process(COMMAND "${PROJECT_SOURCE_DIR}/build.sh" createassets)
+  # remove object files with embedded assets
+  file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/src/CMakeFiles/mympd.dir/web_server/utility.c.o")
+  file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/src/CMakeFiles/mympd.dir/mympd_api/scripts.c.o")
 else()
-  set(ASSETS_PATH "${PROJECT_SOURCE_DIR}/htdocs")
-  set(LUALIBS_PATH "${PROJECT_SOURCE_DIR}/contrib/lualibs")
   message("Serving assets from filesystem")
+  set(MYMPD_DOC_ROOT "${PROJECT_SOURCE_DIR}/htdocs")
+  set(MYMPD_LUALIBS_PATH "${PROJECT_SOURCE_DIR}/contrib/lualibs")
+  set(ENV{MYMPD_BUILDDIR} "${CMAKE_CURRENT_BINARY_DIR}")
+  execute_process(COMMAND "${PROJECT_SOURCE_DIR}/build.sh" copyassets)
 endif()
-message("Document root: ${ASSETS_PATH}")
+message("Document root: ${MYMPD_DOC_ROOT}")
 
-#set debug define for source
-if(CMAKE_BUILD_TYPE MATCHES RELEASE)
-  set(DEBUG "OFF")
-  set(NDEBUG "true")
-else()
-  set(DEBUG "ON")
-endif()
-
-#required dependencies
+# required dependencies
 find_package(Threads REQUIRED)
 find_package(PCRE2 REQUIRED)
 find_library(MATH_LIB m REQUIRED)
 
-#optional dependencies
-if(NOT "${ENABLE_SSL}" MATCHES "OFF")
+# optional dependencies
+if(MYMPD_ENABLE_SSL)
   message("Searching for openssl")
   find_package(OpenSSL)
   if(OPENSSL_FOUND)
-    if ("${OPENSSL_VERSION}" VERSION_GREATER_EQUAL "1.1.0")
-      set(ENABLE_SSL "ON")
-      set(MONGOOSE_SSL "-DMG_ENABLE_OPENSSL=1")
-      include_directories(${OPENSSL_INCLUDE_DIR})
-    else()
+    if(NOT OPENSSL_VERSION VERSION_GREATER_EQUAL "1.1.0")
       message("OpenSSL is disabled because a version lower than 1.1.0 was found")
-      set(ENABLE_SSL "OFF")
+      set(MYMPD_ENABLE_SSL "OFF")
     endif()
   else()
     message("OpenSSL is disabled because it was not found")
-    set(ENABLE_SSL "OFF")
+    set(MYMPD_ENABLE_SSL "OFF")
   endif()
 else()
   message("OpenSSL is disabled by user")
 endif()
 
-if(NOT "${ENABLE_LIBID3TAG}" MATCHES "OFF")
+if(MYMPD_ENABLE_LIBID3TAG)
   message("Searching for libid3tag")
   find_package(LIBID3TAG)
-  if(LIBID3TAG_FOUND)
-    set(ENABLE_LIBID3TAG "ON")
-    include_directories(${LIBID3TAG_INCLUDE_DIRS})
-  else()
+  if(NOT LIBID3TAG_FOUND)
     message("Libid3tag is disabled because it was not found")
-    set(ENABLE_LIBID3TAG "OFF")
+    set(MYMPD_ENABLE_LIBID3TAG "OFF")
   endif()
-else("${ENABLE_LIBID3TAG}" MATCHES "OFF")
+else()
   message("Libid3tag is disabled by user")
 endif()
 
-if(NOT "${ENABLE_FLAC}" MATCHES "OFF")
+if(MYMPD_ENABLE_FLAC)
   message("Searching for flac")
   find_package(FLAC)
-  if(FLAC_FOUND)
-    set(ENABLE_FLAC "ON")
-    include_directories(${FLAC_INCLUDE_DIRS})
-  else()
+  if(NOT FLAC_FOUND)
     message("Flac is disabled because it was not found")
-    set(ENABLE_FLAC "OFF")
+    set(MYMPD_ENABLE_FLAC "OFF")
   endif()
 else()
   message("Flac is disabled by user")
 endif()
 
-if(NOT "${ENABLE_LUA}" MATCHES "OFF")
-  IF(EXISTS "/etc/alpine-release")
+if(MYMPD_ENABLE_LUA)
+  if(EXISTS "/etc/alpine-release")
     set(ENV{LUA_DIR} "/usr/lib/lua5.4")
   endif()
   message("Searching for lua")
   find_package(Lua)
   if(LUA_FOUND)
-    if("${LUA_VERSION_STRING}" VERSION_GREATER_EQUAL "5.3.0")
-      set(ENABLE_LUA "ON")
-      include_directories(${LUA_INCLUDE_DIR})
-    else()
+    if(NOT LUA_VERSION_STRING VERSION_GREATER_EQUAL "5.3.0")
       message("Lua is disabled because a version lower than 5.3.0 was found")
-      set(ENABLE_LUA "OFF")
+      set(MYMPD_ENABLE_LUA "OFF")
     endif()
   else()
     message("Lua is disabled because it was not found")
-    set(ENABLE_LUA "OFF")
+    set(MYMPD_ENABLE_LUA "OFF")
   endif()
 else()
   message("Lua is disabled by user")
 endif()
 
-#configure some files - version and path information
-configure_file(src/mympd_config_defs.h.in ${PROJECT_BINARY_DIR}/mympd_config_defs.h)
+# translation files
+if(MYMPD_EMBEDDED_ASSETS)
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/de-DE.json.gz")
+    set(I18N_de_DE "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/en-US.json.gz")
+    set(I18N_en_US "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/es-AR.json.gz")
+    set(I18N_es_AR "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/es-ES.json.gz")
+    set(I18N_es_ES "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/es-VE.json.gz")
+    set(I18N_es_VE "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/fi-FI.json.gz")
+    set(I18N_fi_FI "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/fr-FR.json.gz")
+    set(I18N_fr_FR "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/it-IT.json.gz")
+    set(I18N_it_IT "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/ja-JP.json.gz")
+    set(I18N_ja_JP "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/ko-KR.json.gz")
+    set(I18N_ko_KR "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/nl-NL.json.gz")
+    set(I18N_nl_NL "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/pl-PL.json.gz")
+    set(I18N_pl_PL "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/ru-RU.json.gz")
+    set(I18N_ru_RU "ON")
+  endif()
+  if(EXISTS "${PROJECT_BINARY_DIR}/htdocs/assets/i18n/zh-Hans.json.gz")
+    set(I18N_zh_Hans "ON")
+  endif()
+endif()
+
+# configure some files - version and path information
+configure_file(src/compile_time.h.in "${PROJECT_BINARY_DIR}/compile_time.h")
 configure_file(cmake/CopyConfig.cmake.in cmake/CopyConfig.cmake @ONLY)
 configure_file(contrib/initscripts/mympd.service.in contrib/initscripts/mympd.service @ONLY)
 configure_file(contrib/initscripts/mympd.sysVinit.in contrib/initscripts/mympd.sysVinit @ONLY)
 configure_file(contrib/initscripts/mympd.openrc.in contrib/initscripts/mympd.openrc @ONLY)
 
-#set include dirs
-include_directories(${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
-include_directories(${PCRE2_INCLUDE_DIRS})
+if(CMAKE_BUILD_TYPE MATCHES "(Release|Debug)")
+  # set strict global compile flags
+  add_compile_options(
+    "-fdata-sections"
+    "-ffunction-sections"
+    "-fstack-protector-strong"
+    "-pedantic"
+    "-Wall"
+    "-Werror"
+    "-Wextra"
+    "-Wformat"
+    "-Wformat-security"
+    "-Winit-self"
+    "-Wmissing-include-dirs"
+    "-Wnested-externs"
+    "-Wold-style-definition"
+    "-Wredundant-decls"
+    "-Wshadow"
+    "-Wsign-compare"
+    "-Wstrict-prototypes"
+    "-Wundef"
+    "-Wuninitialized"
+    "-Wunused-parameter"
+    "-Wvla"
+    "-Wwrite-strings"
+  )
 
-#Use the integrated libmympdclient for mpd communication
-#myMPD is incompatible with the original libmpdclient
-include_directories("dist/libmpdclient/include")
+  # check for supported compiler flags
+  foreach(FLAG IN ITEMS "-std=gnu17" "-fstack-clash-protection" "-fcf-protection" "-fno-plt")
+    message("Checking for compiler flag ${FLAG}")
+    unset(COMPILER_SUPPORTS_FLAG CACHE)
+    unset(COMPILER_SUPPORTS_FLAG)
+    check_c_compiler_flag("${FLAG}" COMPILER_SUPPORTS_FLAG)
+    if(COMPILER_SUPPORTS_FLAG)
+      add_compile_options("${FLAG}")
+    endif()
+  endforeach()
 
-#check for enabling libasan
-if("${ENABLE_LIBASAN}" MATCHES "ON")
-  message("Compiling with libasan")
-  set(LIBASAN_FLAGS "-fsanitize=address \
-    -fsanitize=undefined -fsanitize=shift -fsanitize=integer-divide-by-zero -fsanitize=unreachable -fsanitize=vla-bound \
-    -fsanitize=null -fsanitize=return -fsanitize=signed-integer-overflow -fsanitize=bounds -fsanitize=bounds-strict \
-    -fsanitize=alignment -fsanitize=object-size -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow \
-    -fsanitize=nonnull-attribute -fsanitize=returns-nonnull-attribute -fsanitize=bool -fsanitize=enum -fsanitize=vptr \
-    -static-libasan")
-else()
-  set(LIBASAN_FLAGS "")
-endif()
-
-#set mongoose feature flags
-set(MONGOOSE_FLAGS "${MONGOOSE_SSL} -DMG_ENABLE_DIRECTORY_LISTING=1 -DMG_ENABLE_SSI=0")
-if("${ENABLE_IPV6}" MATCHES "ON")
-  message("IPv6 is enabled")
-  set(MONGOOSE_FLAGS "${MONGOOSE_FLAGS} -DMG_ENABLE_IPV6=1")
-else()
-  message("IPv6 is disabled")
-endif()
-#set mjson feature flags
-set(MJSON_FLAGS "-D MJSON_ENABLE_PRINT=0 -D MJSON_ENABLE_BASE64=0 -D MJSON_ENABLE_RPC=0 \
-  -D MJSON_ENABLE_PRETTY=0 -D MJSON_ENABLE_MERGE=0")
-
-#set strict global compile flags
-#-Wno-stringop-overread: gcc 12 error
-#-Wno-array-bounds: gcc 12 error on armv7l
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
-  -ffunction-sections -fdata-sections -Wall -Werror -Wvla -Winit-self -Wuninitialized \
-	-Werror=array-bounds -Wextra -pedantic -Wunused-parameter -Wshadow -Wwrite-strings \
-	-Wformat=2 -Wstrict-prototypes -Wold-style-definition -Wredundant-decls -Wnested-externs \
-	-Wmissing-include-dirs -Wundef -Wformat-nonliteral -Wsign-compare -Wconversion \
-  -Wno-stringop-overread -Wno-array-bounds \
-	${LIBASAN_FLAGS} ${MONGOOSE_FLAGS} ${MJSON_FLAGS}")
-
-#check for supported compiler flags
-foreach(FLAG IN ITEMS "-std=gnu17" "-fstack-clash-protection" "-fcf-protection" "-fno-plt")
-  message("Checking for compiler flag ${FLAG}")
-  unset(COMPILER_SUPPORTS_FLAG CACHE)
-  unset(COMPILER_SUPPORTS_FLAG)
-  CHECK_C_COMPILER_FLAG("${FLAG}" COMPILER_SUPPORTS_FLAG)
-  if(COMPILER_SUPPORTS_FLAG MATCHES "1")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${FLAG}")
+  if(NOT MYMPD_ENABLE_LIBASAN)
+    #incompatible with libasan
+    add_compile_options("-D_FORTIFY_SOURCE=2")
   endif()
-endforeach()
-
-#set debug/release flags
-if(CMAKE_BUILD_TYPE MATCHES RELEASE)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -fPIE -DMG_ENABLE_LOG=0")
-  set (CMAKE_EXE_LINKER_FLAGS "-Wl,-z,relro,-z,now,--gc-sections -pie -s")
 else()
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb -Og")
-  set (CMAKE_EXE_LINKER_FLAGS "")
+  # if CMAKE_BUILD_TYPE is neither Release nor Debug,
+  # do not alter compile options
 endif()
 
-#set source files
-set(MYMPD_SOURCES
-  dist/mjson/mjson.c
-  dist/mongoose/mongoose.c
-  dist/rax/rax.c
-  dist/sds/sds.c
-  dist/tinymt/tinymt32.c
-  src/handle_options.c
-  src/lib/album_cache.c
-  src/lib/api.c
-  src/lib/covercache.c
-  src/lib/filehandler.c
-  src/lib/http_client.c
-  src/lib/jsonrpc.c
-  src/lib/list.c
-  src/lib/log.c
-  src/lib/lua_mympd_state.c
-  src/lib/m3u.c
-  src/lib/mimetype.c
-  src/lib/mympd_pin.c
-  src/lib/mympd_queue.c
-  src/lib/mympd_state.c
-  src/lib/random.c
-  src/lib/rax_extras.c
-  src/lib/sds_extras.c
-  src/lib/smartpls.c
-  src/lib/state_files.c
-  src/lib/sticker_cache.c
-  src/lib/utility.c
-  src/lib/validate.c
-  src/main.c
-  src/mpd_client/mpd_client_autoconf.c
-  src/mpd_client/mpd_client_connection.c
-  src/mpd_client/mpd_client_errorhandler.c
-  src/mpd_client/mpd_client_features.c
-  src/mpd_client/mpd_client_idle.c
-  src/mpd_client/mpd_client_jukebox.c
-  src/mpd_client/mpd_client_playlists.c
-  src/mpd_client/mpd_client_search.c
-  src/mpd_client/mpd_client_search_local.c
-  src/mpd_client/mpd_client_tags.c
-  src/mpd_client/mpd_client_volume.c
-  src/mpd_worker/mpd_worker.c
-  src/mpd_worker/mpd_worker_api.c
-  src/mpd_worker/mpd_worker_cache.c
-  src/mpd_worker/mpd_worker_smartpls.c
-  src/mpd_worker/mpd_worker_state.c
-  src/mympd_api/mympd_api.c
-  src/mympd_api/mympd_api_albumart.c
-  src/mympd_api/mympd_api_browse.c
-  src/mympd_api/mympd_api_extra_media.c
-  src/mympd_api/mympd_api_filesystem.c
-  src/mympd_api/mympd_api_handler.c
-  src/mympd_api/mympd_api_home.c
-  src/mympd_api/mympd_api_last_played.c
-  src/mympd_api/mympd_api_lyrics.c
-  src/mympd_api/mympd_api_mounts.c
-  src/mympd_api/mympd_api_partitions.c
-  src/mympd_api/mympd_api_pictures.c
-  src/mympd_api/mympd_api_playlists.c
-  src/mympd_api/mympd_api_queue.c
-  src/mympd_api/mympd_api_scripts.c
-  src/mympd_api/mympd_api_settings.c
-  src/mympd_api/mympd_api_smartpls.c
-  src/mympd_api/mympd_api_song.c
-  src/mympd_api/mympd_api_stats.c
-  src/mympd_api/mympd_api_status.c
-  src/mympd_api/mympd_api_sticker.c
-  src/mympd_api/mympd_api_timer.c
-  src/mympd_api/mympd_api_timer_handlers.c
-  src/mympd_api/mympd_api_trigger.c
-  src/mympd_api/mympd_api_webradios.c
-  src/mympd_config.c
-  src/web_server/web_server.c
-  src/web_server/web_server_albumart.c
-  src/web_server/web_server_handler.c
-  src/web_server/web_server_proxy.c
-  src/web_server/web_server_radiobrowser.c
-  src/web_server/web_server_sessions.c
-  src/web_server/web_server_tagart.c
-  src/web_server/web_server_utility.c
-  src/web_server/web_server_webradiodb.c
-)
-
-if("${ENABLE_SSL}" MATCHES "ON")
-  set(CERT_SOURCES
-      src/lib/cert.c
+# libasan memory checker
+# https://github.com/google/sanitizers/wiki/AddressSanitizer#faq
+if(MYMPD_ENABLE_LIBASAN)
+  message("Compiling with libasan")
+  set(LIBASAN_FLAGS
+    "-fsanitize=address"
+    "-fsanitize=alignment"
+    "-fsanitize=bool"
+    "-fsanitize=bounds"
+    "-fsanitize=bounds-strict"
+    "-fsanitize=enum"
+    "-fsanitize=float-cast-overflow"
+    "-fsanitize=float-divide-by-zero"
+    "-fsanitize=integer-divide-by-zero"
+    "-fsanitize=nonnull-attribute"
+    "-fsanitize=null"
+    "-fsanitize=object-size"
+    "-fsanitize=return"
+    "-fsanitize=returns-nonnull-attribute"
+    "-fsanitize=shift"
+    "-fsanitize=signed-integer-overflow"
+    "-fsanitize=undefined"
+    "-fsanitize=unreachable"
+    "-fsanitize=vla-bound"
+    "-fsanitize=vptr"
+  )
+  add_compile_options(
+    ${LIBASAN_FLAGS}
+    "-fno-omit-frame-pointer"
   )
 endif()
 
-set(LIBMPDCLIENT_SOURCES
-  dist/libmpdclient/src/albumart.c
-  dist/libmpdclient/src/async.c
-  dist/libmpdclient/src/audio_format.c
-  dist/libmpdclient/src/binary.c
-  dist/libmpdclient/src/capabilities.c
-  dist/libmpdclient/src/cmessage.c
-  dist/libmpdclient/src/cmount.c
-  dist/libmpdclient/src/cneighbor.c
-  dist/libmpdclient/src/connection.c
-  dist/libmpdclient/src/coutput.c
-  dist/libmpdclient/src/cpartition.c
-  dist/libmpdclient/src/cplaylist.c
-  dist/libmpdclient/src/cstats.c
-  dist/libmpdclient/src/cstatus.c
-  dist/libmpdclient/src/database.c
-  dist/libmpdclient/src/directory.c
-  dist/libmpdclient/src/entity.c
-  dist/libmpdclient/src/error.c
-  dist/libmpdclient/src/fd_util.c
-  dist/libmpdclient/src/fingerprint.c
-  dist/libmpdclient/src/idle.c
-  dist/libmpdclient/src/ierror.c
-  dist/libmpdclient/src/iso8601.c
-  dist/libmpdclient/src/kvlist.c
-  dist/libmpdclient/src/list.c
-  dist/libmpdclient/src/message.c
-  dist/libmpdclient/src/mixer.c
-  dist/libmpdclient/src/mount.c
-  dist/libmpdclient/src/neighbor.c
-  dist/libmpdclient/src/output.c
-  dist/libmpdclient/src/parser.c
-  dist/libmpdclient/src/partition.c
-  dist/libmpdclient/src/password.c
-  dist/libmpdclient/src/player.c
-  dist/libmpdclient/src/playlist.c
-  dist/libmpdclient/src/position.c
-  dist/libmpdclient/src/queue.c
-  dist/libmpdclient/src/quote.c
-  dist/libmpdclient/src/replay_gain.c
-  dist/libmpdclient/src/rdirectory.c
-  dist/libmpdclient/src/readpicture.c
-  dist/libmpdclient/src/recv.c
-  dist/libmpdclient/src/replay_gain.c
-  dist/libmpdclient/src/resolver.c
-  dist/libmpdclient/src/response.c
-  dist/libmpdclient/src/rplaylist.c
-  dist/libmpdclient/src/run.c
-  dist/libmpdclient/src/search.c
-  dist/libmpdclient/src/send.c
-  dist/libmpdclient/src/settings.c
-  dist/libmpdclient/src/socket.c
-  dist/libmpdclient/src/song.c
-  dist/libmpdclient/src/stats.c
-  dist/libmpdclient/src/status.c
-  dist/libmpdclient/src/sticker.c
-  dist/libmpdclient/src/sync.c
-  dist/libmpdclient/src/tag.c
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  add_compile_options(
+    "-fPIE"
+    "-O2"
+  )
+  if(NOT MYMPD_STRIP_BINARY)
+    message("Generating binary with debug symbols")
+    add_compile_options("-g")
+  endif()
+  # IPO/LTO support
+  check_ipo_supported()
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  add_compile_options(
+    "-ggdb"
+    "-Og"
+  )
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
+else()
+  # if CMAKE_BUILD_TYPE is neither Release nor Debug,
+  # do not alter compile options
+endif()
+
+# linker flags
+if(MYMPD_ENABLE_LIBASAN)
+  add_link_options(${LIBASAN_FLAGS})
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  add_link_options(
+    "-pie"
+    "-Wl,-z,relro,-z,now,--gc-sections,--as-needed"
+  )
+  if(MYMPD_STRIP_BINARY)
+    message("Generating stripped binary")
+    add_link_options("-s")
+  endif()
+else()
+  # if CMAKE_BUILD_TYPE is neither Release nor Debug,
+  # do not alter link options
+endif()
+
+# distributed libraries
+add_subdirectory("dist")
+
+# the main mympd target
+add_subdirectory("src")
+
+# command line utilities
+add_subdirectory("cli_tools")
+
+# link all together
+target_link_libraries(mympd
+  libmympdclient
+  mjson
+  mongoose
+  rax
+  sds
+  tinymt
+  ${CMAKE_THREAD_LIBS_INIT}
+  ${MATH_LIB}
+  ${PCRE2_LIBRARIES}
 )
 
-#relax some compiler settings for dist sources
-#compiler flags for mongoose
-#-Wno-stringop-overflow: gcc 11.2.0 bug
-#-Wno-stringop-overread: gcc 12.0.1 bug
-set_property(SOURCE dist/mongoose/mongoose.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-conversion \
-  -Wno-stringop-overflow")
-#compiler flags for mjson
-set_property(SOURCE dist/mjson/mjson.c PROPERTY COMPILE_FLAGS "-Wno-conversion")
-#compiler flags for rax
-#-Wno-use-after-free: gcc 12.0.1 error
-set_property(SOURCE dist/rax/rax.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-conversion \
-  -Wno-shadow -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers -Wno-use-after-free")
-#compiler flags for sds
-#-Wno-stringop-overflow: gcc 11.2.0 bug
-set_property(SOURCE dist/sds/sds.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-stringop-overflow -Wno-conversion")
-#compiler flags for libmpdclient
-set_property(SOURCE ${LIBMPDCLIENT_SOURCES} PROPERTY COMPILE_FLAGS "-Wno-conversion")
-
-#compile the executeable
-add_executable(mympd ${MYMPD_SOURCES} ${LIBMPDCLIENT_SOURCES} ${CERT_SOURCES})
-
-#link required dependencies
-target_link_libraries(mympd ${CMAKE_THREAD_LIBS_INIT})
-target_link_libraries(mympd ${MATH_LIB})
-target_link_libraries(mympd ${PCRE2_LIBRARIES})
-#link optional dependencies
+# link optional dependencies
 if(OPENSSL_FOUND)
   target_link_libraries(mympd ${OPENSSL_LIBRARIES})
 endif()
@@ -426,9 +393,6 @@ if(LUA_FOUND)
   target_link_libraries(mympd ${LUA_LIBRARIES})
 endif()
 
-#install
+# install
 install(TARGETS mympd DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/cmake/CopyConfig.cmake)
-
-#sub projects
-add_subdirectory("cli_tools")

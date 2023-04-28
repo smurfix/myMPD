@@ -1,8 +1,14 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
+/** @module partitions_js */
+
+/**
+ * Initialization function for the partition elements
+ * @returns {void}
+ */
 function initPartitions() {
     document.getElementById('listPartitionsList').addEventListener('click', function(event) {
         event.stopPropagation();
@@ -10,13 +16,16 @@ function initPartitions() {
         if (event.target.nodeName === 'A') {
             const action = getData(event.target, 'action');
             const partition = getData(event.target.parentNode.parentNode, 'partition');
-            if (action === 'delete') {
-                deletePartition(event.target, partition);
+            switch(action) {
+                case 'delete':
+                    deletePartition(event.target, partition);
+                    break;
             }
+            return;
         }
-        else if (event.target.nodeName === 'TD') {
-            const partition = getData(event.target.parentNode, 'partition');
-            switchPartition(partition);
+        const target = getParent(event.target, 'TR');
+        if (checkTargetClick(target) === true) {
+            switchPartition(getData(target, 'partition'));
         }
     }, false);
 
@@ -24,7 +33,11 @@ function initPartitions() {
         event.stopPropagation();
         event.preventDefault();
         if (event.target.nodeName === 'BUTTON') {
-            toggleBtnChk(event.target);
+            toggleBtnChk(event.target, undefined);
+        }
+        else if (event.target.nodeName === 'TD') {
+            const target = event.target.parentNode.firstChild.firstChild;
+            toggleBtnChk(target, undefined);
         }
     }, false);
 
@@ -33,25 +46,27 @@ function initPartitions() {
     });
 
     document.getElementById('modalPartitionOutputs').addEventListener('shown.bs.modal', function () {
-        sendAPI("MYMPD_API_PLAYER_OUTPUT_LIST", {
-            "partition": "default"
-        }, function(obj) {
+        //get all outputs
+        sendAPIpartition("default", "MYMPD_API_PLAYER_OUTPUT_LIST", {}, function(obj) {
             const outputList = document.getElementById('partitionOutputsList');
             if (checkResult(obj, outputList) === false) {
                 return;
             }
             allOutputs = obj.result.data;
-            sendAPI("MYMPD_API_PLAYER_OUTPUT_LIST", {
-                "partition": settings.partition
-            }, parsePartitionOutputsList, true);
+            //get partition specific outputs
+            sendAPI("MYMPD_API_PLAYER_OUTPUT_LIST", {}, parsePartitionOutputsList, true);
         }, true);
     });
 }
 
+/**
+ * Moves the selected outputs to the current partition
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function moveOutputs() {
     const outputs = [];
-    const selection = document.getElementById('partitionOutputsList').getElementsByClassName('active');
+    const selection = document.querySelectorAll('#partitionOutputsList .active');
     if (selection.length === 0) {
         return;
     }
@@ -63,6 +78,11 @@ function moveOutputs() {
     }, moveOutputsCheckError, true);
 }
 
+/**
+ * Handler for the MYMPD_API_PARTITION_OUTPUT_MOVE jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function moveOutputsCheckError(obj) {
     if (obj.error) {
         showModalAlert(obj);
@@ -73,6 +93,11 @@ function moveOutputsCheckError(obj) {
     }
 }
 
+/**
+ * Parses the MYMPD_API_PLAYER_OUTPUT_LIST jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function parsePartitionOutputsList(obj) {
     const outputList = document.getElementById('partitionOutputsList');
     if (checkResult(obj, outputList) === false) {
@@ -80,6 +105,7 @@ function parsePartitionOutputsList(obj) {
     }
 
     elClear(outputList);
+    /** @type {object} */
     const curOutputs = [];
     for (let i = 0; i < obj.result.numOutputs; i++) {
         if (obj.result.data[i].plugin !== 'dummy') {
@@ -108,13 +134,17 @@ function parsePartitionOutputsList(obj) {
     }
 }
 
+/**
+ * Creates a new partition
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function savePartition() {
     cleanupModalId('modalPartitions');
     let formOK = true;
 
     const nameEl = document.getElementById('inputPartitionName');
-    if (!validatePlnameEl(nameEl)) {
+    if (!validatePlistEl(nameEl)) {
         formOK = false;
     }
 
@@ -125,6 +155,11 @@ function savePartition() {
     }
 }
 
+/**
+ * Handler for the MYMPD_API_PARTITION_NEW jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function savePartitionCheckError(obj) {
     if (obj.error) {
         showModalAlert(obj);
@@ -134,16 +169,10 @@ function savePartitionCheckError(obj) {
     }
 }
 
-function switchPartitionCheckError(obj) {
-    if (obj.error) {
-        showModalAlert(obj);
-    }
-    else {
-        BSN.Modal.getInstance(document.getElementById('modalPartitions')).hide();
-        showNotification(tn('Partition switched'), '', 'general', 'info');
-    }
-}
-
+/**
+ * Shows the new partition tab
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function showNewPartition() {
     cleanupModalId('modalPartitions');
@@ -156,6 +185,10 @@ function showNewPartition() {
     setFocus(nameEl);
 }
 
+/**
+ * Shows the list partition tab
+ * @returns {void}
+ */
 function showListPartitions() {
     cleanupModalId('modalPartitions');
     document.getElementById('listPartitions').classList.add('active');
@@ -165,23 +198,58 @@ function showListPartitions() {
     sendAPI("MYMPD_API_PARTITION_LIST", {}, parsePartitionList, true);
 }
 
+/**
+ * Deletes a partition
+ * @param {EventTarget} el triggering element
+ * @param {string} partition partition name to delete
+ * @returns {void}
+ */
 function deletePartition(el, partition) {
     showConfirmInline(el.parentNode.previousSibling, tn('Do you really want to delete the partition?', {"partition": partition}), tn('Yes, delete it'), function() {
-        sendAPI("MYMPD_API_PARTITION_RM", {
+        sendAPIpartition("default", "MYMPD_API_PARTITION_RM", {
             "name": partition
         }, savePartitionCheckError, true);
     });  
 }
 
+/**
+ * Switches the current browser session to a partition
+ * @param {string} partition partition name to switch to
+ * @returns {void}
+ */
 function switchPartition(partition) {
-    sendAPI("MYMPD_API_PARTITION_SWITCH", {
-        "name": partition
-    }, function(obj) {
-        switchPartitionCheckError(obj);
-        sendAPI("MYMPD_API_PLAYER_STATE", {}, parseState);
-    }, true);
+    //save localSettings in browsers localStorage
+    localSettings.partition = partition;
+    try {
+        localStorage.setItem('partition', partition);
+    }
+    catch(err) {
+        const obj = {
+            "error": {
+                "message": "Can not save settings to localStorage: %{error}",
+                "data": {
+                    "error": err.message
+                }
+            }
+        };
+        showModalAlert(obj);
+        return;
+    }
+    //reconnect websocket to new ws endpoint
+    setTimeout(function() {
+        webSocketClose();
+        webSocketConnect();
+    }, 0);
+    getSettings();
+    BSN.Modal.getInstance(document.getElementById('modalPartitions')).hide();
+    showNotification(tn('Partition switched'), '', 'general', 'info');
 }
 
+/**
+ * Parses the MYMPD_API_PARTITION_LIST jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function parsePartitionList(obj) {
     const partitionList = document.getElementById('listPartitionsList');
     if (checkResult(obj, partitionList) === false) {
@@ -193,28 +261,31 @@ function parsePartitionList(obj) {
     for (let i = 0, j = obj.result.data.length; i < j; i++) {
         const tr = elCreateEmpty('tr', {});
         setData(tr, 'partition', obj.result.data[i].name);
-        if (obj.result.data[i].name !== settings.partition) {
+        if (obj.result.data[i].name !== localSettings.partition) {
             tr.setAttribute('title', tn('Switch to'));
         }
         else {
             tr.classList.add('not-clickable');
             tr.setAttribute('title', tn('Active partition'));
         }
+        const tdColor = elCreateText('span', {"class": ["mi", "me-2"]}, 'dashboard');
+        tdColor.style.color = obj.result.data[i].highlightColor;
         const td = elCreateEmpty('td', {});
-        if (obj.result.data[i].name === settings.partition) {
+        td.appendChild(tdColor);
+        if (obj.result.data[i].name === localSettings.partition) {
             td.classList.add('fw-bold');
-            td.textContent = obj.result.data[i].name + ' (' + tn('current') + ')';
+            td.appendChild(document.createTextNode(obj.result.data[i].name + ' (' + tn('current') + ')'));
         }
         else {
-            td.textContent = obj.result.data[i].name;
+            td.appendChild(document.createTextNode(obj.result.data[i].name));
         }
         tr.appendChild(td);
         const partitionActionTd = elCreateEmpty('td', {"data-col": "Action"});
         if (obj.result.data[i].name !== 'default' &&
-            obj.result.data[i].name !== settings.partition)
+            obj.result.data[i].name !== localSettings.partition)
         {
             partitionActionTd.appendChild(
-                elCreateText('a', {"href": "#", "title": tn('Delete'), "data-action": "delete", "class": ["mi", "color-darkgrey", "me-2"]}, 'delete')
+                elCreateText('a', {"href": "#", "data-title-phrase": "Delete", "data-action": "delete", "class": ["mi", "color-darkgrey", "me-2"]}, 'delete')
             );
         }
         tr.appendChild(partitionActionTd);

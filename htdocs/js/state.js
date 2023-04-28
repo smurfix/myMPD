@@ -1,8 +1,14 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
+/** @module state_js */
+
+/**
+ * Clears the mpd error
+ * @returns {void}
+ */
 function clearMPDerror() {
     sendAPI('MYMPD_API_PLAYER_CLEARERROR',{}, function() {
         sendAPI('MYMPD_API_PLAYER_STATE', {}, function(obj) {
@@ -11,16 +17,22 @@ function clearMPDerror() {
     }, false);
 }
 
+/**
+ * Parses the MYMPD_API_STATS jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function parseStats(obj) {
     document.getElementById('mpdstatsArtists').textContent = obj.result.artists;
     document.getElementById('mpdstatsAlbums').textContent = obj.result.albums;
     document.getElementById('mpdstatsSongs').textContent = obj.result.songs;
-    document.getElementById('mpdstatsDbPlaytime').textContent = beautifyDuration(obj.result.dbPlaytime);
-    document.getElementById('mpdstatsPlaytime').textContent = beautifyDuration(obj.result.playtime);
-    document.getElementById('mpdstatsUptime').textContent = beautifyDuration(obj.result.uptime);
-    document.getElementById('mpdstatsMympd_uptime').textContent = beautifyDuration(obj.result.myMPDuptime);
-    document.getElementById('mpdstatsDbUpdated').textContent = localeDate(obj.result.dbUpdated);
+    document.getElementById('mpdstatsDbPlaytime').textContent = fmtDuration(obj.result.dbPlaytime);
+    document.getElementById('mpdstatsPlaytime').textContent = fmtDuration(obj.result.playtime);
+    document.getElementById('mpdstatsUptime').textContent = fmtDuration(obj.result.uptime);
+    document.getElementById('mpdstatsMympd_uptime').textContent = fmtDuration(obj.result.myMPDuptime);
+    document.getElementById('mpdstatsDbUpdated').textContent = fmtDate(obj.result.dbUpdated);
     document.getElementById('mympdVersion').textContent = obj.result.mympdVersion;
+    document.getElementById('myMPDuri').textContent = obj.result.myMPDuri;
 
     const mpdInfoVersionEl = document.getElementById('mpdInfoVersion');
     elClear(mpdInfoVersionEl);
@@ -33,40 +45,40 @@ function parseStats(obj) {
        )
     {
         mpdInfoVersionEl.appendChild(
-            elCreateText('div', {"class": ["alert", "alert-warning", "mt-2", "mb-1"], "data-phrase": 'MPD version is outdated'}, tn('MPD version is outdated'))
+            elCreateTextTn('div', {"class": ["alert", "alert-warning", "mt-2", "mb-1"]}, 'MPD version is outdated')
         );
     }
 }
 
+/**
+ * Gets the serverinfo (ip address)
+ * @returns {void}
+ */
 function getServerinfo() {
-    httpGet(subdir + '/api/serverinfo', function(obj) {
+    httpGet(subdir + '/serverinfo', function(obj) {
         document.getElementById('wsIP').textContent = obj.result.ip;
     }, true);
 }
 
+/**
+ * Creates the elapsed / duration counter text
+ * @returns {string} song counter text
+ */
 function getCounterText() {
-    return beautifySongDuration(currentState.elapsedTime) + smallSpace +
-        '/' + smallSpace + beautifySongDuration(currentState.totalTime);
+    return fmtSongDuration(currentState.elapsedTime) + smallSpace +
+        '/' + smallSpace + fmtSongDuration(currentState.totalTime);
 }
 
+/**
+ * Sets the song counters
+ * @returns {void}
+ */
 function setCounter() {
     //progressbar in footer
-    const progressPx = currentState.totalTime > 0 ?
-        Math.ceil(domCache.progress.offsetWidth * currentState.elapsedTime / currentState.totalTime) : 0;
-    if (progressPx < domCache.progressBar.offsetWidth - 50 ||
-        progressPx > domCache.progressBar.offsetWidth + 50)
-    {
-        //prevent transition if change is to big
-        domCache.progressBar.style.transition = 'none';
-        elReflow(domCache.progressBar);
-        domCache.progressBar.style.width = progressPx + 'px';
-        elReflow(domCache.progressBar);
-        domCache.progressBar.style.transition = progressBarTransition;
-        elReflow(domCache.progressBar);
-    }
-    else {
-        domCache.progressBar.style.width = progressPx + 'px';
-    }
+    //calc percent with two decimals after comma
+    const prct = currentState.totalTime > 0 ?
+        Math.ceil((100 / currentState.totalTime) * currentState.elapsedTime * 100) / 100 : 0;
+    domCache.progressBar.style.width = `${prct}vw`;
     domCache.progress.style.cursor = currentState.totalTime <= 0 ? 'default' : 'pointer';
 
     //counter
@@ -74,7 +86,7 @@ function setCounter() {
     //counter in footer
     domCache.counter.textContent = counterText;
     //update queue card
-    const playingRow = document.getElementById('queueTrackId' + currentState.currentSongId);
+    const playingRow = document.getElementById('queueSongId' + currentState.currentSongId);
     if (playingRow !== null) {
         //progressbar and counter in queue card
         setQueueCounter(playingRow, counterText);
@@ -86,7 +98,7 @@ function setCounter() {
     {
         const sl = document.getElementById('currentLyrics');
         const toHighlight = sl.querySelector('[data-sec="' + currentState.elapsedTime + '"]');
-        const highlighted = sl.getElementsByClassName('highlight')[0];
+        const highlighted = sl.querySelector('.highlight');
         if (highlighted !== toHighlight &&
             toHighlight !== null)
         {
@@ -94,7 +106,7 @@ function setCounter() {
             if (scrollSyncedLyrics === true) {
                 toHighlight.scrollIntoView({behavior: "smooth"});
             }
-            if (highlighted !== undefined) {
+            if (highlighted !== null) {
                 highlighted.classList.remove('highlight');
             }
         }
@@ -111,29 +123,28 @@ function setCounter() {
     }
 }
 
+/**
+ * Parses the MYMPD_API_PLAYER_STATE jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function parseState(obj) {
     if (obj.result === undefined) {
         logError('State is undefined');
         return;
     }
-    //Get current song if songid has changed
-    //Get current song if queueVersion has changed - updates stream titles
+    //Get current song if songid or queueVersion has changed
     if (currentState.currentSongId !== obj.result.currentSongId ||
         currentState.queueVersion !== obj.result.queueVersion)
     {
-        sendAPI("MYMPD_API_PLAYER_CURRENT_SONG", {}, parseCurrentSong);
+        sendAPI("MYMPD_API_PLAYER_CURRENT_SONG", {}, parseCurrentSong, false);
     }
     //save state
     currentState = obj.result;
     //Set playback buttons
     if (obj.result.state === 'stop') {
         document.getElementById('btnPlay').textContent = 'play_arrow';
-        domCache.progressBar.style.transition = 'none';
-        elReflow(domCache.progressBar);
         domCache.progressBar.style.width = '0';
-        elReflow(domCache.progressBar);
-        domCache.progressBar.style.transition = progressBarTransition;
-        elReflow(domCache.progressBar);
     }
     else if (obj.result.state === 'play') {
         document.getElementById('btnPlay').textContent =
@@ -155,7 +166,7 @@ function parseState(obj) {
     }
 
     if (obj.result.nextSongPos === -1 &&
-        settings.jukeboxMode === 'off')
+        settings.partition.jukeboxMode === 'off')
     {
         elDisableId('btnNext');
     }
@@ -193,7 +204,7 @@ function parseState(obj) {
         document.getElementById('footerCover').classList.remove('clickable');
         document.getElementById('currentTitle').classList.remove('clickable');
         clearCurrentCover();
-        const pb = document.getElementById('cardPlaybackTags').getElementsByTagName('p');
+        const pb = document.querySelectorAll('#cardPlaybackTags p');
         for (let i = 0, j = pb.length; i < j; i++) {
             elClear(pb[i]);
         }
@@ -201,40 +212,45 @@ function parseState(obj) {
     else {
         const cff = document.getElementById('currentAudioFormat');
         if (cff) {
-            elClear(cff.getElementsByTagName('p')[0]);
-            cff.getElementsByTagName('p')[0].appendChild(printValue('AudioFormat', obj.result.AudioFormat));
+            elReplaceChild(
+                cff.querySelector('p'),
+                printValue('AudioFormat', obj.result.AudioFormat)
+            );
         }
     }
 
     //handle error from mpd status response
-    if (obj.result.lastError === '') {
-        toggleAlert('alertMpdStatusError', false, '');
-    }
-    else {
-        toggleAlert('alertMpdStatusError', true, obj.result.lastError);
-    }
-    toggleTopAlert();
+    toggleAlert('alertMpdStatusError', (obj.result.lastError === '' ? false : true), obj.result.lastError);
 
-    //check if we need to get settings
-    let getNewSettings = false;
-    if (settings.partition !== obj.result.partition) {
-        //partition has changed, fetch new settings
-        getNewSettings = true;
-    }
-    //refresh settings if mpd is not connected or ui is disabled
-    //ui is disabled at startup
-    if (settings.mpdConnected === false ||
-        uiEnabled === false)
+    //handle mpd update status
+    toggleAlert('alertUpdateDBState', (obj.result.updateState === 0 ? false : true), tn('Updating MPD database'));
+    
+    //handle myMPD cache update status
+    toggleAlert('alertUpdateCacheState', obj.result.updateCacheState, tn('Updating caches'));
+
+    //check if we need to refresh the settings
+    if (localSettings.partition !== obj.result.partition || /* partition has changed */
+        settings.partition.mpdConnected === false ||        /* mpd is not connected */
+        uiEnabled === false)                                /* ui is disabled at startup */
     {
-        logDebug((settings.mpdConnected === false ? 'MPD disconnected' : 'UI disabled') + ' - refreshing settings');
-        getNewSettings = true;
-    }
-
-    if (getNewSettings === true) {
-        getSettings(true);
+        if (document.getElementById('modalSettings').classList.contains('show') ||
+            document.getElementById('modalConnection').classList.contains('show') ||
+            document.getElementById('modalQueueSettings').classList.contains('show'))
+        {
+            //do not refresh settings, if a settings modal is open
+            return;
+        }
+        logDebug('Refreshing settings');
+        getSettings();
     }
 }
 
+/**
+ * Sets the background image
+ * @param {HTMLElement} el element for the background image
+ * @param {string} url background image url
+ * @returns {void}
+ */
 function setBackgroundImage(el, url) {
     if (url === undefined) {
         clearBackgroundImage(el);
@@ -287,6 +303,11 @@ function setBackgroundImage(el, url) {
     img.src = bgImageUrl;
 }
 
+/**
+ * Clears the background image
+ * @param {HTMLElement} el element for the background image
+ * @returns {void}
+ */
 function clearBackgroundImage(el) {
     const old = el.parentNode.querySelectorAll(el.tagName + '> div.albumartbg');
     for (let i = 0, j = old.length; i < j; i++) {
@@ -300,6 +321,11 @@ function clearBackgroundImage(el) {
     }
 }
 
+/**
+ * Sets the current cover in playback view and footer
+ * @param {string} url song uri
+ * @returns {void}
+ */
 function setCurrentCover(url) {
     setBackgroundImage(document.getElementById('currentCover'), url);
     setBackgroundImage(document.getElementById('footerCover'), url);
@@ -308,6 +334,10 @@ function setCurrentCover(url) {
     }
 }
 
+/**
+ * Clears the current cover in playback view and footer
+ * @returns {void}
+ */
 function clearCurrentCover() {
     clearBackgroundImage(document.getElementById('currentCover'));
     clearBackgroundImage(document.getElementById('footerCover'));
@@ -316,267 +346,14 @@ function clearCurrentCover() {
     }
 }
 
-function parseCurrentSong(obj) {
-    const list = document.getElementById('PlaybackList');
-    list.classList.remove('opacity05');
-    setScrollViewHeight(list);
-
-    //check for song change
-    //use title to detect stream changes
-    const newSong = obj.result.uri + ':' + obj.result.Title + ':' + obj.result.currentSongId;
-    if (currentSong === newSong) {
-        return;
-    }
-    let textNotification = '';
-    let pageTitle = '';
-
-    mediaSessionSetMetadata(obj.result.Title, joinArray(obj.result.Artist), obj.result.Album, obj.result.uri);
-
-    setCurrentCover(obj.result.uri);
-
-    for (const elName of ['footerArtist', 'footerAlbum', 'footerCover', 'currentTitle']) {
-        document.getElementById(elName).classList.remove('clickable');
-    }
-
-    const footerArtistEl = document.getElementById('footerArtist');
-    if (obj.result.Artist !== undefined &&
-        obj.result.Artist[0] !== '-')
-    {
-        textNotification += joinArray(obj.result.Artist);
-        pageTitle += obj.result.Artist.join(', ') + smallSpace + nDash + smallSpace;
-        footerArtistEl.textContent = obj.result.Artist;
-        setData(footerArtistEl, 'name', obj.result.Artist);
-        if (features.featAdvsearch === true) {
-            footerArtistEl.classList.add('clickable');
-        }
-    }
-    else {
-        footerArtistEl.textContent = '';
-        setData(footerArtistEl, 'name', ['']);
-    }
-
-    const footerAlbumEl = document.getElementById('footerAlbum');
-    if (obj.result.Album !== undefined &&
-        obj.result.Album !== '-')
-    {
-        textNotification += ' - ' + obj.result.Album;
-        footerAlbumEl.textContent = obj.result.Album;
-        setData(footerAlbumEl, 'name', obj.result.Album);
-        setData(footerAlbumEl, 'AlbumArtist', obj.result[tagAlbumArtist]);
-        if (features.featAdvsearch === true) {
-            footerAlbumEl.classList.add('clickable');
-        }
-    }
-    else {
-        footerAlbumEl.textContent = '';
-        setData(footerAlbumEl, 'name', '');
-        setData(footerAlbumEl, 'AlbumArtist', ['']);
-    }
-
-    const footerTitleEl = document.getElementById('footerTitle');
-    const footerCoverEl = document.getElementById('footerCover');
-    const currentTitleEl = document.getElementById('currentTitle');
-    if (obj.result.Title !== undefined &&
-        obj.result.Title !== '-')
-    {
-        pageTitle += obj.result.Title;
-        currentTitleEl.textContent = obj.result.Title;
-        setData(currentTitleEl, 'uri', obj.result.uri);
-        footerTitleEl.textContent = obj.result.Title;
-        footerCoverEl.classList.add('clickable');
-    }
-    else {
-        document.getElementById('currentTitle').textContent = '';
-        setData(currentTitleEl, 'uri', '');
-        footerTitleEl.textContent = '';
-        currentTitleEl.classList.remove('clickable');
-        footerTitleEl.classList.remove('clickable');
-        footerCoverEl.classList.remove('clickable');
-    }
-    document.title = 'myMPD: ' + pageTitle;
-    footerCoverEl.title = pageTitle;
-
-    if (isValidUri(obj.result.uri) === true &&
-        isStreamUri(obj.result.uri) === false)
-    {
-        footerTitleEl.classList.add('clickable');
-        currentTitleEl.classList.add('clickable');
-    }
-    else {
-        footerTitleEl.classList.remove('clickable');
-        currentTitleEl.classList.remove('clickable');
-    }
-
-    if (obj.result.uri !== undefined) {
-        obj.result['Filetype'] = filetype(obj.result.uri);
-        elEnableId('addCurrentSongToPlaylist');
-    }
-    else {
-        obj.result['Filetype'] = '';
-        elDisableId('addCurrentSongToPlaylist');
-    }
-
-    if (features.featStickers === true) {
-        setVoteSongBtns(obj.result.stickerLike, obj.result.uri);
-    }
-
-    setPlaybackCardTags(obj.result);
-
-    const bookletEl = document.getElementById('currentBooklet');
-    elClear(bookletEl);
-    if (obj.result.bookletPath !== '' &&
-        obj.result.bookletPath !== undefined &&
-        features.featLibrary === true)
-    {
-        bookletEl.appendChild(elCreateText('span', {"class": ["mi", "me-2"]}, 'description'));
-        bookletEl.appendChild(elCreateText('a', {"target": "_blank", "href": myEncodeURI(subdir + obj.result.bookletPath)},
-            tn('Download booklet')));
-    }
-
-    //update queue card
-    queueSetCurrentSong();
-
-    //update title in queue view for http streams
-    const playingTr = document.getElementById('queueTrackId' + obj.result.currentSongId);
-    if (playingTr !== null) {
-        const titleCol = playingTr.querySelector('[data-col=Title');
-        if (titleCol) {
-            titleCol.textContent = obj.result.Title;
-        }
-    }
-
-    if (currentState.state === 'play') {
-        showNotification(obj.result.Title, textNotification, 'player', 'info');
-    }
-
-    //remember current song
-    currentSong = newSong;
-    currentSongObj = obj.result;
-}
-
-function setPlaybackCardTags(songObj) {
-    if (songObj.webradio === undefined) {
-        for (const col of settings.colsPlayback) {
-            elHideId('cardPlaybackWebradio');
-            elShowId('cardPlaybackTags');
-            const c = document.getElementById('current' + col);
-            if (c === null) {
-                continue;
-            }
-            switch(col) {
-                case 'Lyrics':
-                    getLyrics(songObj.uri, c.getElementsByTagName('p')[0]);
-                    break;
-                case 'AudioFormat':
-                    //songObj has no audioformat definition - use current state
-                    elReplaceChild(c.getElementsByTagName('p')[0], printValue('AudioFormat', currentState.AudioFormat));
-                    break;
-                default: {
-                    let value = songObj[col];
-                    if (value === undefined) {
-                        value = '-';
-                    }
-                    elReplaceChild(c.getElementsByTagName('p')[0], printValue(col, value));
-                    if ((typeof value === 'string' && value === '-') ||
-                        (typeof value === 'object' && value[0] === '-') ||
-                        settings.tagListBrowse.includes(col) === false)
-                    {
-                        c.getElementsByTagName('p')[0].classList.remove('clickable');
-                    }
-                    else {
-                        c.getElementsByTagName('p')[0].classList.add('clickable');
-                    }
-                    setData(c, 'name', value);
-                    if (col === 'Album' &&
-                        songObj[tagAlbumArtist] !== undefined)
-                    {
-                        setData(c, 'AlbumArtist', songObj[tagAlbumArtist]);
-                    }
-                }
-            }
-        }
-    }
-    else {
-        //webradio info
-        const cardPlaybackWebradio = document.getElementById('cardPlaybackWebradio');
-        elShow(cardPlaybackWebradio);
-        elHideId('cardPlaybackTags');
-
-        const webradioName = elCreateText('p', {"href": "#", "class": ["clickable"]}, songObj.webradio.Name);
-        setData(webradioName, 'href', {"cmd": "editRadioFavorite", "options": [songObj.webradio.filename]});
-        webradioName.addEventListener('click', function(event) {
-            parseCmd(event, getData(event.target, 'href'));
-        }, false);
-        elReplaceChild(cardPlaybackWebradio,
-            elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                elCreateText('small', {}, tn('Webradio')),
-                webradioName
-            ])
-        );
-        cardPlaybackWebradio.appendChild(
-            elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                elCreateText('small', {}, tn('Genre')),
-                elCreateText('p', {}, songObj.webradio.Genre)
-            ])
-        );
-        cardPlaybackWebradio.appendChild(
-            elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                elCreateText('small', {}, tn('Country')),
-                elCreateText('p', {}, songObj.webradio.Country + smallSpace + nDash + smallSpace + songObj.webradio.Language)
-            ])
-        );
-        if (songObj.webradio.Homepage !== '') {
-            cardPlaybackWebradio.appendChild(
-                elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                    elCreateText('small', {}, tn('Homepage')),
-                    elCreateNode('p', {}, 
-                        elCreateText('a', {"class": ["text-success", "external"],
-                            "href": myEncodeURIhost(songObj.webradio.Homepage),
-                            "rel": "noreferrer",
-                            "target": "_blank"}, songObj.webradio.Homepage)
-                    )
-                ])
-            );
-        }
-        if (songObj.webradio.Codec !== '' &&
-            songObj.webradio.Codec !== undefined)
-        {
-            cardPlaybackWebradio.appendChild(
-                elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                    elCreateText('small', {}, tn('Format')),
-                    elCreateText('p', {}, songObj.webradio.Codec + 
-                        (songObj.webradio.Bitrate !== '' ? ' / ' + songObj.webradio.Bitrate + ' ' + tn('kbit') : ''))
-                ])
-            );
-        }
-        if (songObj.webradio.Description !== '') {
-            cardPlaybackWebradio.appendChild(
-                elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                    elCreateText('small', {}, tn('Description')),
-                    elCreateText('p', {}, songObj.webradio.Description)
-                ])
-            );
-        }
-    }
-}
-
-//eslint-disable-next-line no-unused-vars
-function gotoTagList() {
-    appGoto(app.current.card, app.current.tab, app.current.view, 0, undefined, '-', '-', '-', '');
-}
-
-//eslint-disable-next-line no-unused-vars
-function clickTitle() {
-    const uri = getDataId('currentTitle', 'uri');
-    if (isValidUri(uri) === true &&
-        isStreamUri(uri) === false)
-    {
-        songDetails(uri);
-    }
-}
-
+/**
+ * Sets the elapsed time for the media session api
+ * @param {number} duration song duration
+ * @param {number} position elapsed time
+ * @returns {void}
+ */
 function mediaSessionSetPositionState(duration, position) {
-    if (checkMediaSessionSupport() === false ||
+    if (features.featMediaSession === false ||
         navigator.mediaSession.setPositionState === undefined)
     {
         return;
@@ -590,8 +367,12 @@ function mediaSessionSetPositionState(duration, position) {
     }
 }
 
+/**
+ * Sets the state for the media session api
+ * @returns {void}
+ */
 function mediaSessionSetState() {
-    if (checkMediaSessionSupport() === false) {
+    if (features.featMediaSession === false) {
         return;
     }
     const state = currentState.state === 'play' ? 'playing' : 'paused';
@@ -599,15 +380,23 @@ function mediaSessionSetState() {
     navigator.mediaSession.playbackState = state;
 }
 
+/**
+ * Sets metadata for the media session api
+ * @param {string} title song title
+ * @param {object} artist array of artists
+ * @param {string} album album name
+ * @param {string} url song uri
+ * @returns {void}
+ */
 function mediaSessionSetMetadata(title, artist, album, url) {
-    if (checkMediaSessionSupport() === false) {
+    if (features.featMediaSession === false) {
         return;
     }
     const artwork = window.location.protocol + '//' + window.location.hostname +
         (window.location.port !== '' ? ':' + window.location.port : '') + subdir + '/albumart-thumb?offset=0&uri=' + myEncodeURIComponent(url);
     navigator.mediaSession.metadata = new MediaMetadata({
         title: title,
-        artist: artist,
+        artist: joinArray(artist),
         album: album,
         artwork: [{src: artwork}]
     });

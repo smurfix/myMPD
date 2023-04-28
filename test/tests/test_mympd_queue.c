@@ -1,15 +1,15 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
 
-#include "../../dist/utest/utest.h"
-#include "../../src/lib/api.h"
-#include "../../src/lib/mympd_queue.h"
-#include "../../src/lib/sds_extras.h"
+#include "dist/utest/utest.h"
+#include "src/lib/api.h"
+#include "src/lib/msg_queue.h"
+#include "src/lib/sds_extras.h"
 
 UTEST(mympd_queue, push_shift) {
     struct t_mympd_queue *test_queue = mympd_queue_create("test", QUEUE_TYPE_REQUEST);
@@ -80,7 +80,7 @@ UTEST(mympd_queue, push_shift_id) {
 UTEST(mympd_queue, expire) {
     struct t_mympd_queue *test_queue = mympd_queue_create("test", QUEUE_TYPE_REQUEST);
     for (int i = 0; i < 50; i++) {
-        struct t_work_request *request = create_request(0, 0, MYMPD_API_COLS_SAVE, "test");
+        struct t_work_request *request = create_request(0, 0, MYMPD_API_COLS_SAVE, "test", MPD_PARTITION_DEFAULT);
         request->extra = malloc(10);
         mympd_queue_push(test_queue, request, 10);
     }

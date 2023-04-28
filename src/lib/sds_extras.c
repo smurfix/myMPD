@@ -1,21 +1,16 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
-#include "sds_extras.h"
+#include "compile_time.h"
+#include "src/lib/sds_extras.h"
 
-#include "../../dist/mongoose/mongoose.h"
-#include "../../dist/utf8/utf8.h"
-#include "log.h"
+#include "dist/mongoose/mongoose.h"
+#include "dist/utf8/utf8.h"
 
-#include <ctype.h>
-#include <inttypes.h>
-#include <string.h>
-
-#define HEXTOI(x) (x >= '0' && x <= '9' ? x - '0' : x - 'W')
+#define HEXTOI(x) ((x) >= '0' && (x) <= '9' ? (x) - '0' : (x) - 'W')
 
 /**
  * Splits a comma separated string and trims whitespaces from single values
@@ -52,7 +47,7 @@ sds sds_hash(const char *p) {
 
 /**
  * Reads the integer from start of the string, the integer is removed from string
- * @param s sds string
+ * @param s sds string to modify in place
  * @return the number at the beginning of the sds string
  */
 int sds_toimax(sds s) {
@@ -69,7 +64,7 @@ int sds_toimax(sds s) {
 
 /**
  * Makes the string lower case (utf8 aware)
- * @params s sds string
+ * @param s sds string to modify in place
  */
 void sds_utf8_tolower(sds s) {
     utf8_int32_t cp;
@@ -184,7 +179,7 @@ sds sds_catchar(sds s, const char c) {
  * "dst" must be a pointer to a allocated sds string.
  * @param src string to unescape
  * @param slen string length to unescape
- * @param dst pointer to sds string to append the unsecaped string
+ * @param dst pointer to sds string to append the unescaped string
  * @return true on success, false on error
  */
 bool sds_json_unescape(const char *src, size_t slen, sds *dst) {
@@ -233,7 +228,6 @@ bool sds_json_unescape(const char *src, size_t slen, sds *dst) {
  * @param c char to check
  * @return true if string is url safe else false
  */
-
 static bool is_url_safe(char c) {
     if (isalnum(c) ||
         c == '/' || c == '-' || c == '.' ||

@@ -1,18 +1,16 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
 
 #include "../dist/sds/sds.h"
 #include "log.h"
 
 #include <string.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
 #include <time.h>
 
 int loglevel;
@@ -50,7 +48,7 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
         logline = sdscat(logline, loglevel_colors[level]);
     }
 
-    #ifdef DEBUG
+    #ifdef MYMPD_DEBUG
         logline = sdscatprintf(logline, "%s:%d: ", file, line);
     #else
         (void)file;

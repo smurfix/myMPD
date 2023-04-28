@@ -1,14 +1,14 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
-#include "../utility.h"
+#include "compile_time.h"
+#include "test/utility.h"
 
-#include "../../dist/utest/utest.h"
-#include "../../src/lib/list.h"
+#include "dist/utest/utest.h"
+#include "src/lib/list.h"
 
 static void populate_list(struct t_list *l) {
     list_init(l);

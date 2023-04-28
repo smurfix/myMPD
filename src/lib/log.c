@@ -1,23 +1,26 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
-#include "log.h"
+#include "compile_time.h"
+#include "src/lib/log.h"
 
-#include "sds_extras.h"
+#include "src/lib/sds_extras.h"
 
 #include <pthread.h>
-#include <stdio.h>
 #include <string.h>
 
 //global variables
+_Thread_local sds thread_logname;
 _Atomic int loglevel;
 bool log_to_syslog;
 bool log_on_tty;
 
+/**
+ * Maps loglevels to names
+ */
 static const char *loglevel_names[8] = {
     [LOG_EMERG] = "EMERG",
     [LOG_ALERT] = "ALERT",
@@ -29,6 +32,9 @@ static const char *loglevel_names[8] = {
     [LOG_DEBUG] = "DEBUG"
 };
 
+/**
+ * Maps loglevels to terminal colors
+ */
 static const char *loglevel_colors[8] = {
     [LOG_EMERG] = "\033[0;31m",
     [LOG_ALERT] = "\033[0;31m",
@@ -40,24 +46,48 @@ static const char *loglevel_colors[8] = {
     [LOG_DEBUG] = "\033[0;34m"
 };
 
+/**
+ * Sets the loglevel
+ * @param level loglevel to set
+ */
 void set_loglevel(int level) {
-    if (level > 7) {
+    if (level > LOGLEVEL_MAX) {
         level = 7;
     }
-    else if (level < 0) {
+    else if (level < LOGLEVEL_MIN) {
         level = 0;
     }
     MYMPD_LOG_NOTICE("Setting loglevel to %s", loglevel_names[level]);
     loglevel = level;
 }
 
+/**
+ * Logs the errno string
+ * This function should be called by the suitable macro
+ * @param file filename for debug logging
+ * @param line linenumber for debug logging
+ * @param errnum errno
+ */
 void mympd_log_errno(const char *file, int line, int errnum) {
+    if (errnum == 0) {
+        //do not log success
+        return;
+    }
     char err_text[256];
     int rc = strerror_r(errnum, err_text, 256);
     const char *err_str = rc == 0 ? err_text : "Unknown error";
     mympd_log(LOG_ERR, file, line, "%s", err_str);
 }
 
+/**
+ * Logs the errno string
+ * This function should be called by the suitable macro
+ * @param level loglevel of the message
+ * @param file filename for debug logging
+ * @param line linenumber for debug logging
+ * @param fmt format string to print
+ * @param ... arguments for the format string
+ */
 void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
     if (level > loglevel) {
         return;
@@ -86,7 +116,7 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
         }
     }
     logline = sdscatprintf(logline, "%-8s %-10s", loglevel_names[level], thread_logname);
-    #ifdef DEBUG
+    #ifdef MYMPD_DEBUG
         logline = sdscatfmt(logline, "%s:%i: ", file, line);
     #else
         (void)file;

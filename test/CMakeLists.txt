@@ -1,12 +1,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-# myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+# myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
 # https://github.com/jcorporation/mympd
 #
 
 cmake_minimum_required(VERSION 3.4)
 
-project (test C)
+project(test C)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/../cmake/")
 
@@ -15,7 +15,7 @@ find_library(MATH_LIB m REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(PCRE2 REQUIRED)
 find_package(LIBID3TAG REQUIRED)
-find_package(FLAC)
+find_package(FLAC REQUIRED)
 
 set(TEST_SOURCES
   ../dist/mjson/mjson.c
@@ -26,6 +26,7 @@ set(TEST_SOURCES
   ../src/lib/album_cache.c
   ../src/lib/api.c
   ../src/lib/cert.c
+  ../src/lib/env.c
   ../src/lib/filehandler.c
   ../src/lib/http_client.c
   ../src/lib/jsonrpc.c
@@ -34,7 +35,7 @@ set(TEST_SOURCES
   ../src/lib/lua_mympd_state.c
   ../src/lib/m3u.c
   ../src/lib/mimetype.c
-  ../src/lib/mympd_queue.c
+  ../src/lib/msg_queue.c
   ../src/lib/mympd_state.c
   ../src/lib/random.c
   ../src/lib/sds_extras.c
@@ -42,31 +43,38 @@ set(TEST_SOURCES
   ../src/lib/sticker_cache.c
   ../src/lib/utility.c
   ../src/lib/validate.c
-  ../src/mpd_client/mpd_client_errorhandler.c
-  ../src/mpd_client/mpd_client_search.c
-  ../src/mpd_client/mpd_client_search_local.c
-  ../src/mpd_client/mpd_client_tags.c
-  ../src/mpd_client/mpd_client_jukebox.c
-  ../src/mpd_client/mpd_client_volume.c
-  ../src/mympd_api/mympd_api_extra_media.c
-  ../src/mympd_api/mympd_api_lyrics.c
-  ../src/mympd_api/mympd_api_status.c
-  ../src/mympd_api/mympd_api_sticker.c
-  ../src/mympd_api/mympd_api_timer.c
-  ../src/mympd_api/mympd_api_timer_handlers.c
-  ../src/mympd_api/mympd_api_queue.c
-  ../src/mympd_api/mympd_api_webradios.c
+  ../src/mpd_client/errorhandler.c
+  ../src/mpd_client/presets.c
+  ../src/mpd_client/search.c
+  ../src/mpd_client/search_local.c
+  ../src/mpd_client/tags.c
+  ../src/mpd_client/jukebox.c
+  ../src/mpd_client/volume.c
+  ../src/mympd_api/extra_media.c
+  ../src/mympd_api/home.c
+  ../src/mympd_api/last_played.c
+  ../src/mympd_api/lyrics.c
+  ../src/mympd_api/status.c
+  ../src/mympd_api/sticker.c
+  ../src/mympd_api/timer.c
+  ../src/mympd_api/timer_handlers.c
+  ../src/mympd_api/trigger.c
+  ../src/mympd_api/queue.c
+  ../src/mympd_api/webradios.c
   main.c
   tests/test_api.c
   tests/test_cert.c
+  tests/test_env.c
+  tests/test_filehandler.c
   tests/test_http_client.c
   tests/test_jsonrpc.c
   tests/test_list.c
   tests/test_lyrics.c
   tests/test_m3u.c
-  tests/test_mpd_client_tags.c
   tests/test_mimetype.c
+  tests/test_mpd_client_tags.c
   tests/test_mympd_queue.c
+  tests/test_radix_sort.c
   tests/test_random.c
   tests/test_sds_extras.c
   tests/test_state_files.c
@@ -76,63 +84,63 @@ set(TEST_SOURCES
 )
 
 set(LIBMPDCLIENT_SOURCES
-  ../dist/libmpdclient/src/albumart.c
-  ../dist/libmpdclient/src/async.c
-  ../dist/libmpdclient/src/audio_format.c
-  ../dist/libmpdclient/src/binary.c
-  ../dist/libmpdclient/src/capabilities.c
-  ../dist/libmpdclient/src/cmessage.c
-  ../dist/libmpdclient/src/cmount.c
-  ../dist/libmpdclient/src/cneighbor.c
-  ../dist/libmpdclient/src/connection.c
-  ../dist/libmpdclient/src/coutput.c
-  ../dist/libmpdclient/src/cpartition.c
-  ../dist/libmpdclient/src/cplaylist.c
-  ../dist/libmpdclient/src/cstats.c
-  ../dist/libmpdclient/src/cstatus.c
-  ../dist/libmpdclient/src/database.c
-  ../dist/libmpdclient/src/directory.c
-  ../dist/libmpdclient/src/entity.c
-  ../dist/libmpdclient/src/error.c
-  ../dist/libmpdclient/src/fd_util.c
-  ../dist/libmpdclient/src/fingerprint.c
-  ../dist/libmpdclient/src/idle.c
-  ../dist/libmpdclient/src/ierror.c
-  ../dist/libmpdclient/src/iso8601.c
-  ../dist/libmpdclient/src/kvlist.c
-  ../dist/libmpdclient/src/list.c
-  ../dist/libmpdclient/src/message.c
-  ../dist/libmpdclient/src/mixer.c
-  ../dist/libmpdclient/src/mount.c
-  ../dist/libmpdclient/src/neighbor.c
-  ../dist/libmpdclient/src/output.c
-  ../dist/libmpdclient/src/parser.c
-  ../dist/libmpdclient/src/partition.c
-  ../dist/libmpdclient/src/password.c
-  ../dist/libmpdclient/src/player.c
-  ../dist/libmpdclient/src/playlist.c
-  ../dist/libmpdclient/src/position.c
-  ../dist/libmpdclient/src/queue.c
-  ../dist/libmpdclient/src/quote.c
-  ../dist/libmpdclient/src/replay_gain.c
-  ../dist/libmpdclient/src/rdirectory.c
-  ../dist/libmpdclient/src/readpicture.c
-  ../dist/libmpdclient/src/recv.c
-  ../dist/libmpdclient/src/replay_gain.c
-  ../dist/libmpdclient/src/resolver.c
-  ../dist/libmpdclient/src/response.c
-  ../dist/libmpdclient/src/rplaylist.c
-  ../dist/libmpdclient/src/run.c
-  ../dist/libmpdclient/src/search.c
-  ../dist/libmpdclient/src/send.c
-  ../dist/libmpdclient/src/settings.c
-  ../dist/libmpdclient/src/socket.c
-  ../dist/libmpdclient/src/song.c
-  ../dist/libmpdclient/src/stats.c
-  ../dist/libmpdclient/src/status.c
-  ../dist/libmpdclient/src/sticker.c
-  ../dist/libmpdclient/src/sync.c
-  ../dist/libmpdclient/src/tag.c
+  ../dist/libmympdclient/src/albumart.c
+  ../dist/libmympdclient/src/async.c
+  ../dist/libmympdclient/src/audio_format.c
+  ../dist/libmympdclient/src/binary.c
+  ../dist/libmympdclient/src/capabilities.c
+  ../dist/libmympdclient/src/cmessage.c
+  ../dist/libmympdclient/src/cmount.c
+  ../dist/libmympdclient/src/cneighbor.c
+  ../dist/libmympdclient/src/connection.c
+  ../dist/libmympdclient/src/coutput.c
+  ../dist/libmympdclient/src/cpartition.c
+  ../dist/libmympdclient/src/cplaylist.c
+  ../dist/libmympdclient/src/cstats.c
+  ../dist/libmympdclient/src/cstatus.c
+  ../dist/libmympdclient/src/database.c
+  ../dist/libmympdclient/src/directory.c
+  ../dist/libmympdclient/src/entity.c
+  ../dist/libmympdclient/src/error.c
+  ../dist/libmympdclient/src/fd_util.c
+  ../dist/libmympdclient/src/fingerprint.c
+  ../dist/libmympdclient/src/idle.c
+  ../dist/libmympdclient/src/ierror.c
+  ../dist/libmympdclient/src/iso8601.c
+  ../dist/libmympdclient/src/kvlist.c
+  ../dist/libmympdclient/src/list.c
+  ../dist/libmympdclient/src/message.c
+  ../dist/libmympdclient/src/mixer.c
+  ../dist/libmympdclient/src/mount.c
+  ../dist/libmympdclient/src/neighbor.c
+  ../dist/libmympdclient/src/output.c
+  ../dist/libmympdclient/src/parser.c
+  ../dist/libmympdclient/src/partition.c
+  ../dist/libmympdclient/src/password.c
+  ../dist/libmympdclient/src/player.c
+  ../dist/libmympdclient/src/playlist.c
+  ../dist/libmympdclient/src/position.c
+  ../dist/libmympdclient/src/queue.c
+  ../dist/libmympdclient/src/quote.c
+  ../dist/libmympdclient/src/replay_gain.c
+  ../dist/libmympdclient/src/rdirectory.c
+  ../dist/libmympdclient/src/readpicture.c
+  ../dist/libmympdclient/src/recv.c
+  ../dist/libmympdclient/src/replay_gain.c
+  ../dist/libmympdclient/src/resolver.c
+  ../dist/libmympdclient/src/response.c
+  ../dist/libmympdclient/src/rplaylist.c
+  ../dist/libmympdclient/src/run.c
+  ../dist/libmympdclient/src/search.c
+  ../dist/libmympdclient/src/send.c
+  ../dist/libmympdclient/src/settings.c
+  ../dist/libmympdclient/src/socket.c
+  ../dist/libmympdclient/src/song.c
+  ../dist/libmympdclient/src/stats.c
+  ../dist/libmympdclient/src/status.c
+  ../dist/libmympdclient/src/sticker.c
+  ../dist/libmympdclient/src/sync.c
+  ../dist/libmympdclient/src/tag.c
 )
 
 set(LIBASAN_FLAGS "-fsanitize=address \
@@ -144,7 +152,7 @@ set(LIBASAN_FLAGS "-fsanitize=address \
 
 #set mongoose feature flags
 set(MONGOOSE_FLAGS "-DMG_ENABLE_OPENSSL=1 -DMG_ENABLE_DIRECTORY_LISTING=1 -DMG_ENABLE_SSI=0")
-if("${ENABLE_IPV6}" MATCHES "ON")
+if(ENABLE_IPV6)
   message("IPv6 is enabled")
   set(MONGOOSE_FLAGS "${MONGOOSE_FLAGS} -DMG_ENABLE_IPV6=1")
 else()
@@ -173,7 +181,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb -Og")
 #-Wno-stringop-overflow: gcc 11.2.0 bug
 #-Wno-stringop-overread: gcc 12.0.1 bug
 set_property(SOURCE ../dist/mongoose/mongoose.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-conversion \
-  -Wno-stringop-overflow")
+  -Wno-stringop-overflow -Wno-unused-parameter")
 #compiler flags for mjson
 set_property(SOURCE ../dist/mjson/mjson.c PROPERTY COMPILE_FLAGS "-Wno-conversion")
 #compiler flags for rax
@@ -183,14 +191,14 @@ set_property(SOURCE ../dist/rax/rax.c PROPERTY COMPILE_FLAGS "-Wno-format-nonlit
 #compiler flags for sds
 #-Wno-stringop-overflow: gcc 11.2.0 bug
 set_property(SOURCE ../dist/sds/sds.c PROPERTY COMPILE_FLAGS "-Wno-format-nonliteral -Wno-stringop-overflow -Wno-conversion")
-#compiler flags for libmpdclient
+#compiler flags for libmympdclient
 set_property(SOURCE ${LIBMPDCLIENT_SOURCES} PROPERTY COMPILE_FLAGS "-Wno-conversion")
 
-set(ENABLE_FLAC "ON")
-set(ENABLE_LIBID3TAG "ON")
-configure_file(../src/mympd_config_defs.h.in ${PROJECT_BINARY_DIR}/mympd_config_defs.h)
+set(MYMPD_ENABLE_FLAC "ON")
+set(MYMPD_ENABLE_LIBID3TAG "ON")
+configure_file(../src/compile_time.h.in ${PROJECT_BINARY_DIR}/compile_time.h)
 
-include_directories(${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR} ../dist/libmpdclient/include)
+include_directories(${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/.. ../dist/libmympdclient/include)
 
 include(CheckCSourceCompiles)
 

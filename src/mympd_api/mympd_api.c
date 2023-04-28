@@ -1,76 +1,92 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
-#include "mympd_api.h"
+#include "compile_time.h"
+#include "src/mympd_api/mympd_api.h"
 
-#include "../lib/api.h"
-#include "../lib/log.h"
-#include "../lib/mem.h"
-#include "../lib/sds_extras.h"
-#include "../mpd_client/mpd_client_autoconf.h"
-#include "../mpd_client/mpd_client_connection.h"
-#include "../mpd_client/mpd_client_errorhandler.h"
-#include "../mpd_client/mpd_client_idle.h"
-#include "mympd_api_home.h"
-#include "mympd_api_last_played.h"
-#include "mympd_api_settings.h"
-#include "mympd_api_timer.h"
-#include "mympd_api_timer_handlers.h"
-#include "mympd_api_trigger.h"
+#include "src/lib/album_cache.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/sticker_cache.h"
+#include "src/mpd_client/autoconf.h"
+#include "src/mpd_client/connection.h"
+#include "src/mpd_client/idle.h"
+#include "src/mympd_api/home.h"
+#include "src/mympd_api/settings.h"
+#include "src/mympd_api/timer.h"
+#include "src/mympd_api/timer_handlers.h"
+#include "src/mympd_api/trigger.h"
 
-#include <stdlib.h>
-#include <string.h>
 #include <sys/prctl.h>
 
+/**
+ * This is the main function for the mympd_api thread
+ * @param arg_config void pointer to t_config struct
+ */
 void *mympd_api_loop(void *arg_config) {
     thread_logname = sds_replace(thread_logname, "mympdapi");
     prctl(PR_SET_NAME, thread_logname, 0, 0, 0);
 
-    //create mympd_state struct and set defaults
+    //create initial mympd_state struct and set defaults
     struct t_mympd_state *mympd_state = malloc_assert(sizeof(struct t_mympd_state));
-    mympd_state->config = (struct t_config *) arg_config;
-    mympd_state_default(mympd_state);
+    mympd_state_default(mympd_state, (struct t_config *)arg_config);
 
-    if (mympd_state->config->first_startup == true) {
-        MYMPD_LOG_NOTICE("Starting myMPD autoconfiguration");
+    //start autoconfiguration, if mpd_host does not exist
+    sds filepath = sdscatfmt(sdsempty(), "%S/%s/mpd_host", mympd_state->config->workdir, DIR_WORK_STATE);
+    if (testfile_read(filepath) == false) {
         mpd_client_autoconf(mympd_state);
     }
+    FREE_SDS(filepath);
 
-    //read myMPD states
-    mympd_api_settings_statefiles_read(mympd_state);
+    //read global states
+    mympd_api_settings_statefiles_global_read(mympd_state);
+    //read myMPD states for default partition
+    mympd_api_settings_statefiles_partition_read(mympd_state->partition_state);
     //home icons
     mympd_api_home_file_read(&mympd_state->home_list, mympd_state->config->workdir);
-    //myMPD timer
+    //timer
     mympd_api_timer_file_read(&mympd_state->timer_list, mympd_state->config->workdir);
-    //myMPD trigger
+    //trigger
     mympd_api_trigger_file_read(&mympd_state->trigger_list, mympd_state->config->workdir);
-    //set timers
-    if (mympd_state->covercache_keep_days > 0) {
-        MYMPD_LOG_DEBUG("Setting timer action \"crop covercache\" to periodic each 7200s");
-        mympd_api_timer_add(&mympd_state->timer_list, 60, 7200, timer_handler_by_id, TIMER_ID_COVERCACHE_CROP, NULL);
+    //caches
+    if (mympd_state->config->save_caches == true) {
+        MYMPD_LOG_INFO("Reading caches from disc");
+        //album cache
+        album_cache_read(&mympd_state->mpd_state->album_cache, mympd_state->config->workdir);
+        //sticker cache
+        sticker_cache_read(&mympd_state->mpd_state->sticker_cache, mympd_state->config->workdir);
     }
+    //set timers
+    if (mympd_state->config->covercache_keep_days > 0) {
+        MYMPD_LOG_DEBUG("Adding timer for \"crop covercache\" to execute periodic each day");
+        mympd_api_timer_add(&mympd_state->timer_list, COVERCACHE_CLEANUP_OFFSET, COVERCACHE_CLEANUP_INTERVAL,
+            timer_handler_by_id, TIMER_ID_COVERCACHE_CROP, NULL);
+    }
+
     //start trigger
-    mympd_api_trigger_execute(&mympd_state->trigger_list, TRIGGER_MYMPD_START);
+    mympd_api_trigger_execute(&mympd_state->trigger_list, TRIGGER_MYMPD_START, MPD_PARTITION_ALL);
+
     //thread loop
     while (s_signal_received == 0) {
         mpd_client_idle(mympd_state);
         mympd_api_timer_check(&mympd_state->timer_list);
     }
+    MYMPD_LOG_DEBUG("Stopping mympd_api thread");
+
     //stop trigger
-    mympd_api_trigger_execute(&mympd_state->trigger_list, TRIGGER_MYMPD_STOP);
+    mympd_api_trigger_execute(&mympd_state->trigger_list, TRIGGER_MYMPD_STOP, MPD_PARTITION_ALL);
+
     //disconnect from mpd
-    mpd_client_disconnect(mympd_state->mpd_state);
-    //save states
-    mympd_api_home_file_save(&mympd_state->home_list, mympd_state->config->workdir);
-    mympd_api_timer_file_save(&mympd_state->timer_list, mympd_state->config->workdir);
-    mympd_api_last_played_file_save(&mympd_state->last_played, mympd_state->last_played_count, mympd_state->config->workdir);
-    mympd_api_trigger_file_save(&mympd_state->trigger_list, mympd_state->config->workdir);
-    //free anything
-    mympd_state_free(mympd_state);
+    mpd_client_disconnect_all(mympd_state, MPD_DISCONNECT_INSTANT);
+
+    //save and free states
+    mympd_state_save(mympd_state, true);
+
     FREE_SDS(thread_logname);
     return NULL;
 }

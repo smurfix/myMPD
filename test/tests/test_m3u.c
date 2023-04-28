@@ -1,17 +1,17 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
-#include "../utility.h"
+#include "compile_time.h"
+#include "test/utility.h"
 
-#include "../../dist/utest/utest.h"
-#include "../../dist/sds/sds.h"
-#include "../../src/lib/jsonrpc.h"
-#include "../../src/lib/m3u.h"
-#include "../../src/mympd_api/mympd_api_webradios.h"
+#include "dist/utest/utest.h"
+#include "dist/sds/sds.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/m3u.h"
+#include "src/mympd_api/webradios.h"
 
 #include <sys/stat.h>
 
@@ -65,16 +65,14 @@ UTEST(mympd_api_webradios, test_get_webradio_from_uri) {
 }
 
 UTEST(mympd_api_webradios, test_mympd_api_webradio_list) {
-    sds method = sdsnew("METHOD");
     sds searchstr = sdsempty();
-    sds buffer = mympd_api_webradio_list(workdir, sdsempty(), method, 0, searchstr, 0, 10);
+    sds buffer = mympd_api_webradio_list(workdir, sdsempty(), 0, searchstr, 0, 10);
     sds error = sdsempty();
     int result;
     bool rc = json_get_int_max(buffer, "$.result.totalEntities", &result, &error);
     ASSERT_TRUE(rc);
     ASSERT_EQ(result, 1);
     sdsfree(error);
-    sdsfree(method);
     sdsfree(searchstr);
     sdsfree(buffer);
 }

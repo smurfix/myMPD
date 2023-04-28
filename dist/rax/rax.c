@@ -30,13 +30,16 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdlib.h>
-#include <string.h>
+#include "rax.h"
+
+#undef NDEBUG
 #include <assert.h>
-#include <stdio.h>
+
 #include <errno.h>
 #include <math.h>
-#include "rax.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifndef RAX_MALLOC_INCLUDE
 #define RAX_MALLOC_INCLUDE "rax_malloc.h"
@@ -154,7 +157,7 @@ static inline void raxStackFree(raxStack *ts) {
  * 'nodesize'. The padding is needed to store the child pointers to aligned
  * addresses. Note that we add 4 to the node size because the node has a four
  * bytes header. */
-#define raxPadding(nodesize) ((sizeof(void*)-((nodesize+4) % sizeof(void*))) & (sizeof(void*)-1))
+#define raxPadding(nodesize) ((sizeof(void*)-(((nodesize)+4) % sizeof(void*))) & (sizeof(void*)-1))
 
 /* Return the pointer to the last child pointer in a node. For the compressed
  * nodes this is the only child pointer. */
@@ -905,9 +908,9 @@ int raxInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old) {
     return raxGenericInsert(rax,s,len,data,old,1);
 }
 
-/* Non overwriting insert function: this if an element with the same key
+/* Non overwriting insert function: if an element with the same key
  * exists, the value is not updated and the function returns 0.
- * This is a just a wrapper for raxGenericInsert(). */
+ * This is just a wrapper for raxGenericInsert(). */
 int raxTryInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old) {
     return raxGenericInsert(rax,s,len,data,old,0);
 }

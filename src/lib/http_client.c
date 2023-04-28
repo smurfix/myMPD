@@ -1,25 +1,29 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
-#include "http_client.h"
+#include "compile_time.h"
+#include "src/lib/http_client.h"
 
-#include "../../dist/mongoose/mongoose.h"
-#include "filehandler.h"
-#include "log.h"
-#include "sds_extras.h"
+#include "dist/mongoose/mongoose.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
 
 #include <errno.h>
+#include <inttypes.h>
 
-//private definitions
-static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data,
+/**
+ * Private definitions
+ */
+static void http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data,
     void *fn_data);
 
-//public functions
-
+/**
+ * Public functions
+ */
 
 /**
  * Reads the dns server from resolv.conf
@@ -37,7 +41,7 @@ sds get_dnsserver(void) {
     }
     sds line = sdsempty();
     sds nameserver = sdsempty();
-    while (sds_getline(&line, fp, LINE_LENGTH_MAX) == 0) {
+    while (sds_getline(&line, fp, LINE_LENGTH_MAX) >= 0) {
         if (sdslen(line) > 10 &&
             strncmp(line, "nameserver", 10) == 0 &&
             isspace(line[10]))
@@ -82,9 +86,7 @@ void http_client_request(struct mg_client_request_t *mg_client_request,
 {
     struct mg_mgr mgr_client;
     mg_mgr_init(&mgr_client);
-    #ifdef DEBUG
-    mg_log_set("1");
-    #endif
+    mg_log_set(1);
     //set dns server
     sds dns_uri = get_dnsserver();
     MYMPD_LOG_DEBUG("Setting dns server to %s", dns_uri);
@@ -92,7 +94,7 @@ void http_client_request(struct mg_client_request_t *mg_client_request,
 
     mgr_client.userdata = mg_client_request;
     MYMPD_LOG_DEBUG("HTTP client connecting to \"%s\"", mg_client_request->uri);
-    mg_http_connect(&mgr_client, mg_client_request->uri, _http_client_ev_handler, mg_client_response);
+    mg_http_connect(&mgr_client, mg_client_request->uri, http_client_ev_handler, mg_client_response);
     while (mg_client_response->rc == -1) {
         mg_mgr_poll(&mgr_client, 1000);
     }
@@ -100,7 +102,9 @@ void http_client_request(struct mg_client_request_t *mg_client_request,
     mg_mgr_free(&mgr_client);
 }
 
-//private functions
+/**
+ * Private functions
+ */
 
 /**
  * Event handler for the http request made by http_client_request
@@ -109,15 +113,15 @@ void http_client_request(struct mg_client_request_t *mg_client_request,
  * @param ev_data event data (http response)
  * @param fn_data struct mg_client_response
  */
-static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data,
+static void http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_data,
     void *fn_data)
 {
     struct mg_client_request_t *mg_client_request = (struct mg_client_request_t *) nc->mgr->userdata;
     if (ev == MG_EV_CONNECT) {
-        // Connected to server. Extract host name from URL
+        //Connected to server. Extract host name from URL
         struct mg_str host = mg_url_host(mg_client_request->uri);
 
-        // If s_url is https://, tell client connection to use TLS
+        //If uri is https://, tell client connection to use TLS
         if (mg_url_is_ssl(mg_client_request->uri)) {
             struct mg_tls_opts tls_opts = {
                 .srvname = host
@@ -167,23 +171,12 @@ static void _http_client_ev_handler(struct mg_connection *nc, int ev, void *ev_d
             mg_client_response->header = sdscatlen(mg_client_response->header, hm->headers[i].value.ptr, hm->headers[i].value.len);
             mg_client_response->header = sdscatlen(mg_client_response->header, "\n", 1);
         }
-        //response code line
-        for (unsigned i = 0; i < hm->message.len; i++) {
-            if (hm->message.ptr[i] == '\n') {
-                break;
-            }
-            if (isprint(hm->message.ptr[i])) {
-                mg_client_response->response = sds_catchar(mg_client_response->response, hm->message.ptr[i]);
-            }
-        }
+        //http response code
+        mg_client_response->response_code = (int)mg_to64(hm->uri);
         //set response code
-        if (strncmp("HTTP/1.1 200", mg_client_response->response, 12) == 0) {;
-            mg_client_response->rc = 0;
-        }
-        else {
-            mg_client_response->rc = 1;
-        }
-        MYMPD_LOG_DEBUG("HTTP client received response \"%s\"", mg_client_response->response);
+        mg_client_response->rc =  mg_client_response->response_code == 200 ? 0: 1;
+
+        MYMPD_LOG_DEBUG("HTTP client response code \"%d\"", mg_client_response->response_code);
         MYMPD_LOG_DEBUG("HTTP client received body \"%s\"", mg_client_response->body);
         //Tell mongoose to close this connection
         nc->is_closing = 1;

@@ -1,38 +1,32 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
-#include "mimetype.h"
+#include "compile_time.h"
+#include "src/lib/mimetype.h"
 
-#include "log.h"
-#include "sds_extras.h"
-#include "utility.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/utility.h"
 
-#include <errno.h>
-#include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-
 
 /**
  * List of mime types with magic numbers and typical extensions
  */
 struct t_mime_type_entry {
-    size_t skip;
-    const char *magic_bytes;
-    const char *extension;
-    const char *mime_type;
+    size_t skip;              //!< starting bytes to skip
+    const char *magic_bytes;  //!< bytes to match to get the mime type
+    const char *extension;    //!< file extension for the mime type
+    const char *mime_type;    //!< mime type
 };
 
 const struct t_mime_type_entry mime_entries[] = {
     {0, "89504E470D0A1A0A", "png",  "image/png"},
-    {0, "FFD8FFDB",         "jpg",  "image/jpeg"},
-    {0, "FFD8FFE0",         "jpeg", "image/jpeg"},
-    {0, "FFD8FFEE",         "jpeg", "image/jpeg"},
-    {0, "FFD8FFE1",         "jpeg", "image/jpeg"},
+    {0, "FFD8FF",           "jpg",  "image/jpeg"},
+    {0, "FFD8FF",           "jpeg", "image/jpeg"},
     {0, "52494646",         "webp", "image/webp"},
     {4, "667479706d696631", "avif", "image/avif"},
     {0, "494433",           "mp3",  "audio/mpeg"},
@@ -136,11 +130,12 @@ bool is_image(const char *filename) {
     if (ext == NULL) {
         return false;
     }
-    const char *p;
-    for (p = *image_extensions; p!= NULL; p++) {
-        if (strcasecmp(p, ext) == 0) {
+    const char **p = image_extensions;
+    while(*p != NULL) {
+        if (strcasecmp(*p, ext) == 0) {
             return true;
         }
+        p++;
     }
     return false;
 }

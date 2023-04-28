@@ -8,12 +8,20 @@ Tips to debug problems with myMPD. Try these steps and reproduce the error.
 
 ## myMPD logging
 
+### Start myMPD manually
+
 - Stop myMPD
-- Set loglevel to debug: ``export MYMPD_LOGLEVEL=7``
-- Start it in the console ``mympd``
+- Set loglevel to debug: `export MYMPD_LOGLEVEL=7`
+- Start it in the console `mympd` (same user as the service runs or as root)
 - Debug output is printed to the console
 - Press Ctrl + C to abort
-- Reset loglevel: ``unset MYMPD_LOGLEVEL``
+- Reset loglevel: `unset MYMPD_LOGLEVEL`
+
+- **Note:** Use [systemd-run]({{ site.baseurl }}/running#manual-startup), if you use a distribution with systemd
+
+### Get logs from running myMPD
+
+You can set the log level in the Maintenance dialog to `debug` and get the output from your logging service, for systemd it is: `journalctl -fu mympd`.
 
 ## Webbrowser logging
 
@@ -23,17 +31,21 @@ Tips to debug problems with myMPD. Try these steps and reproduce the error.
 
 ## MPD logging
 
-- Set ```log_level "verbose" ``` in mpd.conf and restart mpd
+- Set `log_level "verbose"` in mpd.conf and restart mpd
 - Look through the mpd log file for any errors
 
 ## myMPD debug build
 
-- Build: ``./build.sh debug``
+- Build: `./build.sh debug`
 
 ### If myMPD aborts with a segmentation fault
 
-- Run: ``catchsegv debug/mympd``
+- Run: `catchsegv debug/bin/mympd`
+
+### Memory leaks
+
+- Run: `valgrind --leakcheck=full debug/bin/mympd`
 
 ### Other errors - get a calltrace
 
-- Run: ``valgrind --tool=callgrind debug/mympd``
+- Run: `valgrind --tool=callgrind debug/bin/mympd`

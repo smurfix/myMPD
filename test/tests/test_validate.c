@@ -1,22 +1,22 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
 
-#include "../../dist/utest/utest.h"
-#include "../../src/lib/validate.h"
+#include "dist/utest/utest.h"
+#include "src/lib/validate.h"
 
 UTEST(validate, test_validate_json) {
     //valid
     sds data = sdsnew("{\"key1\":\"value1\"}");
-    ASSERT_TRUE(validate_json(data));
+    ASSERT_TRUE(validate_json_object(data));
     sdsclear(data);
     //invalid
     data = sdscat(data, "asdfsfdjlk");
-    ASSERT_FALSE(validate_json(data));
+    ASSERT_FALSE(validate_json_object(data));
     sdsfree(data);
 }
 

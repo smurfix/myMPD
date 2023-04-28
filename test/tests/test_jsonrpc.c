@@ -1,16 +1,16 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
-#include "mympd_config_defs.h"
+#include "compile_time.h"
 
-#include "../../dist/utest/utest.h"
-#include "../../src/lib/jsonrpc.h"
-#include "../../src/lib/list.h"
-#include "../../src/lib/sds_extras.h"
-#include "../../src/mpd_client/mpd_client_tags.h"
+#include "dist/utest/utest.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/list.h"
+#include "src/lib/sds_extras.h"
+#include "src/mpd_client/tags.h"
 
 UTEST(jsonrpc, test_json_get_bool) {
     bool result;
@@ -81,6 +81,36 @@ UTEST(jsonrpc, test_json_get_long_max) {
     //invalid
     data = sdscat(data, "{\"key2\": 10}");
     ASSERT_FALSE(json_get_long_max(data, "$.key1", &result, NULL));
+    FREE_SDS(data);
+}
+
+UTEST(jsonrpc, test_json_get_llong) {
+    long long result;
+    //valid
+    sds data = sdsnew("{\"key1\": 10}");
+    ASSERT_TRUE(json_get_llong(data, "$.key1", 0, 20, &result, NULL));
+    sdsclear(data);
+    data = sdscat(data, "{\"key1\": -30}");
+    ASSERT_TRUE(json_get_llong(data, "$.key1", -50, 20, &result, NULL));
+    sdsclear(data);
+    //invalid
+    data = sdscat(data, "{\"key1\": 30}");
+    ASSERT_FALSE(json_get_llong(data, "$.key1", 0, 20, &result, NULL));
+    sdsclear(data);
+    data = sdscat(data, "{\"key2\": 10}");
+    ASSERT_FALSE(json_get_llong(data, "$.key1", 0, 20, &result, NULL));
+    FREE_SDS(data);
+}
+
+UTEST(jsonrpc, test_json_get_llong_max) {
+    long long result;
+    //valid
+    sds data = sdsnew("{\"key1\": 10}");
+    ASSERT_TRUE(json_get_llong_max(data, "$.key1", &result, NULL));
+    sdsclear(data);
+    //invalid
+    data = sdscat(data, "{\"key2\": 10}");
+    ASSERT_FALSE(json_get_llong_max(data, "$.key1", &result, NULL));
     FREE_SDS(data);
 }
 
@@ -221,7 +251,7 @@ UTEST(jsonrpc, test_list_to_json_array) {
     list_push(&l, "key2", 0, NULL, NULL);
     sds s = sdsempty();
     s = list_to_json_array(s, &l);
-    ASSERT_STREQ("\"key1\",\"key2\"", s);
+    ASSERT_STREQ("[\"key1\",\"key2\"]", s);
     list_clear(&l);
     FREE_SDS(s);
 }
@@ -233,7 +263,7 @@ UTEST(jsonrpc, test_json_get_cols_as_string) {
     sds data = sdsnew("{\"params\": {\"cols\": [\"Artist\", \"Duration\"]}}");
     sds cols = sdsempty();
     cols = json_get_cols_as_string(data, cols, &error);
-    ASSERT_STREQ("\"Artist\",\"Duration\"", cols);
+    ASSERT_STREQ("[\"Artist\",\"Duration\"]", cols);
     list_clear(&l);
     FREE_SDS(cols);
     FREE_SDS(data);
