@@ -1,27 +1,28 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "jukebox.h"
+#include "src/mpd_client/jukebox.h"
 
-#include "../../dist/utf8/utf8.h"
-#include "../lib/filehandler.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/mem.h"
-#include "../lib/mympd_state.h"
-#include "../lib/random.h"
-#include "../lib/sds_extras.h"
-#include "../lib/sticker_cache.h"
-#include "../mympd_api/queue.h"
-#include "../mympd_api/sticker.h"
-#include "errorhandler.h"
-#include "search.h"
-#include "search_local.h"
-#include "tags.h"
+#include "dist/utf8/utf8.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/mympd_state.h"
+#include "src/lib/random.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/sticker_cache.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/search.h"
+#include "src/mpd_client/search_local.h"
+#include "src/mpd_client/tags.h"
+#include "src/mympd_api/queue.h"
+#include "src/mympd_api/sticker.h"
+
 
 #include <errno.h>
 #include <string.h>
@@ -119,7 +120,7 @@ void jukebox_clear_all(struct t_mympd_state *mympd_state) {
 
 /**
  * Clears the jukebox queue.
- * This is a simple wrapper arround list_clear.
+ * This is a simple wrapper around list_clear.
  * @param list the jukebox queue
  */
 void jukebox_clear(struct t_list *list) {
@@ -129,13 +130,13 @@ void jukebox_clear(struct t_list *list) {
 /**
  * Prints the jukebox queue as an jsonrpc response
  * @param partition_state pointer to myMPD partition state
- * @param buffer alreay allocated sds string to append the result
+ * @param buffer already allocated sds string to append the result
  * @param cmd_id jsonrpc method
  * @param request_id jsonrpc request id
  * @param offset offset for printing
  * @param limit max entries to print
  * @param searchstr string to search
- * @param tagcols colums to print
+ * @param tagcols columns to print
  * @return pointer to buffer
  */
 sds jukebox_list(struct t_partition_state *partition_state, sds buffer, enum mympd_cmd_ids cmd_id, long request_id,
@@ -163,12 +164,12 @@ sds jukebox_list(struct t_partition_state *partition_state, sds buffer, enum mym
                             }
                             buffer = sdscatlen(buffer, "{", 1);
                             buffer = tojson_long(buffer, "Pos", entity_count, true);
-                            buffer = get_song_tags(buffer, partition_state, tagcols, song);
+                            buffer = get_song_tags(buffer, partition_state->mpd_state->feat_tags, tagcols, song);
                             if (partition_state->mpd_state->feat_stickers == true &&
                                 partition_state->mpd_state->sticker_cache.cache != NULL)
                             {
                                 buffer = sdscatlen(buffer, ",", 1);
-                                buffer = mympd_api_sticker_list(buffer, &partition_state->mpd_state->sticker_cache, mpd_song_get_uri(song));
+                                buffer = mympd_api_sticker_get_print(buffer, &partition_state->mpd_state->sticker_cache, mpd_song_get_uri(song));
                             }
                             buffer = sdscatlen(buffer, "}", 1);
                         }
@@ -384,7 +385,7 @@ bool jukebox_add_to_queue(struct t_partition_state *partition_state, long add_so
     }
     if (added == 0) {
         MYMPD_LOG_ERROR("\"%s\": Error adding song(s)", partition_state->name);
-        send_jsonrpc_notify(JSONRPC_FACILITY_JUKEBOX, JSONRPC_SEVERITY_ERROR, partition_state->name, "Addings songs from jukebox to queue failed");
+        send_jsonrpc_notify(JSONRPC_FACILITY_JUKEBOX, JSONRPC_SEVERITY_ERROR, partition_state->name, "Adding songs from jukebox to queue failed");
         return false;
     }
     if (manual == false) {
@@ -518,7 +519,7 @@ static struct t_list *jukebox_get_last_played(struct t_partition_state *partitio
     FILE *fp = fopen(lp_file, OPEN_FLAGS_READ);
     if (fp != NULL) {
         sds line = sdsempty();
-        while (sds_getline(&line, fp, LINE_LENGTH_MAX) == 0 &&
+        while (sds_getline(&line, fp, LINE_LENGTH_MAX) >= 0 &&
                 queue_list->length < 50)
         {
             sds uri = NULL;
@@ -826,7 +827,13 @@ static long fill_jukebox_queue_songs(struct t_partition_state *partition_state, 
 
             const char *uri = mpd_song_get_uri(song);
             struct t_sticker *sticker = get_sticker_from_cache(&partition_state->mpd_state->sticker_cache, uri);
-            time_t last_played = sticker != NULL ? sticker->last_played : 0;
+            time_t last_played = sticker != NULL
+                ? sticker->last_played
+                : 0;
+            bool is_hated = sticker != NULL &&
+                sticker->like == STICKER_LIKE_HATE
+                    ? partition_state->jukebox_ignore_hated == true
+                    : false;
 
             long is_uniq = JUKEBOX_UNIQ_IS_UNIQ;
             if (last_played > since) {
@@ -837,7 +844,9 @@ static long fill_jukebox_queue_songs(struct t_partition_state *partition_state, 
                 is_uniq = jukebox_unique_tag(partition_state, uri, tag_value, manual, queue_list);
             }
 
-            if (is_uniq == JUKEBOX_UNIQ_IS_UNIQ) {
+            if (is_uniq == JUKEBOX_UNIQ_IS_UNIQ &&
+                is_hated == false)
+            {
                 if (randrange(0, lineno) < add_songs) {
                     if (nkeep < add_songs) {
                         if (list_push(add_list, uri, lineno, tag_value, NULL) == true) {

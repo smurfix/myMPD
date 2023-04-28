@@ -1,22 +1,22 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "mounts.h"
+#include "src/mympd_api/mounts.h"
 
-#include "../lib/jsonrpc.h"
-#include "../lib/sds_extras.h"
-#include "../mpd_client/errorhandler.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/sds_extras.h"
+#include "src/mpd_client/errorhandler.h"
 
 #include <string.h>
 
 /**
  * Prints the list of mounted mpd uris as jsonrpc response
  * @param partition_state pointer to partition state
- * @param buffer alreay allocated sds string to append the response
+ * @param buffer already allocated sds string to append the response
  * @param request_id jsonrpc request id
  * @return pointer to buffer
  */
@@ -62,7 +62,7 @@ sds mympd_api_mounts_list(struct t_partition_state *partition_state, sds buffer,
 /**
  * Prints the list of url handlers as jsonrpc response
  * @param partition_state pointer to partition state
- * @param buffer alreay allocated sds string to append the response
+ * @param buffer already allocated sds string to append the response
  * @param request_id jsonrpc request id
  * @return pointer to buffer
  */
@@ -101,7 +101,7 @@ sds mympd_api_mounts_urlhandler_list(struct t_partition_state *partition_state, 
 /**
  * Prints the list of neighbors as jsonrpc response
  * @param partition_state pointer to partition state
- * @param buffer alreay allocated sds string to append the response
+ * @param buffer already allocated sds string to append the response
  * @param request_id jsonrpc request id
  * @return pointer to buffer
  */

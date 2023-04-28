@@ -1,21 +1,21 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "queue.h"
+#include "src/mympd_api/queue.h"
 
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/sds_extras.h"
-#include "../lib/utility.h"
-#include "../mpd_client/errorhandler.h"
-#include "../mpd_client/tags.h"
-#include "status.h"
-#include "sticker.h"
-#include "webradios.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/utility.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/tags.h"
+#include "src/mympd_api/status.h"
+#include "src/mympd_api/sticker.h"
+#include "src/mympd_api/webradios.h"
 
 #include <string.h>
 
@@ -284,7 +284,6 @@ sds mympd_api_queue_list(struct t_partition_state *partition_state, sds buffer, 
     buffer = jsonrpc_respond_start(buffer, cmd_id, request_id);
     buffer = sdscat(buffer, "\"data\":[");
     unsigned total_time = 0;
-    long entity_count = 0;
     long entities_returned = 0;
     struct mpd_song *song;
     while ((song = mpd_recv_song(partition_state->conn)) != NULL) {
@@ -294,7 +293,6 @@ sds mympd_api_queue_list(struct t_partition_state *partition_state, sds buffer, 
         buffer = print_queue_entry(partition_state, buffer, tagcols, song);
         total_time += mpd_song_get_duration(song);
         mpd_song_free(song);
-        entity_count++;
     }
 
     buffer = sdscatlen(buffer, "],", 2);
@@ -431,6 +429,8 @@ sds mympd_api_queue_search_adv(struct t_partition_state *partition_state, sds bu
         }
     }
     else if (strcmp(sort, "LastModified") == 0) {
+        //swap order
+        sortdesc = sortdesc == false ? true : false;
         rc = mpd_search_add_sort_name(partition_state->conn, "Last-Modified", sortdesc);
         if (mympd_check_rc_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, rc, "mpd_search_add_sort_name") == false) {
             mpd_search_cancel(partition_state->conn);
@@ -512,7 +512,7 @@ sds print_queue_entry(struct t_partition_state *partition_state, sds buffer, con
     const struct mpd_audio_format *audioformat = mpd_song_get_audio_format(song);
     buffer = printAudioFormat(buffer, audioformat);
     buffer = sdscatlen(buffer, ",", 1);
-    buffer = get_song_tags(buffer, partition_state, tagcols, song);
+    buffer = get_song_tags(buffer, partition_state->mpd_state->feat_tags, tagcols, song);
     const char *uri = mpd_song_get_uri(song);
     buffer = sdscatlen(buffer, ",", 1);
     if (is_streamuri(uri) == true) {
@@ -533,7 +533,7 @@ sds print_queue_entry(struct t_partition_state *partition_state, sds buffer, con
     }
     if (partition_state->mpd_state->feat_stickers == true) {
         buffer = sdscatlen(buffer, ",", 1);
-        buffer = mympd_api_sticker_list(buffer, &partition_state->mpd_state->sticker_cache, uri);
+        buffer = mympd_api_sticker_get_print(buffer, &partition_state->mpd_state->sticker_cache, uri);
     }
     buffer = sdscatlen(buffer, "}", 1);
     return buffer;

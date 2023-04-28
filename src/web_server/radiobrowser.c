@@ -1,17 +1,17 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "radiobrowser.h"
+#include "src/web_server/radiobrowser.h"
 
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/sds_extras.h"
-#include "proxy.h"
-#include "utility.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
+#include "src/web_server/proxy.h"
+#include "src/web_server/utility.h"
 
 /**
  * Private definitions
@@ -96,7 +96,7 @@ void radiobrowser_api(struct mg_connection *nc, struct mg_connection *backend_nc
         bool rc = radiobrowser_send(nc, backend_nc, cmd_id, uri);
         if (rc == false) {
             sds response = jsonrpc_respond_message(sdsempty(), cmd_id, request_id,
-                JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Error connection to radio-browser.info");
+                JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Error connecting to radio-browser.info");
             webserver_send_data(nc, response, sdslen(response), "Content-Type: application/json\r\n");
             FREE_SDS(response);
         }

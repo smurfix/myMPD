@@ -1,16 +1,16 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "cert.h"
+#include "src/lib/cert.h"
 
-#include "filehandler.h"
-#include "list.h"
-#include "log.h"
-#include "sds_extras.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/list.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -29,6 +29,7 @@
 
 //private definitions
 static bool certificates_create(sds dir, sds custom_san);
+static void push_san(struct t_list *san_list, const char *san);
 static sds get_san(sds buffer);
 static bool generate_set_random_serial(X509 *cert);
 static X509_REQ *generate_request(EVP_PKEY *pkey);
@@ -56,7 +57,7 @@ enum expire_check_rcs {
  */
 
 /**
- * Creates the ssl directory, ca and cert and rewnews before expired
+ * Creates the ssl directory, ca and cert and renews before expired
  * @param workdir myMPD working directory
  * @param ssl_san Additional subject alternative names
  * @return true on success else false
@@ -87,7 +88,7 @@ bool certificates_check(sds workdir, sds ssl_san) {
  */
 
 /**
- * Creates the ca and cert and rewnews before expired
+ * Creates the ca and cert and renews before expired
  * @param dir key and certificate directory
  * @param custom_san Additional subject alternative names
  * @return true on success else false
@@ -129,7 +130,7 @@ static bool certificates_create(sds dir, sds custom_san) {
         }
     }
 
-    //read server certificate / privat key or create it
+    //read server certificate / private key or create it
     sds servercert_file = sdscatfmt(sdsempty(), "%S/server.pem", dir);
     sds serverkey_file = sdscatfmt(sdsempty(), "%S/server.key", dir);
     EVP_PKEY *server_key = NULL;
@@ -328,6 +329,18 @@ static bool load_certificate(sds key_file, EVP_PKEY **key, sds cert_file, X509 *
 }
 
 /**
+ * Adds a uniq string to the san list
+ * @param san_list pointer to the san list
+ * @param san string to add
+ */
+static void push_san(struct t_list *san_list, const char *san) {
+    if (list_get_node(san_list, san) == NULL) {
+        MYMPD_LOG_DEBUG("Adding %s to SAN", san);
+        list_push(san_list, san, 0, NULL, NULL);
+    }
+}
+
+/**
  * Gets local hostnames and ips for subject alternative names
  * @param buffer sds string to populate
  * @return pointer to buffer
@@ -336,31 +349,27 @@ static sds get_san(sds buffer) {
     sds key = sdsempty();
     struct t_list san;
     list_init(&san);
-    MYMPD_LOG_DEBUG("Adding DNS:localhost to SAN");
-    list_push(&san, "DNS:localhost", 0, NULL, NULL);
-    list_push(&san, "DNS:ip6-localhost", 0, NULL, NULL);
-    list_push(&san, "DNS:ip6-loopback", 0, NULL, NULL);
+    push_san(&san, "DNS:localhost");
+    #ifdef MYMPD_ENABLE_IPV6
+        push_san(&san, "DNS:ip6-localhost");
+        push_san(&san, "DNS:ip6-loopback");
+    #endif
 
     //Retrieve short hostname
     char hostbuffer[256]; /* Flawfinder: ignore */
     int hostname = gethostname(hostbuffer, sizeof(hostbuffer));
     if (hostname == 0) {
-        MYMPD_LOG_DEBUG("Adding DNS:%s to SAN", hostbuffer);
         key = sdscatfmt(key, "DNS:%s", hostbuffer);
-        list_push(&san, key, 0, NULL, NULL);
+        push_san(&san, key);
         //Retrieve fqdn
         struct addrinfo hints = {0};
         hints.ai_family = AF_UNSPEC;
         hints.ai_flags = AI_CANONNAME;
         struct addrinfo *res;
         if (getaddrinfo(hostbuffer, 0, &hints, &res) == 0) {
-            // The hostname was successfully resolved.
-            if (strcmp(hostbuffer, res->ai_canonname) != 0) {
-                MYMPD_LOG_DEBUG("Adding DNS:%s to SAN", res->ai_canonname);
-                sdsclear(key);
-                key = sdscatfmt(key, "DNS:%s", res->ai_canonname);
-                list_push(&san, key, 0, NULL, NULL);
-            }
+            sdsclear(key);
+            key = sdscatfmt(key, "DNS:%s", res->ai_canonname);
+            push_san(&san, key);
             freeaddrinfo(res);
         }
     }
@@ -391,11 +400,10 @@ static sds get_san(sds buffer) {
                 }
                 sdsclear(key);
                 char *crap;
-                // remove zone info from ipv6
+                //remove zone info from ipv6
                 char *ip = strtok_r(host, "%", &crap);
-                MYMPD_LOG_DEBUG("Adding IP:%s to SAN", ip);
                 key = sdscatfmt(key, "IP:%s", ip);
-                list_push(&san, key, 0, NULL, NULL);
+                push_san(&san, key);
             }
         }
         freeifaddrs(ifaddr);
@@ -445,7 +453,7 @@ static bool generate_set_random_serial(X509 *cert) {
 /**
  * Generates a certificate signing request
  * @param pkey pointer to private key
- * @return certifcate signing request as X509_REQ struct
+ * @return certificate signing request as X509_REQ struct
  */
 static X509_REQ *generate_request(EVP_PKEY *pkey) {
     X509_REQ *req = X509_REQ_new();
@@ -653,7 +661,7 @@ static bool write_to_disk(sds key_file, EVP_PKEY *pkey, sds cert_file, X509 *cer
         return false;
     }
     bool write_rc = PEM_write_PrivateKey(fp, pkey, NULL, NULL, 0, NULL, NULL) == 0 ? false : true;
-    bool rc = rename_tmp_file(fp, tmp_file, key_file, write_rc);
+    bool rc = rename_tmp_file(fp, tmp_file, write_rc);
     if (rc == false) {
         FREE_SDS(tmp_file);
         return rc;
@@ -668,7 +676,7 @@ static bool write_to_disk(sds key_file, EVP_PKEY *pkey, sds cert_file, X509 *cer
         return false;
     }
     write_rc = PEM_write_X509(fp, cert) == 0 ? false : true;
-    rc = rename_tmp_file(fp, tmp_file, cert_file, write_rc);
+    rc = rename_tmp_file(fp, tmp_file, write_rc);
     FREE_SDS(tmp_file);
     return rc;
 }

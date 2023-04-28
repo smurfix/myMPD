@@ -1,20 +1,20 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "trigger.h"
+#include "src/mympd_api/trigger.h"
 
-#include "../lib/api.h"
-#include "../lib/filehandler.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/mem.h"
-#include "../lib/msg_queue.h"
-#include "../lib/sds_extras.h"
-#include "../lib/state_files.h"
+#include "src/lib/api.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/msg_queue.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/state_files.h"
 
 #include <errno.h>
 #include <string.h>
@@ -60,7 +60,6 @@ static const char *const trigger_event_names[] = {
     "mpd_mixer",
     "mpd_output",
     "mpd_options",
-    "mpd_update",
     "mpd_partition",
     NULL
 };
@@ -96,9 +95,9 @@ const char *mympd_api_event_name(long event) {
         }
         return NULL;
     }
-    for (int i = 0; trigger_event_names[i] != NULL; ++i) {
+    for (int i = 0; mpd_event_names[i] != NULL; ++i) {
         if (event == (1 << i)) {
-            return trigger_event_names[i];
+            return mpd_event_names[i];
         }
     }
     return NULL;
@@ -114,11 +113,11 @@ sds mympd_api_trigger_print_event_list(sds buffer) {
         buffer = tojson_long(buffer, mympd_event_names[i], (-1 - i), true);
     }
 
-    for (int i = 0; mpd_event_names[i] != NULL; ++i) {
+    for (int i = 0; trigger_event_names[i] != NULL; ++i) {
         if (i > 0) {
             buffer = sdscatlen(buffer, ",", 1);
         }
-        buffer = tojson_long(buffer, mpd_event_names[i], (1 << i), false);
+        buffer = tojson_long(buffer, trigger_event_names[i], (1 << i), false);
     }
     return buffer;
 }
@@ -172,7 +171,7 @@ void mympd_api_trigger_execute_feedback(struct t_list *trigger_list, sds uri, in
         {
             MYMPD_LOG_NOTICE("Executing script \"%s\" for trigger \"mympd_feedback\" (-6)", current->value_p);
             struct t_trigger_data *trigger_data = (struct t_trigger_data *)current->user_data;
-            trigger_execute(trigger_data->script, &trigger_data->arguments, partition);
+            trigger_execute(trigger_data->script, &script_arguments, partition);
         }
         current = current->next;
     }
@@ -306,7 +305,7 @@ bool mympd_api_trigger_file_read(struct t_list *trigger_list, sds workdir) {
     }
     int i = 0;
     sds line = sdsempty();
-    while (sds_getline(&line, fp, LINE_LENGTH_MAX) == 0) {
+    while (sds_getline(&line, fp, LINE_LENGTH_MAX) >= 0) {
         if (i > LIST_TRIGGER_MAX) {
             MYMPD_LOG_WARN("Too many triggers defined");
             break;

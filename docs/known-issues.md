@@ -4,19 +4,19 @@ permalink: /known-issues
 title: Known issues
 ---
 
-## Known issues
-
 ### Accept-Encoding not honored
 
 - myMPD issue: [#738](https://github.com/jcorporation/myMPD/issues/738)
 
 #### Cause
 
-Parsing this header and inflating the embedded compressed assets are not implemented.
+Parsing this header and inflating the embedded compressed assets is not implemented.
 
 #### Workaround
 
 None
+
+***
 
 ### Response line too large
 
@@ -27,7 +27,7 @@ None
 
 The mpd client library libmpclient uses a fixed buffer of 4096 bytes to get
 response lines from MPD. If a response line is larger than this limit, this
-error occurs. Most of the time the reponse line is to large, because of a tag
+error occurs. Most of the time the response line is to large, because of a tag
 that length exceeds this limit.
 
 libmympdclient uses a fixed buffer size of 8192 bytes.
@@ -36,6 +36,8 @@ libmympdclient uses a fixed buffer size of 8192 bytes.
 
 - Disable the tag in mpd.conf or in myMPD if you do not use it
 - Crop the tag value
+
+***
 
 ### Output buffer is full
 

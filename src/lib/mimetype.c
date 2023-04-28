@@ -1,15 +1,15 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "mimetype.h"
+#include "src/lib/mimetype.h"
 
-#include "log.h"
-#include "sds_extras.h"
-#include "utility.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/utility.h"
 
 #include <string.h>
 
@@ -25,10 +25,8 @@ struct t_mime_type_entry {
 
 const struct t_mime_type_entry mime_entries[] = {
     {0, "89504E470D0A1A0A", "png",  "image/png"},
-    {0, "FFD8FFDB",         "jpg",  "image/jpeg"},
-    {0, "FFD8FFE0",         "jpeg", "image/jpeg"},
-    {0, "FFD8FFEE",         "jpeg", "image/jpeg"},
-    {0, "FFD8FFE1",         "jpeg", "image/jpeg"},
+    {0, "FFD8FF",           "jpg",  "image/jpeg"},
+    {0, "FFD8FF",           "jpeg", "image/jpeg"},
     {0, "52494646",         "webp", "image/webp"},
     {4, "667479706d696631", "avif", "image/avif"},
     {0, "494433",           "mp3",  "audio/mpeg"},

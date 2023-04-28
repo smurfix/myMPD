@@ -1,28 +1,28 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "playlists.h"
+#include "src/mympd_api/playlists.h"
 
-#include "../../dist/utf8/utf8.h"
-#include "../lib/api.h"
-#include "../lib/filehandler.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/mem.h"
-#include "../lib/rax_extras.h"
-#include "../lib/sds_extras.h"
-#include "../lib/smartpls.h"
-#include "../lib/sticker_cache.h"
-#include "../lib/utility.h"
-#include "../mpd_client/errorhandler.h"
-#include "../mpd_client/playlists.h"
-#include "../mpd_client/search_local.h"
-#include "../mpd_client/tags.h"
-#include "sticker.h"
+#include "dist/utf8/utf8.h"
+#include "src/lib/api.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/rax_extras.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/smartpls.h"
+#include "src/lib/sticker_cache.h"
+#include "src/lib/utility.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/playlists.h"
+#include "src/mpd_client/search_local.h"
+#include "src/mpd_client/tags.h"
+#include "src/mympd_api/sticker.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -223,11 +223,11 @@ sds mympd_api_playlist_content_list(struct t_partition_state *partition_state, s
                     buffer = tojson_char(buffer, "Type", "song", true);
                 }
                 buffer = tojson_long(buffer, "Pos", entity_count, true);
-                buffer = get_song_tags(buffer, partition_state, tagcols, song);
+                buffer = get_song_tags(buffer, partition_state->mpd_state->feat_tags, tagcols, song);
                 if (partition_state->mpd_state->feat_stickers) {
                     buffer = sdscatlen(buffer, ",", 1);
                     struct t_sticker *sticker = get_sticker_from_cache(&partition_state->mpd_state->sticker_cache, mpd_song_get_uri(song));
-                    buffer = mympd_api_print_sticker(buffer, sticker);
+                    buffer = mympd_api_sticker_print(buffer, sticker);
                     if (sticker != NULL &&
                         sticker->last_played > last_played_max)
                     {
@@ -247,6 +247,7 @@ sds mympd_api_playlist_content_list(struct t_partition_state *partition_state, s
 
     mpd_response_finish(partition_state->conn);
     if (mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id) == false) {
+        FREE_SDS(last_played_song_uri);
         return buffer;
     }
 
@@ -261,7 +262,7 @@ sds mympd_api_playlist_content_list(struct t_partition_state *partition_state, s
     buffer = tojson_sds(buffer, "plist", plist, true);
     buffer = tojson_bool(buffer, "smartpls", smartpls, true);
     buffer = sdscat(buffer, "\"lastPlayedSong\":{");
-    buffer = tojson_llong(buffer, "time", (long long)last_played_max, true);
+    buffer = tojson_time(buffer, "time", last_played_max, true);
     buffer = tojson_sds(buffer, "uri", last_played_song_uri, false);
     buffer = sdscatlen(buffer, "}", 1);
     buffer = jsonrpc_end(buffer);
@@ -271,7 +272,7 @@ sds mympd_api_playlist_content_list(struct t_partition_state *partition_state, s
 }
 
 /**
- * Rename the mpd playlists and the correspodending myMPD smart playlist
+ * Rename the mpd playlists and the corresponding myMPD smart playlist
  * @param partition_state pointer to partition state
  * @param buffer already allocated sds string to append the response
  * @param request_id jsonrpc request id

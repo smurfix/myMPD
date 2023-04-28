@@ -1,20 +1,20 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "pin.h"
+#include "src/lib/pin.h"
 
-#include "log.h"
-#include "sds_extras.h"
-#include "state_files.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/state_files.h"
 
 #include <string.h>
 #include <termios.h>
 
-#ifdef ENABLE_SSL
+#ifdef MYMPD_ENABLE_SSL
     #include <openssl/evp.h>
 #endif
 
@@ -66,13 +66,7 @@ bool pin_set(sds workdir) {
         return false;
     }
 
-    sds hex_hash;
-    if (sdslen(pin) == 0) {
-        hex_hash = sdsempty();
-    }
-    else {
-        hex_hash = pin_hash(pin);
-    }
+    sds hex_hash = sdslen(pin) == 0 ? sdsempty() : pin_hash(pin);
     bool rc = state_file_write(workdir, "config", "pin_hash", hex_hash);
     FREE_SDS(hex_hash);
 
@@ -128,7 +122,7 @@ bool pin_validate(const char *pin, const char *hash) {
  */
 static sds pin_hash(const char *pin) {
     sds hex_hash = sdsempty();
-#ifdef ENABLE_SSL
+#ifdef MYMPD_ENABLE_SSL
     EVP_MD_CTX* context = EVP_MD_CTX_new();
     if (context == NULL) {
         return hex_hash;

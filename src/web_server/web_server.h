@@ -1,14 +1,14 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #ifndef MYMPD_WEB_SERVER_H
 #define MYMPD_WEB_SERVER_H
 
-#include "../lib/config_def.h"
-#include "utility.h"
+#include "src/lib/config_def.h"
+#include "src/web_server/utility.h"
 
 #include <stdbool.h>
 

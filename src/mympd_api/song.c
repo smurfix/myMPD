@@ -1,17 +1,17 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "song.h"
+#include "src/mympd_api/song.h"
 
-#include "../lib/jsonrpc.h"
-#include "../mpd_client/errorhandler.h"
-#include "../mpd_client/tags.h"
-#include "extra_media.h"
-#include "sticker.h"
+#include "src/lib/jsonrpc.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/tags.h"
+#include "src/mympd_api/extra_media.h"
+#include "src/mympd_api/sticker.h"
 
 /**
  * Gets the chromaprint fingerprint for the song
@@ -62,7 +62,7 @@ sds mympd_api_song_details(struct t_partition_state *partition_state, sds buffer
         const struct mpd_audio_format *audioformat = mpd_song_get_audio_format(song);
         buffer = printAudioFormat(buffer, audioformat);
         buffer = sdscatlen(buffer, ",", 1);
-        buffer = get_song_tags(buffer, partition_state, &partition_state->mpd_state->tags_mympd, song);
+        buffer = get_song_tags(buffer, partition_state->mpd_state->feat_tags, &partition_state->mpd_state->tags_mympd, song);
         mpd_song_free(song);
     }
 
@@ -73,7 +73,7 @@ sds mympd_api_song_details(struct t_partition_state *partition_state, sds buffer
 
     if (partition_state->mpd_state->feat_stickers) {
         buffer = sdscatlen(buffer, ",", 1);
-        buffer = mympd_api_sticker_list(buffer, &partition_state->mpd_state->sticker_cache, uri);
+        buffer = mympd_api_sticker_get_print(buffer, &partition_state->mpd_state->sticker_cache, uri);
     }
 
     buffer = sdscatlen(buffer, ",", 1);

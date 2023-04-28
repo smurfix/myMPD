@@ -1,12 +1,13 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #ifndef MYMPD_MEM_H
 #define MYMPD_MEM_H
 
+#undef NDEBUG
 #include <assert.h>
 #include <stdlib.h>
 

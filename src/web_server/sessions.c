@@ -1,24 +1,24 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "sessions.h"
+#include "src/web_server/sessions.h"
 
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/mem.h"
-#include "../lib/pin.h"
-#include "../lib/sds_extras.h"
-#include "../lib/validate.h"
-#include "utility.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/pin.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/validate.h"
+#include "src/web_server/utility.h"
 
 #include <string.h>
 #include <time.h>
 
-#ifdef ENABLE_SSL
+#ifdef MYMPD_ENABLE_SSL
     #include <openssl/rand.h>
 #endif
 
@@ -95,11 +95,11 @@ void webserver_session_api(struct mg_connection *nc, enum mympd_cmd_ids cmd_id, 
 /**
  * Creates a new session
  * @param session_list the session list
- * @return newly allocatded sds string with the session hash
+ * @return newly allocated sds string with the session hash
  */
 sds webserver_session_new(struct t_list *session_list) {
     sds session = sdsempty();
-    #ifdef ENABLE_SSL
+    #ifdef MYMPD_ENABLE_SSL
     unsigned char *buf = malloc_assert(10 * sizeof(unsigned char));
     RAND_bytes(buf, 10);
     for (int i = 0; i < 10; i++) {

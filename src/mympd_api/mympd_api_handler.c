@@ -1,56 +1,58 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "mympd_api_handler.h"
+#include "src/mympd_api/mympd_api_handler.h"
 
-#include "../lib/album_cache.h"
-#include "../lib/api.h"
-#include "../lib/covercache.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/mem.h"
-#include "../lib/msg_queue.h"
-#include "../lib/mympd_state.h"
-#include "../lib/sds_extras.h"
-#include "../lib/smartpls.h"
-#include "../lib/sticker_cache.h"
-#include "../lib/utility.h"
-#include "../lib/validate.h"
-#include "../mpd_client/connection.h"
-#include "../mpd_client/errorhandler.h"
-#include "../mpd_client/features.h"
-#include "../mpd_client/jukebox.h"
-#include "../mpd_client/partitions.h"
-#include "../mpd_client/playlists.h"
-#include "../mpd_client/search.h"
-#include "../mpd_worker/mpd_worker.h"
-#include "albumart.h"
-#include "browse.h"
-#include "filesystem.h"
-#include "home.h"
-#include "last_played.h"
-#include "lyrics.h"
-#include "mounts.h"
-#include "outputs.h"
-#include "partitions.h"
-#include "pictures.h"
-#include "playlists.h"
-#include "queue.h"
-#include "scripts.h"
-#include "settings.h"
-#include "smartpls.h"
-#include "song.h"
-#include "stats.h"
-#include "status.h"
-#include "timer.h"
-#include "timer_handlers.h"
-#include "trigger.h"
-#include "volume.h"
-#include "webradios.h"
+#include "src/lib/album_cache.h"
+#include "src/lib/api.h"
+#include "src/lib/covercache.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/list.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/msg_queue.h"
+#include "src/lib/mympd_state.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/smartpls.h"
+#include "src/lib/sticker_cache.h"
+#include "src/lib/utility.h"
+#include "src/lib/validate.h"
+#include "src/mpd_client/connection.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/features.h"
+#include "src/mpd_client/jukebox.h"
+#include "src/mpd_client/partitions.h"
+#include "src/mpd_client/playlists.h"
+#include "src/mpd_client/presets.h"
+#include "src/mpd_client/search.h"
+#include "src/mpd_worker/mpd_worker.h"
+#include "src/mympd_api/albumart.h"
+#include "src/mympd_api/browse.h"
+#include "src/mympd_api/filesystem.h"
+#include "src/mympd_api/home.h"
+#include "src/mympd_api/last_played.h"
+#include "src/mympd_api/lyrics.h"
+#include "src/mympd_api/mounts.h"
+#include "src/mympd_api/outputs.h"
+#include "src/mympd_api/partitions.h"
+#include "src/mympd_api/pictures.h"
+#include "src/mympd_api/playlists.h"
+#include "src/mympd_api/queue.h"
+#include "src/mympd_api/scripts.h"
+#include "src/mympd_api/settings.h"
+#include "src/mympd_api/smartpls.h"
+#include "src/mympd_api/song.h"
+#include "src/mympd_api/stats.h"
+#include "src/mympd_api/status.h"
+#include "src/mympd_api/timer.h"
+#include "src/mympd_api/timer_handlers.h"
+#include "src/mympd_api/trigger.h"
+#include "src/mympd_api/volume.h"
+#include "src/mympd_api/webradios.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -94,13 +96,13 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
     sds error = sdsempty();
     bool async = false;
 
-    #ifdef DEBUG
-    MEASURE_INIT
-    MEASURE_START
+    #ifdef MYMPD_DEBUG
+        MEASURE_INIT
+        MEASURE_START
     #endif
 
     const char *method = get_cmd_id_method_name(request->cmd_id);
-    MYMPD_LOG_INFO("\"%s\": MYMPD API request (%lld)(%ld) %s: %s",
+    MYMPD_LOG_DEBUG("\"%s\": MYMPD API request (%lld)(%ld) %s: %s",
         partition_state->name, request->conn_id, request->id, method, request->data);
 
     //shortcuts
@@ -120,14 +122,22 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             break;
         case MYMPD_API_SMARTPLS_UPDATE_ALL:
         case MYMPD_API_SMARTPLS_UPDATE:
-        case INTERNAL_API_CACHES_CREATE:
+        case MYMPD_API_CACHES_CREATE:
             if (worker_threads > 5) {
                 response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
                     JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Too many worker threads are already running");
                 MYMPD_LOG_ERROR("Too many worker threads are already running");
                 break;
             }
-            if (request->cmd_id == INTERNAL_API_CACHES_CREATE) {
+            if (request->cmd_id == MYMPD_API_CACHES_CREATE ||
+                request->cmd_id == MYMPD_API_SMARTPLS_UPDATE_ALL)
+            {
+                if (json_get_bool(request->data, "$.params.force", &bool_buf1, NULL) == false) {
+                    //enforce parameter
+                    break;
+                }
+            }
+            if (request->cmd_id == MYMPD_API_CACHES_CREATE) {
                 if (mympd_state->mpd_state->album_cache.building == true ||
                     mympd_state->mpd_state->sticker_cache.building == true)
                 {
@@ -141,6 +151,56 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             }
             async = true;
             mpd_worker_start(mympd_state, request);
+            break;
+        case INTERNAL_API_ALBUMCACHE_SKIPPED:
+            mympd_state->mpd_state->album_cache.building = false;
+            response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_DATABASE);
+            break;
+        case INTERNAL_API_STICKERCACHE_SKIPPED:
+            mympd_state->mpd_state->sticker_cache.building = false;
+            response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_STICKER);
+            break;
+        case INTERNAL_API_ALBUMCACHE_ERROR:
+            mympd_state->mpd_state->album_cache.building = false;
+            response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
+                JSONRPC_FACILITY_DATABASE, JSONRPC_SEVERITY_ERROR, "Error creating album cache");
+            break;
+        case INTERNAL_API_STICKERCACHE_ERROR:
+            mympd_state->mpd_state->sticker_cache.building = false;
+            response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
+                JSONRPC_FACILITY_STICKER, JSONRPC_SEVERITY_ERROR, "Error creating sticker cache");
+            break;
+        case INTERNAL_API_STICKERCACHE_CREATED:
+            if (request->extra != NULL) {
+                sticker_cache_free(&mympd_state->mpd_state->sticker_cache);
+                mympd_state->mpd_state->sticker_cache.cache = (rax *) request->extra;
+                response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_STICKER);
+                MYMPD_LOG_INFO("Sticker cache was replaced");
+            }
+            else {
+                MYMPD_LOG_ERROR("Sticker cache is NULL");
+                response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
+                    JSONRPC_FACILITY_STICKER, JSONRPC_SEVERITY_ERROR, "Sticker cache is NULL");
+            }
+            mympd_state->mpd_state->sticker_cache.building = false;
+            break;
+        case INTERNAL_API_ALBUMCACHE_CREATED:
+            if (request->extra != NULL) {
+                //first clear the jukebox queues - it has references to the album cache
+                MYMPD_LOG_INFO("Clearing jukebox queues");
+                jukebox_clear_all(mympd_state);
+                //free the old album cache and replace it with the freshly generated one
+                album_cache_free(&mympd_state->mpd_state->album_cache);
+                mympd_state->mpd_state->album_cache.cache = (rax *) request->extra;
+                response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_DATABASE);
+                MYMPD_LOG_INFO("Album cache was replaced");
+            }
+            else {
+                MYMPD_LOG_ERROR("Album cache is NULL");
+                response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
+                    JSONRPC_FACILITY_DATABASE, JSONRPC_SEVERITY_ERROR, "Album cache is NULL");
+            }
+            mympd_state->mpd_state->album_cache.building = false;
             break;
         case MYMPD_API_PICTURE_LIST:
             if (json_get_string(request->data, "$.params.type", 1, FILENAME_LEN_MAX, &sds_buf1, vcb_isfilename, &error) == true) {
@@ -214,7 +274,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
         case MYMPD_API_HOME_ICON_LIST:
             response->data = mympd_api_home_icon_list(&mympd_state->home_list, response->data, request->id);
             break;
-        #ifdef ENABLE_LUA
+        #ifdef MYMPD_ENABLE_LUA
         case MYMPD_API_SCRIPT_SAVE: {
             struct t_list arguments;
             list_init(&arguments);
@@ -357,6 +417,27 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
                     //start jukebox
                     jukebox_run(partition_state);
                 }
+                //save options as preset
+                if (json_find_key(request->data, "$.params.name") == true &&
+                    json_get_string(request->data, "$.params.name", 0, NAME_LEN_MAX, &sds_buf1, vcb_isname, &error) == true &&
+                    sdslen(sds_buf1) > 0)
+                {
+                    sds params = json_get_key_as_sds(request->data, "$.params");
+                    if (params != NULL) {
+                        int idx = list_get_node_idx(&partition_state->presets, sds_buf1);
+                        if (idx > -1) {
+                            list_replace(&partition_state->presets, idx, sds_buf1, 0, params, NULL);
+                        }
+                        else {
+                            list_push(&partition_state->presets, sds_buf1, 0, params, NULL);
+                        }
+                        FREE_SDS(params);
+                    }
+                    else {
+                        response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
+                            JSONRPC_FACILITY_MPD, JSONRPC_SEVERITY_ERROR, "Can't save preset");
+                    }
+                }
                 //respond with ok
                 response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_MPD);
             }
@@ -366,6 +447,41 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             }
             break;
         }
+        case MYMPD_API_PRESET_RM:
+            if (json_get_string(request->data, "$.params.name", 1, NAME_LEN_MAX, &sds_buf1, vcb_isname, &error) == true) {
+                rc = presets_delete(&partition_state->presets, sds_buf1);
+                if (rc == true) {
+                    response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_SCRIPT);
+                }
+                else {
+                    response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
+                        JSONRPC_FACILITY_SCRIPT, JSONRPC_SEVERITY_ERROR, "Could not delete preset");
+                }
+            }
+            break;
+        case MYMPD_API_PRESET_LOAD:
+            if (json_get_string(request->data, "$.params.name", 1, NAME_LEN_MAX, &sds_buf1, vcb_isname, &error) == true) {
+                struct t_list_node *preset = list_get_node(&partition_state->presets, sds_buf1);
+                if (preset != NULL) {
+                    if (json_iterate_object(preset->value_p, "$", mympd_api_settings_mpd_options_set, partition_state, NULL, 100, &error) == true) {
+                        if (partition_state->jukebox_mode != JUKEBOX_OFF) {
+                            //start jukebox
+                            jukebox_run(partition_state);
+                        }
+                        //respond with ok
+                        response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_MPD);
+                    }
+                    else {
+                        response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
+                            JSONRPC_FACILITY_MPD, JSONRPC_SEVERITY_ERROR, "Can't set playback options");
+                    }
+                }
+                else {
+                    response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
+                        JSONRPC_FACILITY_SCRIPT, JSONRPC_SEVERITY_ERROR, "Could not load preset");
+                }
+            }
+            break;
         case MYMPD_API_SETTINGS_GET:
             response->data = mympd_api_settings_get(partition_state, response->data, request->id);
             break;
@@ -380,6 +496,9 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
                     mpd_client_disconnect_all(mympd_state, MPD_DISCONNECTED);
                     //remove all but default partition
                     partitions_list_clear(mympd_state);
+                    //remove caches
+                    album_cache_remove(config->workdir);
+                    sticker_cache_remove(config->workdir);
                 }
                 else if (partition_state->conn_state == MPD_CONNECTED) {
                     //feature detection
@@ -489,7 +608,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             }
             break;
         case INTERNAL_API_STATE_SAVE:
-            mympd_state_save(mympd_state);
+            mympd_state_save(mympd_state, false);
             response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_GENERAL);
             break;
         case MYMPD_API_JUKEBOX_RM:
@@ -574,7 +693,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             break;
         case INTERNAL_API_SCRIPT_INIT: {
             struct t_list *lua_mympd_state = list_new();
-            rc = mympd_api_status_lua_mympd_state_set(lua_mympd_state, partition_state, mympd_state->listenbrainz_token);
+            rc = mympd_api_status_lua_mympd_state_set(lua_mympd_state, partition_state);
             if (rc == true) {
                 response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_SCRIPT);
                 response->extra = lua_mympd_state;
@@ -587,7 +706,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             }
             break;
         }
-        case MYMPD_API_PLAYER_OUTPUT_ATTRIBUTS_SET: {
+        case MYMPD_API_PLAYER_OUTPUT_ATTRIBUTES_SET: {
             struct t_list attributes;
             list_init(&attributes);
             if (json_get_uint(request->data, "$.params.outputId", 0, MPD_OUTPUT_ID_MAX, &uint_buf1, &error) == true &&
@@ -606,42 +725,6 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             list_clear(&attributes);
             break;
         }
-        case INTERNAL_API_STICKERCACHE_CREATED:
-            if (request->extra != NULL) {
-                sticker_cache_free(&mympd_state->mpd_state->sticker_cache);
-                mympd_state->mpd_state->sticker_cache.cache = (rax *) request->extra;
-                response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_STICKER);
-                MYMPD_LOG_INFO("Sticker cache was replaced");
-            }
-            else {
-                MYMPD_LOG_ERROR("Sticker cache is NULL");
-                response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
-                    JSONRPC_FACILITY_STICKER, JSONRPC_SEVERITY_ERROR, "Sticker cache is NULL");
-            }
-            mympd_state->mpd_state->sticker_cache.building = false;
-            break;
-        case INTERNAL_API_ALBUMCACHE_CREATED:
-            if (request->extra != NULL) {
-                //first clear the jukebox queues - it has references to the album cache
-                MYMPD_LOG_INFO("Clearing jukebox queues");
-                jukebox_clear_all(mympd_state);
-                //free the old album cache and replace it with the freshly generated one
-                album_cache_free(&mympd_state->mpd_state->album_cache);
-                mympd_state->mpd_state->album_cache.cache = (rax *) request->extra;
-                response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_DATABASE);
-                MYMPD_LOG_INFO("Album cache was replaced");
-                //send notification
-                sds buffer = jsonrpc_event(sdsempty(), JSONRPC_EVENT_UPDATE_ALBUM_CACHE);
-                ws_notify(buffer, MPD_PARTITION_ALL);
-                FREE_SDS(buffer);
-            }
-            else {
-                MYMPD_LOG_ERROR("Album cache is NULL");
-                response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
-                    JSONRPC_FACILITY_DATABASE, JSONRPC_SEVERITY_ERROR, "Album cache is NULL");
-            }
-            mympd_state->mpd_state->album_cache.building = false;
-            break;
         case MYMPD_API_MESSAGE_SEND:
             if (json_get_string(request->data, "$.params.channel", 1, NAME_LEN_MAX, &sds_buf1, vcb_isname, &error) == true &&
                 json_get_string(request->data, "$.params.message", 1, CONTENT_LEN_MAX, &sds_buf2, vcb_isname, &error) == true)
@@ -867,7 +950,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             break;
         case MYMPD_API_PLAYER_VOLUME_SET:
             if (json_get_uint(request->data, "$.params.volume", 0, 100, &uint_buf1, &error) == true) {
-                response->data = mympd_api_volume_set(partition_state, response->data, request->id, uint_buf1);
+                response->data = mympd_api_volume_set(partition_state, response->data, MYMPD_API_PLAYER_VOLUME_SET, request->id, uint_buf1);
             }
             break;
         case MYMPD_API_PLAYER_VOLUME_CHANGE:
@@ -1115,7 +1198,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
                 rc = mpd_client_playlist_shuffle(partition_state, sds_buf1);
                 if (rc == true) {
                     response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
-                        JSONRPC_FACILITY_PLAYLIST, JSONRPC_SEVERITY_INFO, "Shuffled playlist succesfully");
+                        JSONRPC_FACILITY_PLAYLIST, JSONRPC_SEVERITY_INFO, "Shuffled playlist successfully");
                 }
                 else {
                     response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
@@ -1130,7 +1213,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
                 rc = mpd_client_playlist_sort(partition_state, sds_buf1, sds_buf2);
                 if (rc == true) {
                     response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
-                        JSONRPC_FACILITY_PLAYLIST, JSONRPC_SEVERITY_INFO, "Sorted playlist succesfully");
+                        JSONRPC_FACILITY_PLAYLIST, JSONRPC_SEVERITY_INFO, "Sorted playlist successfully");
                 }
                 else {
                     response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
@@ -1210,7 +1293,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             if (json_get_string(request->data, "$.params.plist", 1, FILEPATH_LEN_MAX, &sds_buf1, vcb_isuri, &error) == true &&
                 json_get_bool(request->data, "$.params.play", &bool_buf1, &error) == true)
             {
-                sds_buf1 = resolv_mympd_uri(sds_buf1, mympd_state->mpd_state->mpd_host, config->http_host, config->http_port);
+                sds_buf1 = resolv_mympd_uri(sds_buf1, mympd_state->mpd_state->mpd_host, config);
                 rc = mpd_run_load(partition_state->conn, sds_buf1);
                 response->data = mympd_respond_with_error_or_ok(partition_state, response->data, request->cmd_id, request->id, rc, "mpd_run_load", &result);
                 if (result == true &&
@@ -1232,7 +1315,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
                 json_get_uint(request->data, "$.params.whence", 0, 2, &uint_buf2, &error) == true &&
                 json_get_bool(request->data, "$.params.play", &bool_buf1, &error) == true)
             {
-                sds_buf1 = resolv_mympd_uri(sds_buf1, mympd_state->mpd_state->mpd_host, config->http_host, config->http_port);
+                sds_buf1 = resolv_mympd_uri(sds_buf1, mympd_state->mpd_state->mpd_host, config);
                 rc = mpd_run_load_range_to(partition_state->conn, sds_buf1, 0, UINT_MAX, uint_buf1, uint_buf2);
                 response->data = mympd_respond_with_error_or_ok(partition_state, response->data, request->cmd_id, request->id, rc, "mpd_run_load_range_to", &result);
                 if (result == true &&
@@ -1247,7 +1330,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             if (json_get_string(request->data, "$.params.plist", 1, FILEPATH_LEN_MAX, &sds_buf1, vcb_isuri, &error) == true &&
                 json_get_bool(request->data, "$.params.play", &bool_buf1, &error) == true)
             {
-                sds_buf1 = resolv_mympd_uri(sds_buf1, mympd_state->mpd_state->mpd_host, config->http_host, config->http_port);
+                sds_buf1 = resolv_mympd_uri(sds_buf1, mympd_state->mpd_state->mpd_host, config);
                 rc = mympd_api_queue_replace_with_playlist(partition_state, sds_buf1);
                 response->data = mympd_respond_with_error_or_ok(partition_state, response->data, request->cmd_id, request->id, rc, "mympd_api_queue_replace_with_playlist", &result);
                 if (result == true &&
@@ -1316,9 +1399,24 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             }
             break;
         case MYMPD_API_QUEUE_SAVE:
-            if (json_get_string(request->data, "$.params.plist", 1, FILENAME_LEN_MAX, &sds_buf1, vcb_isfilename, &error) == true) {
-                rc = mpd_run_save(partition_state->conn, sds_buf1);
-                response->data = mympd_respond_with_error_or_ok(partition_state, response->data, request->cmd_id, request->id, rc, "mpd_run_save", &result);
+            if (json_get_string(request->data, "$.params.plist", 1, FILENAME_LEN_MAX, &sds_buf1, vcb_isfilename, &error) == true &&
+                json_get_string(request->data, "$.params.mode", 1, NAME_LEN_MAX, &sds_buf2, vcb_isalnum, &error) == true)
+            {
+                if (mympd_state->mpd_state->feat_advqueue == true) {
+                    enum mpd_queue_save_mode save_mode = mpd_parse_queue_save_mode(sds_buf2);
+                    if (save_mode != MPD_QUEUE_SAVE_MODE_UNKNOWN) {
+                        rc = mpd_run_save_queue(partition_state->conn, sds_buf1, save_mode);
+                        response->data = mympd_respond_with_error_or_ok(partition_state, response->data, request->cmd_id, request->id, rc, "mpd_run_save_queue", &result);
+                    }
+                    else {
+                        response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
+                            JSONRPC_FACILITY_QUEUE, JSONRPC_SEVERITY_ERROR, "Unknown queue save mode");
+                    }
+                }
+                else {
+                    rc = mpd_run_save(partition_state->conn, sds_buf1);
+                    response->data = mympd_respond_with_error_or_ok(partition_state, response->data, request->cmd_id, request->id, rc, "mpd_run_save", &result);
+                }
             }
             break;
         case MYMPD_API_QUEUE_SEARCH: {
@@ -1369,7 +1467,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
             rc = mpd_run_shuffle(partition_state->conn);
             response->data = mympd_respond_with_error_or_ok(partition_state, response->data, request->cmd_id, request->id, rc, "mpd_run_shuffle", &result);
             break;
-        case MYMPD_API_DATABASE_STATS:
+        case MYMPD_API_STATS:
             response->data = mympd_api_stats_get(partition_state, response->data, request->id);
             break;
         case INTERNAL_API_ALBUMART:
@@ -1377,17 +1475,21 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
                 response->data = mympd_api_albumart_getcover(partition_state, response->data, request->id, sds_buf1, &response->binary);
             }
             break;
-        case MYMPD_API_DATABASE_ALBUMS_GET:
+        case MYMPD_API_DATABASE_ALBUM_LIST: {
+            struct t_tags tagcols;
+            reset_t_tags(&tagcols);
             if (json_get_long(request->data, "$.params.offset", 0, MPD_PLAYLIST_LENGTH_MAX, &long_buf1, &error) == true &&
                 json_get_long(request->data, "$.params.limit", MPD_RESULTS_MIN, MPD_RESULTS_MAX, &long_buf2, &error) == true &&
                 json_get_string(request->data, "$.params.expression", 0, EXPRESSION_LEN_MAX, &sds_buf1, vcb_isname, &error) == true &&
                 json_get_string(request->data, "$.params.sort", 1, NAME_LEN_MAX, &sds_buf2, vcb_ismpdsort, &error) == true &&
-                json_get_bool(request->data, "$.params.sortdesc", &bool_buf1, &error) == true)
+                json_get_bool(request->data, "$.params.sortdesc", &bool_buf1, &error) == true &&
+                json_get_tags(request->data, "$.params.cols", &tagcols, COLS_MAX, &error) == true)
             {
                 response->data = mympd_api_browse_album_list(partition_state, response->data, request->id,
-                    sds_buf1, sds_buf2, bool_buf1, long_buf1, long_buf2);
+                    sds_buf1, sds_buf2, bool_buf1, long_buf1, long_buf2, &tagcols);
             }
             break;
+        }
         case MYMPD_API_DATABASE_TAG_LIST:
             if (json_get_long(request->data, "$.params.offset", 0, MPD_PLAYLIST_LENGTH_MAX, &long_buf1, &error) == true &&
                 json_get_long(request->data, "$.params.limit", MPD_RESULTS_MIN, MPD_RESULTS_MAX, &long_buf2, &error) == true &&
@@ -1399,7 +1501,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
                     sds_buf1, sds_buf2, long_buf1, long_buf2, bool_buf1);
             }
             break;
-        case MYMPD_API_DATABASE_TAG_ALBUM_TITLE_LIST: {
+        case MYMPD_API_DATABASE_ALBUM_DETAIL: {
             struct t_tags tagcols;
             reset_t_tags(&tagcols);
             struct t_list albumartists;
@@ -1408,17 +1510,17 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
                 json_get_array_string(request->data, "$.params.albumartist", &albumartists, vcb_isname, 10, &error) == true &&
                 json_get_tags(request->data, "$.params.cols", &tagcols, COLS_MAX, &error) == true)
             {
-                response->data = mympd_api_browse_album_songs(partition_state, response->data, request->id, sds_buf1, &albumartists, &tagcols);
+                response->data = mympd_api_browse_album_detail(partition_state, response->data, request->id, sds_buf1, &albumartists, &tagcols);
             }
             list_clear(&albumartists);
             break;
         }
         case INTERNAL_API_TIMER_STARTPLAY:
             if (json_get_uint(request->data, "$.params.volume", 0, 100, &uint_buf1, &error) == true &&
-                json_get_string(request->data, "$.params.plist", 1, FILENAME_LEN_MAX, &sds_buf1, vcb_isfilename, &error) == true &&
-                json_get_uint(request->data, "$.params.jukeboxMode", 0, 2, &uint_buf2, &error) == true)
+                json_get_string(request->data, "$.params.plist", 0, FILENAME_LEN_MAX, &sds_buf1, vcb_isfilename, &error) == true &&
+                json_get_string_max(request->data, "$.params.preset", &sds_buf2, vcb_isname, &error) == true)
             {
-                rc = mympd_api_timer_startplay(partition_state, uint_buf1, sds_buf1, uint_buf2);
+                rc = mympd_api_timer_startplay(partition_state, uint_buf1, sds_buf1, sds_buf2);
                 if (rc == true) {
                     response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_TIMER);
                 }
@@ -1532,7 +1634,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
                 json_get_string(request->data, "$.params.homepage", 0, FILEPATH_LEN_MAX, &sds_buf6, vcb_isuri, &error) == true &&
                 json_get_string(request->data, "$.params.country", 0, FILEPATH_LEN_MAX, &sds_buf7, vcb_isname, &error) == true &&
                 json_get_string(request->data, "$.params.language", 0, FILEPATH_LEN_MAX, &sds_buf8, vcb_isname, &error) == true &&
-                json_get_string(request->data, "$.params.codec", 0, FILEPATH_LEN_MAX, &sds_buf9, vcb_isalnum, &error) == true &&
+                json_get_string(request->data, "$.params.codec", 0, FILEPATH_LEN_MAX, &sds_buf9, vcb_isprint, &error) == true &&
                 json_get_int(request->data, "$.params.bitrate", 0, 2048, &int_buf1, &error) == true &&
                 json_get_string(request->data, "$.params.description", 0, CONTENT_LEN_MAX, &sds_buf0, vcb_isname, &error) == true
             ) {
@@ -1577,9 +1679,9 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
     FREE_SDS(sds_buf9);
     FREE_SDS(sds_buf0);
 
-    #ifdef DEBUG
-    MEASURE_END
-    MEASURE_PRINT(method)
+    #ifdef MYMPD_DEBUG
+        MEASURE_END
+        MEASURE_PRINT(method)
     #endif
 
     //errorhandling
@@ -1624,7 +1726,7 @@ void mympd_api_handler(struct t_partition_state *partition_state, struct t_work_
 /**
  * Tries to play the last inserted song and checks for success
  * @param partition_state pointer to partition state
- * @param play realy play last inserts song
+ * @param play really play last inserts song
  * @param buffer already allocated sds string to append the error response
  * @param cmd_id jsonrpc method
  * @param request_id jsonrpc request id

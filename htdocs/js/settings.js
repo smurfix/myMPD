@@ -1,135 +1,45 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
-function initSettings() {
-    document.getElementById('selectMusicDirectory').addEventListener('change', function () {
-        const musicDirMode = getSelectValue(this);
-        if (musicDirMode === 'auto') {
-            document.getElementById('inputMusicDirectory').value = settings.musicDirectoryValue;
-            document.getElementById('inputMusicDirectory').setAttribute('readonly', 'readonly');
-        }
-        else if (musicDirMode === 'none') {
-            document.getElementById('inputMusicDirectory').value = '';
-            document.getElementById('inputMusicDirectory').setAttribute('readonly', 'readonly');
-        }
-        else {
-            document.getElementById('inputMusicDirectory').value = '';
-            document.getElementById('inputMusicDirectory').removeAttribute('readonly');
-        }
-    }, false);
+/** @module settings_js */
 
+/**
+ * Initialization function for the settings elements
+ * @returns {void}
+ */
+function initSettings() {
     document.getElementById('modalSettings').addEventListener('shown.bs.modal', function () {
         cleanupModalId('modalSettings');
         getSettings();
     });
 
-    document.getElementById('modalMaintenance').addEventListener('shown.bs.modal', function () {
-        document.getElementById('selectSetLoglevel').value = settings.loglevel;
-        cleanupModalId('modalMaintenance');
-    });
-
-    document.getElementById('modalQueueSettings').addEventListener('shown.bs.modal', function () {
-        cleanupModalId('modalQueueSettings');
-        getSettings();
-    });
-
-    setDataId('selectJukeboxPlaylist', 'cb-filter', 'filterPlaylistsSelect');
-    setDataId('selectJukeboxPlaylist', 'cb-filter-options', [0, 'selectJukeboxPlaylist']);
-
-    document.getElementById('modalConnection').addEventListener('shown.bs.modal', function () {
-        getSettings();
-        cleanupModalId('modalConnection');
-    });
-
-    document.getElementById('btnJukeboxModeGroup').addEventListener('mouseup', function () {
-        setTimeout(function() {
-            const value = getBtnGroupValueId('btnJukeboxModeGroup');
-            if (value === 'off') {
-                elDisableId('inputJukeboxQueueLength');
-                elDisableId('selectJukeboxPlaylist');
-            }
-            else if (value === 'album') {
-                elDisableId('inputJukeboxQueueLength');
-                elDisableId('selectJukeboxPlaylist');
-                elDisable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
-                document.getElementById('selectJukeboxPlaylist').value = 'Database';
-                setDataId('selectJukeboxPlaylist', 'value', 'Database');
-            }
-            else if (value === 'song') {
-                elEnableId('inputJukeboxQueueLength');
-                elEnableId('selectJukeboxPlaylist');
-                elEnable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
-            }
-            if (value !== 'off') {
-                toggleBtnChkId('btnConsume', true);
-            }
-            checkConsume();
-        }, 100);
-    });
-
-    document.getElementById('btnConsume').addEventListener('mouseup', function() {
-        setTimeout(function() {
-            checkConsume();
-        }, 100);
-    });
-
-    initElements(document.getElementById('modalConnection'));
-    initElements(document.getElementById('modalQueueSettings'));
     createSettingsFrm();
 }
 
-//eslint-disable-next-line no-unused-vars
-function togglePlaymode(option) {
-    let value;
-    let title;
-    switch(option) {
-        case 'consume':
-        case 'random':
-        case 'repeat':
-            if (settings.partition[option] === true) {
-                value = false;
-                title = 'Disable ' + option;
-            }
-            else {
-                value = true;
-                title = 'Enable ' + option;
-            }
-            break;
-        case 'single':
-            if (settings.partition.single === '0') {
-                value = 'oneshot';
-                title = 'Enable single oneshot';
-            }
-            else if (settings.partition.single === 'oneshot') {
-                value = '1';
-                title = 'Enable single mode';
-            }
-            else if (settings.partition.single === '1') {
-                value = '0';
-                title = 'Disable single mode';
-            }
-            break;
-    }
-    const params = {};
-    params[option] = value;
-    sendAPI('MYMPD_API_PLAYER_OPTIONS_SET', params);
-    showNotification(tn(title), '', 'queue', 'info');
-}
-
+/**
+ * Change eventhandler for the locale select
+ * @param {Event} event change event
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function eventChangeLocale(event) {
     const value = getSelectValue(event.target);
     warnLocale(value);
 }
 
+/**
+ * Change eventhandler for the theme select
+ * @param {Event} event change event
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function eventChangeTheme(event) {
     const value = getSelectValue(event.target);
     const bgImageEl = document.getElementById('inputWebUIsettinguiBgImage');
     const bgImageValue = getData(bgImageEl, 'value');
-    if (value === 'theme-light') {
+    if (value === 'light') {
         document.getElementById('inputWebUIsettinguiBgColor').value = '#ffffff';
         if (bgImageValue.indexOf('/assets/') === 0) {
             bgImageEl.value = getBgImageText('/assets/mympd-background-light.svg');
@@ -137,7 +47,7 @@ function eventChangeTheme(event) {
         }
     }
     else {
-        //theme-dark is the default
+        //dark is the default
         document.getElementById('inputWebUIsettinguiBgColor').value = '#060708';
         if (bgImageValue.indexOf('/assets/') === 0) {
             bgImageEl.value = getBgImageText('/assets/mympd-background-dark.svg');
@@ -147,8 +57,13 @@ function eventChangeTheme(event) {
     toggleThemeInputs(value);
 }
 
+/**
+ * Shows or hides the background color and image inputs
+ * @param {string} theme theme name
+ * @returns {void}
+ */
 function toggleThemeInputs(theme) {
-    if (theme === 'theme-autodetect') {
+    if (theme === 'auto') {
         document.getElementById('inputWebUIsettinguiBgColor').parentNode.parentNode.classList.add('d-none');
         document.getElementById('inputWebUIsettinguiBgImage').parentNode.parentNode.classList.add('d-none');
     }
@@ -158,94 +73,20 @@ function toggleThemeInputs(theme) {
     }
 }
 
-//eslint-disable-next-line no-unused-vars
-function saveConnection() {
-    cleanupModalId('modalConnection');
-    let formOK = true;
-    const mpdHostEl = document.getElementById('inputMpdHost');
-    const mpdPortEl = document.getElementById('inputMpdPort');
-    const mpdPassEl = document.getElementById('inputMpdPass');
-    const playlistDirectoryEl = document.getElementById('inputPlaylistDirectory');
-    const mpdBinarylimitEl = document.getElementById('inputMpdBinarylimit');
-    const mpdTimeoutEl = document.getElementById('inputMpdTimeout');
-    const musicDirectoryEl = document.getElementById('selectMusicDirectory');
-    let musicDirectory = getSelectValue(musicDirectoryEl);
-
-    if (musicDirectory === 'auto' && mpdHostEl.value.indexOf('/') !== 0) {
-        formOK = false;
-        setIsInvalid(musicDirectoryEl);
-    }
-
-    if (musicDirectory === 'custom') {
-        const musicDirectoryValueEl = document.getElementById('inputMusicDirectory');
-        if (validatePath(musicDirectoryValueEl) === false) {
-            formOK = false;
-        }
-        musicDirectory = musicDirectoryValueEl.value;
-    }
-    if (mpdPortEl.value === '') {
-        mpdPortEl.value = '6600';
-    }
-    if (validateIntRange(mpdPortEl, 1024, 65535) === false) {
-        formOK = false;
-    }
-    if (mpdHostEl.value.indexOf('/') !== 0) {
-        if (validateInt(mpdPortEl) === false) {
-            formOK = false;
-        }
-        if (validateHost(mpdHostEl) === false) {
-            formOK = false;
-        }
-    }
-    if (validatePath(playlistDirectoryEl) === false) {
-        formOK = false;
-    }
-    if (validateIntRange(mpdBinarylimitEl, 4, 256) === false) {
-        formOK = false;
-    }
-    if (validateIntRange(mpdTimeoutEl, 1, 1000) === false) {
-        formOK = false;
-    }
-    if (formOK === true) {
-        sendAPIpartition('default', 'MYMPD_API_CONNECTION_SAVE', {
-            "mpdHost": mpdHostEl.value,
-            "mpdPort": Number(mpdPortEl.value),
-            "mpdPass": mpdPassEl.value,
-            "musicDirectory": musicDirectory,
-            "playlistDirectory": playlistDirectoryEl.value,
-            "mpdBinarylimit": Number(mpdBinarylimitEl.value) * 1024,
-            "mpdTimeout": Number(mpdTimeoutEl.value) * 1000,
-            "mpdKeepalive": (document.getElementById('btnMpdKeepalive').classList.contains('active') ? true : false)
-        }, saveConnectionClose, true);
-    }
-}
-
-function saveConnectionClose(obj) {
-    if (obj.error) {
-        showModalAlert(obj);
-    }
-    else {
-        getSettings(false);
-        uiElements.modalConnection.hide();
-    }
-}
-
-function getSettings(onerror) {
+/**
+ * Fetches all myMPD and MPD settings
+ * @returns {void}
+ */
+function getSettings() {
     settingsParsed = 'no';
-    sendAPI('MYMPD_API_SETTINGS_GET', {}, parseSettings, onerror);
+    sendAPI('MYMPD_API_SETTINGS_GET', {}, parseSettings, true);
 }
 
-function checkConsume() {
-    const stateConsume = document.getElementById('btnConsume').classList.contains('active') ? true : false;
-    const stateJukeboxMode = getBtnGroupValueId('btnJukeboxModeGroup');
-    if (stateJukeboxMode !== 'off' && stateConsume === false) {
-        elShowId('warnConsume');
-    }
-    else {
-        elHideId('warnConsume');
-    }
-}
-
+/**
+ * Parses the MYMPD_API_SETTINGS_GET jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function parseSettings(obj) {
     if (obj.error) {
         settingsParsed = 'error';
@@ -264,7 +105,9 @@ function parseSettings(obj) {
 
     //set webuiSettings defaults
     for (const key in webuiSettingsDefault) {
-        if (settings.webuiSettings[key] === undefined) {
+        if (settings.webuiSettings[key] === undefined &&
+            webuiSettingsDefault[key].defaultValue !== undefined)
+        {
             settings.webuiSettings[key] = webuiSettingsDefault[key].defaultValue;
         }
     }
@@ -293,30 +136,23 @@ function parseSettings(obj) {
 
     //theme
     let setTheme = settings.webuiSettings.uiTheme;
-    if (setTheme === 'theme-default') {
-        setTheme = 'theme-dark';
+    switch(setTheme) {
+        case 'theme-autodetect': setTheme = 'auto'; break;
+        case 'theme-light': setTheme = 'light'; break;
+        case 'theme-dark': setTheme = 'dark'; break;
     }
-    else if (setTheme === 'theme-autodetect') {
+    if (setTheme === 'auto') {
         setTheme = window.matchMedia &&
-            window.matchMedia('(prefers-color-scheme: light)').matches ? 'theme-light' : 'theme-dark';
+            window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
     }
-
-    for (const theme in webuiSettingsDefault.uiTheme.validValues) {
-        if (theme === setTheme) {
-            domCache.body.classList.add(theme);
-            setCssVars(theme);
-        }
-        else {
-            domCache.body.classList.remove(theme);
-        }
-    }
+    document.querySelector('html').setAttribute('data-bs-theme', setTheme);
 
     //background
-    if (settings.webuiSettings.uiTheme === 'theme-autodetect') {
+    if (settings.webuiSettings.uiTheme === 'auto') {
         //in auto mode we set default background
         domCache.body.style.backgroundImage = '';
         document.documentElement.style.setProperty('--mympd-backgroundcolor',
-            (setTheme === 'theme-dark' ? '#060708' : '#ffffff')
+            (setTheme === 'dark' ? '#060708' : '#ffffff')
         );
     }
     else {
@@ -361,6 +197,9 @@ function parseSettings(obj) {
         document.getElementById('btnNext').removeAttribute('disabled');
     }
 
+    //presets
+    populatePresetDropdowns();
+
     //parse mpd settings if connected
     if (settings.partition.mpdConnected === true) {
         parseMPDSettings();
@@ -372,6 +211,7 @@ function parseSettings(obj) {
 
     document.documentElement.style.setProperty('--mympd-thumbnail-size', settings.webuiSettings.uiThumbnailSize + "px");
     document.documentElement.style.setProperty('--mympd-highlightcolor', settings.partition.highlightColor);
+    document.documentElement.style.setProperty('--mympd-highlightcolor-contrast', settings.partition.highlightColorContrast);
 
     //default limit for all cards
     let limit = settings.webuiSettings.uiMaxElementsPerPage;
@@ -384,10 +224,11 @@ function parseSettings(obj) {
     app.cards.Queue.tabs.LastPlayed.limit = limit;
     app.cards.Queue.tabs.Jukebox.limit = limit;
     app.cards.Browse.tabs.Filesystem.limit = limit;
-    app.cards.Browse.tabs.Playlists.views.List.limit = limit;
-    app.cards.Browse.tabs.Playlists.views.Detail.limit = limit;
-    app.cards.Browse.tabs.Database.views.List.limit = limit;
-    app.cards.Browse.tabs.Database.views.Detail.limit = limit;
+    app.cards.Browse.tabs.Playlist.views.List.limit = limit;
+    app.cards.Browse.tabs.Playlist.views.Detail.limit = limit;
+    app.cards.Browse.tabs.Database.views.TagList.limit = limit;
+    app.cards.Browse.tabs.Database.views.AlbumList.limit = limit;
+    app.cards.Browse.tabs.Database.views.AlbumDetail.limit = limit;
     app.cards.Search.limit = limit;
 
     //scripts
@@ -396,8 +237,8 @@ function parseSettings(obj) {
         elClearId('selectTimerAction');
         selectTimerAction.appendChild(
             elCreateNodes('optgroup', {"data-value": "player", "data-label-phrase": "Playback", "label": tn('Playback')}, [
-                elCreateText('option', {"value": "startplay", "data-phrase": "Start playback"}, tn('Start playback')),
-                elCreateText('option', {"value": "stopplay", "data-phrase": "Stop playback"}, tn('Stop playback'))
+                elCreateTextTn('option', {"value": "startplay"}, 'Start playback'),
+                elCreateTextTn('option', {"value": "stopplay"}, 'Stop playback')
             ])
         );
 
@@ -431,7 +272,7 @@ function parseSettings(obj) {
     appRoute();
 
     //mediaSession support
-    if (checkMediaSessionSupport() === true) {
+    if (features.featMediaSession === true) {
         try {
             navigator.mediaSession.setActionHandler('play', clickPlay);
             navigator.mediaSession.setActionHandler('pause', clickPlay);
@@ -459,148 +300,11 @@ function parseSettings(obj) {
     settingsParsed = 'parsed';
 }
 
-function setCssVars(theme) {
-    switch(theme) {
-        case 'theme-light':
-            document.documentElement.style.setProperty('--bs-body-color', '#343a40');
-            document.documentElement.style.setProperty('--bs-body-color-rgb', '52, 58, 64');
-            document.documentElement.style.setProperty('--bs-body-bg', 'white');
-            document.documentElement.style.setProperty('--bs-dark-rgb', '206, 212, 218');
-            document.documentElement.style.setProperty('--mympd-black-light', '#f8f9fa');
-            break;
-        default:
-            document.documentElement.style.setProperty('--bs-body-color', '#f8f9fa');
-            document.documentElement.style.setProperty('--bs-body-color-rgb', '248, 249, 250');
-            document.documentElement.style.setProperty('--bs-body-bg', 'black');
-            document.documentElement.style.setProperty('--bs-dark-rgb', '52, 58, 64');
-            document.documentElement.style.setProperty('--mympd-black-light', '#1d2124');
-    }
-}
-
-function setLocale(newLocale) {
-    if (newLocale === 'default') {
-        //auto detection
-        locale = navigator.language || navigator.userLanguage;
-        if (locale.length === 2) {
-            locale += '-';
-        }
-    }
-    else {
-        locale = newLocale;
-    }
-    //check if locale is available
-    let localeFound = false;
-    for (const l in i18n) {
-        if (l === 'default') {
-            continue;
-        }
-        if (l.indexOf(locale) === 0) {
-            locale = l;
-            localeFound = true;
-            break;
-        }
-    }
-    //fallback to default locale
-    if (localeFound === false) {
-        logError('Locale "' + locale + '" not defined');
-        locale = 'en-US';
-    }
-    //get phrases and translate dom
-    httpGet(subdir + '/assets/i18n/' + locale + '.json', function(obj) {
-        phrases = obj;
-        i18nHtml(domCache.body);
-    }, true);
-}
-
-function populateQueueSettingsFrm() {
-    toggleBtnGroupValueCollapse(document.getElementById('btnJukeboxModeGroup'), 'collapseJukeboxMode', settings.partition.jukeboxMode);
-    addTagListSelect('selectJukeboxUniqueTag', 'tagListBrowse');
-
-    document.getElementById('selectJukeboxUniqueTag').value = settings.partition.jukeboxUniqueTag;
-    document.getElementById('inputJukeboxQueueLength').value = settings.partition.jukeboxQueueLength;
-    document.getElementById('inputJukeboxLastPlayed').value = settings.partition.jukeboxLastPlayed;
-    if (settings.partition.jukeboxMode === 'off') {
-        elDisableId('inputJukeboxQueueLength');
-        elDisableId('selectJukeboxPlaylist');
-    }
-    else if (settings.partition.jukeboxMode === 'album') {
-        elDisableId('inputJukeboxQueueLength');
-        elDisableId('selectJukeboxPlaylist');
-        elDisable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
-        document.getElementById('selectJukeboxPlaylist').value = 'Database';
-    }
-    else if (settings.partition.jukeboxMode === 'song') {
-        elEnableId('inputJukeboxQueueLength');
-        elEnableId('selectJukeboxPlaylist');
-        elEnable(document.getElementById('selectJukeboxPlaylist').nextElementSibling);
-    }
-
-    document.getElementById('selectJukeboxPlaylist').filterInput.value = '';
-
-    if (settings.partition.mpdConnected === true) {
-        if (features.featPlaylists === true) {
-            filterPlaylistsSelect(0, 'selectJukeboxPlaylist', '', settings.partition.jukeboxPlaylist);
-            setDataId('selectJukeboxPlaylist', 'value', settings.partition.jukeboxPlaylist);
-        }
-        else {
-            document.getElementById('selectJukeboxPlaylist').value = tn('Database');
-            setDataId('selectJukeboxPlaylist', 'value', 'Database');
-        }
-        toggleBtnChkId('btnRandom', settings.partition.random);
-        toggleBtnChkId('btnConsume', settings.partition.consume);
-        toggleBtnChkId('btnRepeat', settings.partition.repeat);
-        toggleBtnChkId('btnAutoPlay', settings.partition.autoPlay);
-        toggleBtnGroupValue(document.getElementById('btnSingleGroup'), settings.partition.single);
-        toggleBtnGroupValue(document.getElementById('btnReplaygainGroup'), settings.partition.replaygain);
-        document.getElementById('inputCrossfade').value = settings.partition.crossfade;
-        document.getElementById('inputMixrampDb').value = settings.partition.mixrampDb;
-        document.getElementById('inputMixrampDelay').value = settings.partition.mixrampDelay;
-        if (features.featStickers === false) {
-            elShowId('warnPlaybackStatistics');
-            elDisableId('inputJukeboxLastPlayed');
-        }
-        else {
-            elHideId('warnPlaybackStatistics');
-            elEnableId('inputJukeboxLastPlayed');
-        }
-    }
-    checkConsume();
-}
-
-function populateConnectionFrm() {
-    document.getElementById('inputMpdHost').value = settings.mpdHost;
-    document.getElementById('inputMpdPort').value = settings.mpdPort;
-    document.getElementById('inputMpdPass').value = settings.mpdPass;
-    document.getElementById('inputPlaylistDirectory').value = settings.playlistDirectory;
-    document.getElementById('inputMpdBinarylimit').value = settings.mpdBinarylimit / 1024;
-    document.getElementById('inputMpdTimeout').value = settings.mpdTimeout / 1000;
-
-    toggleBtnChkId('btnMpdKeepalive', settings.mpdKeepalive);
-
-    if (settings.musicDirectory === 'auto') {
-        document.getElementById('selectMusicDirectory').value = settings.musicDirectory;
-        document.getElementById('inputMusicDirectory').value = settings.musicDirectoryValue !== undefined ? settings.musicDirectoryValue : '';
-        document.getElementById('inputMusicDirectory').setAttribute('readonly', 'readonly');
-    }
-    else if (settings.musicDirectory === 'none') {
-        document.getElementById('selectMusicDirectory').value = settings.musicDirectory;
-        document.getElementById('inputMusicDirectory').value = '';
-        document.getElementById('inputMusicDirectory').setAttribute('readonly', 'readonly');
-    }
-    else {
-        document.getElementById('selectMusicDirectory').value = 'custom';
-        document.getElementById('inputMusicDirectory').value = settings.musicDirectoryValue;
-        document.getElementById('inputMusicDirectory').removeAttribute('readonly');
-    }
-
-    if (settings.musicDirectoryValue === '' && settings.musicDirectory !== 'none') {
-        elShowId('warnMusicDirectory');
-    }
-    else {
-        elHideId('warnMusicDirectory');
-    }
-}
-
+/**
+ * Sets the text for the bgImage input
+ * @param {string} value bgImage value
+ * @returns {string} bgImage text
+ */
 function getBgImageText(value) {
     if (value === '') {
         return 'None';
@@ -613,8 +317,12 @@ function getBgImageText(value) {
     return value;
 }
 
+/**
+ * Populates the settings modal
+ * @returns {void}
+ */
 function populateSettingsFrm() {
-    getBgImageList(settings.webuiSettings.uiBgImage);
+    getBgImageList();
     const bgImageInput = document.getElementById('inputWebUIsettinguiBgImage');
     setData(bgImageInput, 'value', settings.webuiSettings.uiBgImage);
     bgImageInput.value = getBgImageText(settings.webuiSettings.uiBgImage);
@@ -623,6 +331,7 @@ function populateSettingsFrm() {
 
     //partition specific settings
     document.getElementById('inputHighlightColor').value = settings.partition.highlightColor;
+    document.getElementById('inputHighlightColorContrast').value = settings.partition.highlightColorContrast;
     document.getElementById('inputMpdStreamPort').value = settings.partition.mpdStreamPort;
     document.getElementById('inputStreamUri').value = settings.partition.streamUri;
 
@@ -631,7 +340,7 @@ function populateSettingsFrm() {
     elClear(localeList);
     for (const l in i18n) {
         localeList.appendChild(
-            elCreateText('option', {"value": l}, i18n[l].desc + ' (' + l + ')')
+            elCreateTextTn('option', {"value": l}, i18n[l].desc)
         );
         if (l === settings.webuiSettings.uiLocale) {
             localeList.lastChild.setAttribute('selected', 'selected');
@@ -665,7 +374,7 @@ function populateSettingsFrm() {
 
     //media session support
     const btnMediaSession = document.getElementById('inputWebUIsettingmediaSession');
-    if (checkMediaSessionSupport() === false) {
+    if (features.featMediaSession === false) {
         elShowId('warninputWebUIsettingmediaSession');
         elDisable(btnMediaSession);
         toggleBtnChk(btnMediaSession, false);
@@ -722,6 +431,13 @@ function populateSettingsFrm() {
     setFeatureBtnId('inputWebUIsettingenablePartitions', settings.features.featPartitions);
 }
 
+/**
+ * Shows the warning for a disabled feature button (feature is not supported by the backend)
+ * @param {string} id button id
+ * @param {boolean} value true = enable button and hide warning
+ *                        false = disable button and show warning
+ * @returns {void}
+ */
 function setFeatureBtnId(id, value) {
     if (value === true) {
         elEnableId(id);
@@ -734,12 +450,23 @@ function setFeatureBtnId(id, value) {
     }
 }
 
+/**
+ * Creates the settings modal and initializes the elements
+ * @returns {void}
+ */
 function createSettingsFrm() {
     _createSettingsFrm(settings.webuiSettings, webuiSettingsDefault, 'inputWebUIsetting');
     _createSettingsFrm(settings, settingFields, 'inputSetting');
     initElements(document.getElementById('modalSettings'));
 }
 
+/**
+ * Creates the settings modal
+ * @param {object} fields elements to create
+ * @param {object} defaults default values for the elements
+ * @param {string} prefix prefix for element ids
+ * @returns {void}
+ */
 function _createSettingsFrm(fields, defaults, prefix) {
     //build form for web ui settings
     const advFrm = {};
@@ -758,11 +485,17 @@ function _createSettingsFrm(fields, defaults, prefix) {
 
         if (defaults[key].inputType === 'section') {
             if (defaults[key].title !== undefined) {
-                advFrm[form].appendChild(elCreateEmpty('hr', {}));
-                advFrm[form].appendChild(elCreateText('h4', {"data-phrase": defaults[key].title}, tn(defaults[key].title)));
+                advFrm[form].appendChild(
+                    elCreateEmpty('hr', {})
+                );
+                advFrm[form].appendChild(
+                    elCreateTextTn('h4', {}, defaults[key].title)
+                );
             }
             else if (defaults[key].subtitle !== undefined) {
-                advFrm[form].appendChild(elCreateText('h4', {"data-phrase": defaults[key].subtitle}, tn(defaults[key].subtitle)));
+                advFrm[form].appendChild(
+                    elCreateTextTn('h4', {}, defaults[key].subtitle)
+                );
             }
             continue;
         }
@@ -770,12 +503,13 @@ function _createSettingsFrm(fields, defaults, prefix) {
         const col = elCreateEmpty('div', {"class": ["col-sm-8", "position-relative"]});
         if (defaults[key].inputType === 'select') {
             const select = elCreateEmpty('select', {"class": ["form-select"], "id": prefix + r(key)});
-            for (let value in defaults[key].validValues) {
-                if (defaults[key].contentType === 'integer') {
-                    value = Number(value);
-                }
-                select.appendChild(elCreateText('option', {"value": value, "data-phrase": defaults[key].validValues[value]}, tn(defaults[key].validValues[value])));
-                if (fields[key] === value) {
+            for (const value in defaults[key].validValues) {
+                select.appendChild(
+                    elCreateTextTn('option', {"value": value}, defaults[key].validValues[value])
+                );
+                if ((defaults[key].contentType === 'integer' && fields[key] === Number(value)) ||
+                    fields[key] === value)
+                {
                     select.lastChild.setAttribute('selected', 'selected');
                 }
             }
@@ -801,12 +535,13 @@ function _createSettingsFrm(fields, defaults, prefix) {
             }
             if (defaults[key].onClick !== undefined) {
                 btn.addEventListener('click', function(event) {
+                    // @ts-ignore
                     window[defaults[key].onClick](event);
                 }, false);
             }
             else {
                 btn.addEventListener('click', function(event) {
-                    toggleBtnChk(event.target);
+                    toggleBtnChk(event.target, undefined);
                 }, false);
             }
             col.appendChild(btn);
@@ -818,15 +553,19 @@ function _createSettingsFrm(fields, defaults, prefix) {
             col.appendChild(input);
         }
         if (defaults[key].invalid !== undefined) {
-            col.appendChild(elCreateText('div', {"class": ["invalid-feedback"], "data-phrase": defaults[key].invalid}, tn(defaults[key].invalid)));
+            col.appendChild(
+                elCreateTextTn('div', {"class": ["invalid-feedback"]}, defaults[key].invalid)
+            );
         }
         if (defaults[key].warn !== undefined) {
-            col.appendChild(elCreateText('div', {"id": "warn" + prefix + r(key), "class": ["mt-2", "mb-1", "alert", "alert-warning", "d-none"], "data-prase": defaults[key].warn}, tn(defaults[key].warn)));
+            col.appendChild(
+                elCreateTextTn('div', {"id": "warn" + prefix + r(key), "class": ["mt-2", "mb-1", "alert", "alert-warning", "d-none"]}, defaults[key].warn)
+            );
         }
 
         advFrm[form].appendChild(
             elCreateNodes('div', {"class": ["mb-3", "row"]}, [
-                elCreateText('label', {"class": ["col-sm-4", "col-form-label"], "for": prefix + r(key), "data-phrase": defaults[key].title}, defaults[key].title),
+                elCreateTextTn('label', {"class": ["col-sm-4", "col-form-label"], "for": prefix + r(key)}, defaults[key].title),
                 col
             ])
         );
@@ -835,6 +574,7 @@ function _createSettingsFrm(fields, defaults, prefix) {
     for (const key in defaults) {
         if (defaults[key].onChange !== undefined) {
             document.getElementById(prefix + r(key)).addEventListener('change', function(event) {
+                // @ts-ignore
                 window[defaults[key].onChange](event);
             }, false);
         }
@@ -845,7 +585,7 @@ function _createSettingsFrm(fields, defaults, prefix) {
         'inputWebUIsettingclickPlaylist', 'inputWebUIsettingclickSong',
         'inputWebUIsettingclickRadioFavorites', 'inputWebUIsettingclickRadiobrowser'])
     {
-        const options = document.getElementById(sel).getElementsByTagName('option');
+        const options = document.querySelectorAll('#' + sel + ' > option');
         for (const opt of options) {
             if (opt.value === 'insert' || opt.value === 'play') {
                 opt.classList.add('featWhence');
@@ -854,16 +594,23 @@ function _createSettingsFrm(fields, defaults, prefix) {
     }
 }
 
+/**
+ * Sets the features object accordingly to the backend features and settings
+ * @returns {void}
+ */
 function setFeatures() {
     //web ui features
     features.featCacert = settings.features.featCacert;
     features.featHome = settings.webuiSettings.enableHome;
+    features.featVolumeLevel = settings.webuiSettings.uiFooterVolumeLevel;
     features.featLocalPlayback = settings.webuiSettings.enableLocalPlayback === true ?
         (settings.partition.mpdStreamPort > 0 || settings.partition.streamUri.length > 0 ? true : false) : false;
     features.featScripting = settings.webuiSettings.enableScripting === true ?
         settings.features.featScripting : false;
     features.featTimer = settings.webuiSettings.enableTimer;
     features.featTrigger = settings.webuiSettings.enableTrigger;
+    features.featMediaSession = checkMediaSessionSupport();
+    features.featFooterNotifications = settings.webuiSettings.uiFooterNotifications;
 
     //mpd features
     if (settings.partition.mpdConnected === true) {
@@ -881,20 +628,38 @@ function setFeatures() {
         features.featPlaylistRmRange = settings.features.featPlaylistRmRange;
         features.featWhence = settings.features.featWhence;
         features.featAdvqueue = settings.features.featAdvqueue;
+        features.featConsumeOneshot = settings.features.featConsumeOneshot;
+        features.featPlaylistDirAuto = settings.features.featPlaylistDirAuto;
+        features.featStartsWith = settings.features.featStartsWith;
+        features.featPcre = settings.features.featPcre;
     }
 }
 
+/**
+ * Shows or hides feature related elements
+ * @returns {void}
+ */
 function applyFeatures() {
     //show or hide elements
     for (const feature in features) {
-        const els = document.getElementsByClassName(feature);
-        const displayValue = features[feature] === true ? '' : 'none';
-        for (const el of els) {
+        const featureEls = document.querySelectorAll('.' + feature);
+        let displayValue = features[feature] === true ? '' : 'none';
+        for (const el of featureEls) {
+            el.style.display = displayValue;
+        }
+        const notfeatureEls = document.querySelectorAll('.not' + feature);
+        displayValue = features[feature] === true ? 'none' : '';
+        for (const el of notfeatureEls) {
             el.style.display = displayValue;
         }
     }
+    setQueueCurrentHeaderClickable();
 }
 
+/**
+ * Parses the MPD options
+ * @returns {void}
+ */
 function parseMPDSettings() {
     document.getElementById('partitionName').textContent = localSettings.partition;
 
@@ -909,7 +674,7 @@ function parseMPDSettings() {
     elClear(triggerEventList);
     for (const event in settings.triggerEvents) {
         triggerEventList.appendChild(
-            elCreateText('option', {"value": settings.triggerEvents[event], "data-phrase": event}, tn(event))
+            elCreateTextTn('option', {"value": settings.triggerEvents[event]}, event)
         );
     }
 
@@ -920,7 +685,7 @@ function parseMPDSettings() {
     filterCols('Playback');
 
     for (const table of ['Search', 'QueueCurrent', 'QueueLastPlayed', 'QueueJukebox',
-            'BrowsePlaylistsDetail', 'BrowseFilesystem', 'BrowseDatabaseDetail'])
+            'BrowsePlaylistDetail', 'BrowseFilesystem', 'BrowseDatabaseAlbumDetail'])
     {
         filterCols(table);
         setCols(table);
@@ -936,11 +701,28 @@ function parseMPDSettings() {
     setCols('BrowseRadioWebradiodb');
     setCols('BrowseRadioRadiobrowser');
 
-    //enforce disc for album details view
-    if (settings.colsBrowseDatabaseDetailFetch.includes('Disc') === false &&
+    //tagselect dropdowns
+    for (const table of ['BrowseDatabaseAlbumList', 'BrowseDatabaseAlbumDetailInfo']) {
+        filterCols(table);
+        const menu = document.querySelector('#' + table + 'ColsDropdown > form');
+        elClear(menu);
+        setColsChecklist(table, menu);
+    }
+
+    //enforce album and albumartist for album list view
+    settings['colsBrowseDatabaseAlbumListFetch'] = settings['colsBrowseDatabaseAlbumList'].slice();
+    if (settings.colsBrowseDatabaseAlbumListFetch.includes('Album') === false) {
+        settings.colsBrowseDatabaseAlbumListFetch.push('Album');
+    }
+    if (settings.colsBrowseDatabaseAlbumListFetch.includes(tagAlbumArtist) === false) {
+        settings.colsBrowseDatabaseAlbumListFetch.push(tagAlbumArtist);
+    }
+
+    //enforce disc for album detail list view
+    if (settings.colsBrowseDatabaseAlbumDetailFetch.includes('Disc') === false &&
         settings.tagList.includes('Disc'))
     {
-        settings.colsBrowseDatabaseDetailFetch.push('Disc');
+        settings.colsBrowseDatabaseAlbumDetailFetch.push('Disc');
     }
 
     if (features.featTags === false) {
@@ -953,7 +735,6 @@ function parseMPDSettings() {
         settings.colsQueueJukebox = ["Pos", "Title"];
         settings.colsSearch = ["Title", "Duration"];
         settings.colsBrowseFilesystem = ["Type", "Title", "Duration"];
-        settings.colsBrowseDatabase = ["Track", "Title", "Duration"];
         settings.colsPlayback = [];
     }
     else {
@@ -970,18 +751,22 @@ function parseMPDSettings() {
                     colWidth = "col-xl-6";
             }
             const div = elCreateNodes('div', {"id": "current" + settings.colsPlayback[i],"class": [colWidth]}, [
-                elCreateText('small', {}, tn(settings.colsPlayback[i])),
+                elCreateTextTn('small', {}, settings.colsPlayback[i]),
                 elCreateEmpty('p', {})
             ]);
             setData(div, 'tag', settings.colsPlayback[i]);
             pbtl.appendChild(div);
         }
+        //musicbrainz
+        pbtl.appendChild(
+            elCreateEmpty('div', {"id": "currentMusicbrainz", "class": ["col-xl-6"]})
+        );
         //fill blank card with currentSongObj
         if (currentSongObj !== null) {
             setPlaybackCardTags(currentSongObj);
         }
         //tagselect dropdown
-        const menu = document.getElementById('PlaybackColsDropdown').getElementsByTagName('form')[0];
+        const menu = document.querySelector('#PlaybackColsDropdown > form');
         elClear(menu);
         setColsChecklist('Playback', menu);
     }
@@ -996,16 +781,17 @@ function parseMPDSettings() {
     }
     else if (settings.tagList.includes('Artist')) {
         tagAlbumArtist = 'Artist';
-        if (app.cards.Browse.tabs.Database.views.List.filter === 'AlbumArtist') {
-            app.cards.Browse.tabs.Database.views.List.filter = tagAlbumArtist;
+        if (app.cards.Browse.tabs.Database.views.AlbumList.filter === 'AlbumArtist') {
+            app.cards.Browse.tabs.Database.views.AlbumList.filter = tagAlbumArtist;
         }
-        if (app.cards.Browse.tabs.Database.views.List.sort.tag === 'AlbumArtist') {
-            app.cards.Browse.tabs.Database.views.List.sort.tag = tagAlbumArtist;
+        if (app.cards.Browse.tabs.Database.views.AlbumList.sort.tag === 'AlbumArtist') {
+            app.cards.Browse.tabs.Database.views.AlbumList.sort.tag = tagAlbumArtist;
         }
     }
 
-    addTagList('BrowseDatabaseByTagDropdown', 'tagListBrowse');
-    addTagList('BrowseNavPlaylistsDropdown', 'tagListBrowse');
+    addTagList('BrowseDatabaseAlbumListTagDropdown', 'tagListBrowse');
+    addTagList('BrowseDatabaseTagListTagDropdown', 'tagListBrowse');
+    addTagList('BrowseNavPlaylistDropdown', 'tagListBrowse');
     addTagList('BrowseNavFilesystemDropdown', 'tagListBrowse');
     addTagList('BrowseNavRadioFavoritesDropdown', 'tagListBrowse');
     addTagList('BrowseNavWebradiodbDropdown', 'tagListBrowse');
@@ -1013,13 +799,18 @@ function parseMPDSettings() {
 
     addTagList('searchQueueTags', 'tagListSearch');
     addTagList('searchTags', 'tagListSearch');
-    addTagList('searchDatabaseTags', 'tagListBrowse');
-    addTagList('databaseSortTagsList', 'tagListBrowse');
+    addTagList('searchDatabaseAlbumListTags', 'tagListBrowse');
+    addTagList('databaseAlbumListSortTagsList', 'tagListBrowse');
     addTagList('dropdownSortPlaylistTags', 'tagList');
 
     addTagListSelect('saveSmartPlaylistSort', 'tagList');
 }
 
+/**
+ * Saves the settings
+ * @param {boolean} closeModal true = close modal, else not
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function saveSettings(closeModal) {
     cleanupModalId('modalSettings');
@@ -1030,42 +821,42 @@ function saveSettings(closeModal) {
         'inputSettingvolumeStep'])
     {
         const inputEl = document.getElementById(inputId);
-        if (validateUint(inputEl) === false) {
+        if (validateUintEl(inputEl) === false) {
             formOK = false;
         }
     }
 
     const inputCoverimageNames = document.getElementById('inputCoverimageNames');
-    if (validateFilenameList(inputCoverimageNames) === false) {
+    if (validateFilenameListEl(inputCoverimageNames) === false) {
         formOK = false;
     }
     const inputThumbnailNames = document.getElementById('inputThumbnailNames');
-    if (validateFilenameList(inputThumbnailNames) === false) {
+    if (validateFilenameListEl(inputThumbnailNames) === false) {
         formOK = false;
     }
 
     const inputBookletName = document.getElementById('inputBookletName');
-    if (validateFilename(inputBookletName) === false) {
+    if (validateFilenameEl(inputBookletName) === false) {
         formOK = false;
     }
 
     const inputScaleRatio = document.getElementById('inputScaleRatio');
     //handle scaleRatio only for mobile browsers
     if (userAgentData.isMobile === true) {
-        if (validateFloat(inputScaleRatio) === false) {
+        if (validateFloatEl(inputScaleRatio) === false) {
             formOK = false;
         }
     }
 
     if (formOK === true) {
         //browser specific settings
-        localSettings.localPlaybackAutoplay = (document.getElementById('btnEnableLocalPlaybackAutoplay').classList.contains('active') ? true : false);
-        localSettings.enforceMobile = (document.getElementById('btnEnforceMobile').classList.contains('active') ? true : false);
+        localSettings.localPlaybackAutoplay = getBtnChkValueId('btnEnableLocalPlaybackAutoplay');
+        localSettings.enforceMobile = getBtnChkValueId('btnEnforceMobile');
         setUserAgentData();
 
         //use scaleRatio only for mobile browsers
         localSettings.scaleRatio = userAgentData.isMobile === true ?
-            parseFloat(inputScaleRatio.value) : 1.0;
+            inputScaleRatio.value : '1.0';
         setViewport();
 
         //save localSettings in browsers localStorage
@@ -1092,22 +883,25 @@ function saveSettings(closeModal) {
                     webuiSettings[key] = webuiSettingsDefault[key].contentType === 'integer' ? Number(getData(el, 'value')) : getData(el, 'value');
                 }
                 else if (webuiSettingsDefault[key].inputType === 'checkbox') {
-                    webuiSettings[key] = el.classList.contains('active') ? true : false;
+                    webuiSettings[key] = getBtnChkValue(el);
                 }
                 else {
                     webuiSettings[key] = webuiSettingsDefault[key].contentType === 'integer' ? Number(el.value) : el.value;
                 }
             }
+            else if (webuiSettingsDefault[key].defaultValue !== undefined) {
+                webuiSettings[key] = webuiSettingsDefault[key].defaultValue;
+            }
         }
 
-        webuiSettings.enableLyrics = (document.getElementById('btnEnableLyrics').classList.contains('active') ? true : false);
-        webuiSettings.enableLocalPlayback = (document.getElementById('btnEnableLocalPlayback').classList.contains('active') ? true : false);
+        webuiSettings.enableLyrics = getBtnChkValueId('btnEnableLyrics');
+        webuiSettings.enableLocalPlayback = getBtnChkValueId('btnEnableLocalPlayback');
 
         const params = {
             "coverimageNames": inputCoverimageNames.value,
             "thumbnailNames": inputThumbnailNames.value,
             "lastPlayedCount": Number(document.getElementById('inputSettinglastPlayedCount').value),
-            "smartpls": (document.getElementById('btnSmartpls').classList.contains('active') ? true : false),
+            "smartpls": getBtnChkValueId('btnSmartpls'),
             "smartplsPrefix": document.getElementById('inputSmartplsPrefix').value,
             "smartplsInterval": smartplsInterval,
             "smartplsSort": document.getElementById('selectSmartplsSort').value,
@@ -1136,16 +930,25 @@ function saveSettings(closeModal) {
     }
 }
 
+/**
+ * Response handler for MYMPD_API_SETTINGS_SET that closes the modal
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function saveSettingsClose(obj) {
     if (obj.error) {
         showModalAlert(obj);
     }
     else {
         savePartitionSettings(true);
-        
     }
 }
 
+/**
+ * Response handler for MYMPD_API_SETTINGS_SET
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function saveSettingsApply(obj) {
     if (obj.error) {
         showModalAlert(obj);
@@ -1155,16 +958,21 @@ function saveSettingsApply(obj) {
     }
 }
 
+/**
+ * Saves the partition specific settings
+ * @param {boolean} closeModal true = close modal, else not
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function savePartitionSettings(closeModal) {
     let formOK = true;
     const mpdStreamPortEl = document.getElementById('inputMpdStreamPort');
     const streamUriEl = document.getElementById('inputStreamUri');
-    if (validateIntRange(mpdStreamPortEl, 0, 65535) === false) {
+    if (validateIntRangeEl(mpdStreamPortEl, 0, 65535) === false) {
         formOK = false;
     }
     if (streamUriEl.value.length > 0 &&
-        validateStream(streamUriEl) === false)
+        validateStreamEl(streamUriEl) === false)
     {
         formOK = false;
     }
@@ -1172,6 +980,7 @@ function savePartitionSettings(closeModal) {
     if (formOK === true) {
         const params = {
             "highlightColor": document.getElementById('inputHighlightColor').value,
+            "highlightColorContrast": document.getElementById('inputHighlightColorContrast').value,
             "mpdStreamPort": Number(mpdStreamPortEl.value),
             "streamUri": streamUriEl.value
         };
@@ -1184,95 +993,48 @@ function savePartitionSettings(closeModal) {
     }
 }
 
+/**
+ * Response handler for MYMPD_API_PARTITION_SAVE that closes the modal
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function savePartitionSettingsApply(obj) {
     if (obj.error) {
         showModalAlert(obj);
     }
     else {
         btnWaiting(document.getElementById('btnApplySettings'), true);
-        getSettings(true);
+        getSettings();
     }
 }
 
+/**
+ * Response handler for MYMPD_API_PARTITION_SAVE
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function savePartitionSettingsClose(obj) {
     if (obj.error) {
         showModalAlert(obj);
     }
     else {
-        getSettings(true);
+        getSettings();
         uiElements.modalSettings.hide();
     }
 }
 
-//eslint-disable-next-line no-unused-vars
-function saveQueueSettings() {
-    cleanupModalId('modalQueueSettings');
-    let formOK = true;
-
-    for (const inputId of ['inputCrossfade', 'inputJukeboxQueueLength', 'inputJukeboxLastPlayed']) {
-        const inputEl = document.getElementById(inputId);
-        if (validateInt(inputEl) === false) {
-            formOK = false;
-        }
-    }
-
-    const mixrampDbEl = document.getElementById('inputMixrampDb');
-    if (validateFloatRange(mixrampDbEl, -100, 0) === false) {
-        formOK = false;
-    }
-    const mixrampDelayEl = document.getElementById('inputMixrampDelay');
-    if (validateFloatRange(mixrampDelayEl, -1, 100) === false) {
-        formOK = false;
-    }
-
-    const singleState = getBtnGroupValueId('btnSingleGroup');
-    const jukeboxMode = getBtnGroupValueId('btnJukeboxModeGroup');
-    const replaygain = getBtnGroupValueId('btnReplaygainGroup');
-    let jukeboxUniqueTag = getSelectValueId('selectJukeboxUniqueTag');
-    const jukeboxPlaylist = getDataId('selectJukeboxPlaylist', 'value');
-
-    if (jukeboxMode === 'album') {
-        jukeboxUniqueTag = 'Album';
-    }
-
-    if (formOK === true) {
-        btnWaitingId('btnSaveQueueSettings', true);
-        sendAPI("MYMPD_API_PLAYER_OPTIONS_SET", {
-            "consume": (document.getElementById('btnConsume').classList.contains('active') ? true : false),
-            "random": (document.getElementById('btnRandom').classList.contains('active') ? true : false),
-            "single": singleState,
-            "repeat": (document.getElementById('btnRepeat').classList.contains('active') ? true : false),
-            "replaygain": replaygain,
-            "crossfade": Number(document.getElementById('inputCrossfade').value),
-            "mixrampDb": Number(mixrampDbEl.value),
-            "mixrampDelay": Number(mixrampDelayEl.value),
-            "jukeboxMode": jukeboxMode,
-            "jukeboxPlaylist": jukeboxPlaylist,
-            "jukeboxQueueLength": Number(document.getElementById('inputJukeboxQueueLength').value),
-            "jukeboxLastPlayed": Number(document.getElementById('inputJukeboxLastPlayed').value),
-            "jukeboxUniqueTag": jukeboxUniqueTag,
-            "autoPlay": (document.getElementById('btnAutoPlay').classList.contains('active') ? true : false)
-        }, saveQueueSettingsClose, true);
-    }
-}
-
-function saveQueueSettingsClose(obj) {
-    btnWaitingId('btnSaveQueueSettings', false);
-    if (obj.error) {
-        showModalAlert(obj);
-    }
-    else {
-        getSettings(false);
-        uiElements.modalQueueSettings.hide();
-    }
-}
-
-function getTagMultiSelectValues(taglist, translated) {
+/**
+ * Gets all selected tags from a tag multiselect
+ * @param {HTMLElement} taglist container of the checkboxes
+ * @param {boolean} translate true = translate the name, else not
+ * @returns {string} comma separated list of selected tags
+ */
+function getTagMultiSelectValues(taglist, translate) {
     const values = [];
-    const chkBoxes = taglist.getElementsByTagName('button');
+    const chkBoxes = taglist.querySelectorAll('button');
     for (let i = 0, j = chkBoxes.length; i < j; i++) {
         if (chkBoxes[i].classList.contains('active')) {
-            if (translated === true) {
+            if (translate === true) {
                 values.push(tn(chkBoxes[i].name));
             }
             else {
@@ -1280,12 +1042,20 @@ function getTagMultiSelectValues(taglist, translated) {
             }
         }
     }
-    if (translated === true) {
+    if (translate === true) {
         return values.join(', ');
     }
     return values.join(',');
 }
 
+/**
+ * Initializes a tag multiselect
+ * @param {string} inputId input element id to initialize
+ * @param {string} listId list container element id to initialize
+ * @param {object} allTags all tags to list
+ * @param {object} enabledTags already enabled tags
+ * @returns {void}
+ */
 function initTagMultiSelect(inputId, listId, allTags, enabledTags) {
     const values = [];
     const list = document.getElementById(listId);
@@ -1305,7 +1075,7 @@ function initTagMultiSelect(inputId, listId, allTags, enabledTags) {
         list.appendChild(
             elCreateNodes('div', {"class": ["form-check"]}, [
                 btn,
-                elCreateText('label', {"class": ["form-check-label"], "for": allTags[i]}, allTags[i])
+                elCreateTextTn('label', {"class": ["form-check-label"], "for": allTags[i]}, allTags[i])
             ])
         );
     }
@@ -1320,30 +1090,38 @@ function initTagMultiSelect(inputId, listId, allTags, enabledTags) {
         event.stopPropagation();
         event.preventDefault();
         if (event.target.nodeName === 'BUTTON') {
-            toggleBtnChk(event.target);
+            toggleBtnChk(event.target, undefined);
             event.target.parentNode.parentNode.parentNode.previousElementSibling.value =
                 getTagMultiSelectValues(event.target.parentNode.parentNode, true);
         }
     });
 }
 
-function filterCols(x) {
-    const tags = setColTags(x);
-    const set = "cols" + x;
-    const cols = [];
-    for (let i = 0, j = settings[set].length; i < j; i++) {
-        if (tags.includes(settings[set][i])) {
-            cols.push(settings[set][i]);
-        }
-    }
-    settings[set] = cols;
-    logDebug('Columns for ' + set + ': ' + cols);
+/**
+ * Filters the selected column by available tags
+ * @param {string} tableName the table name
+ * @returns {void}
+ */
+function filterCols(tableName) {
+    //set available tags
+    const tags = setColTags(tableName);
+    //column name
+    const set = "cols" + tableName;
+    settings[set] = settings[set].filter(function(value) {
+        return tags.includes(value);
+    });
+    logDebug('Columns for ' + set + ': ' + settings[set]);
 }
 
+/**
+ * Event handler for the enable web notification button that requests the permission from the user
+ * @param {Event} event change event
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function toggleBtnNotifyWeb(event) {
     const btnNotifyWeb = event.target;
-    const notifyWebState = btnNotifyWeb.classList.contains('active') ? true : false;
+    const notifyWebState = getBtnChkValue(btnNotifyWeb);
     if (notificationsSupported() === false) {
         toggleBtnChk(btnNotifyWeb, false);
         settings.webuiSettings.notifyWeb = false;
@@ -1356,9 +1134,6 @@ function toggleBtnNotifyWeb(event) {
         return;
     }
     Notification.requestPermission(function (permission) {
-        if (!('permission' in Notification)) {
-            Notification.permission = permission;
-        }
         if (permission === 'granted') {
             toggleBtnChk(btnNotifyWeb, true);
             settings.webuiSettings.notifyWeb = true;
@@ -1372,11 +1147,15 @@ function toggleBtnNotifyWeb(event) {
     });
 }
 
+/**
+ * Populates the navbar with the icons
+ * @returns {void}
+ */
 function setNavbarIcons() {
     const oldBadgeQueueItems = document.getElementById('badgeQueueItems');
     let oldQueueLength = 0;
     if (oldBadgeQueueItems) {
-        oldQueueLength = oldBadgeQueueItems.textContent;
+        oldQueueLength = Number(oldBadgeQueueItems.textContent);
     }
 
     const container = document.getElementById('navbar-main');
@@ -1392,7 +1171,7 @@ function setNavbarIcons() {
         {
             elHide(btn);
         }
-        const a = elCreateNode('a', {"data-title-phrase": icon.title, "title": tn(icon.title), "href": "#", "class": ["nav-link"]},
+        const a = elCreateNode('a', {"data-title-phrase": icon.title, "href": "#", "class": ["nav-link"]},
             elCreateText('span', {"class": ["mi"]}, icon.ligature)
         );
         if (icon.options.length === 1 &&
@@ -1400,76 +1179,40 @@ function setNavbarIcons() {
              icon.options[0] === 'Queue' ||
              icon.options[0] === 'Playback'))
         {
-            a.setAttribute('data-popover', 'Navbar' + icon.options.join(''));
+            a.setAttribute('data-contextmenu', 'Navbar' + icon.options.join(''));
         }
         if (icon.options[0] === 'Queue' &&
             icon.options.length === 1)
         {
             a.appendChild(
-                elCreateText('span', {"id": "badgeQueueItems", "class": ["badge", "bg-secondary"]}, oldQueueLength)
+                elCreateText('span', {"id": "badgeQueueItems", "class": ["badge", "bg-secondary"]}, oldQueueLength.toString())
             );
         }
         btn.appendChild(a);
         container.appendChild(btn);
-        setData(a, 'href', JSON.stringify({"cmd": "appGoto", "options": icon.options}));
+        setData(a, 'href', {"cmd": "appGoto", "options": icon.options});
     }
 
     //cache elements, reused in appPrepare
-    domCache.navbarBtns = container.getElementsByTagName('div');
+    domCache.navbarBtns = container.querySelectorAll('div');
     domCache.navbarBtnsLen = domCache.navbarBtns.length;
 }
 
-function getBgImageList() {
-    const list = document.getElementById('inputWebUIsettinguiBgImage');
-    getImageList(list, bgImageValues, 'backgrounds');
-}
-
-//eslint-disable-next-line no-unused-vars
-function getImageListId(selectId, addOptions, type) {
-    getImageList(document.getElementById(selectId), addOptions, type)
-}
-
-function getImageList(sel, addOptions, type) {
-    sendAPI("MYMPD_API_PICTURE_LIST", {
-        "type": type
-    }, function(obj) {
-        elClear(sel.filterResult);
-        for (const option of addOptions) {
-            sel.addFilterResult(option.text, option.value);
-        }
-        for (let i = 0; i < obj.result.returnedEntities; i++) {
-            sel.addFilterResult(obj.result.data[i], obj.result.data[i]);
-        }
-    });
-}
-
-//eslint-disable-next-line no-unused-vars
-function filterImageSelect(elId, searchstr) {
-    const select = document.getElementById(elId).filterResult;
-    searchstr = searchstr.toLowerCase();
-    const items = select.getElementsByTagName('li');
-    for (const item of items) {
-        const value = item.textContent.toLowerCase();
-        if (value.indexOf(searchstr) >= 0) {
-            elShow(item);
-        }
-        else {
-            elHide(item);
-        }
-    }
-}
-
+/**
+ * Shows the missing translations warning
+ * @param {string} value locale name
+ * @returns {void}
+ */
 function warnLocale(value) {
     const warnEl = document.getElementById('warnMissingPhrases');
     elClear(warnEl);
     if (i18n[value].missingPhrases > 0) {
         warnEl.appendChild(
-            elCreateText('p', {}, tn('Missing translations', i18n[value].missingPhrases))
+            elCreateTextTnNr('p', {}, 'Missing translations', i18n[value].missingPhrases)
         );
         warnEl.appendChild(
-            elCreateText('a', {"class": ["alert-link", "external"], "target": "_blank",
-                "href": "https://github.com/jcorporation/myMPD/discussions/167"}, tn('Help to improve myMPD')
-            )
+            elCreateTextTn('a', {"class": ["alert-link", "external"], "target": "_blank",
+                "href": "https://github.com/jcorporation/myMPD/discussions/167"}, 'Help to improve myMPD')
         );
         elShow(warnEl);
     }
@@ -1478,16 +1221,10 @@ function warnLocale(value) {
     }
 }
 
-//eslint-disable-next-line no-unused-vars
-function setLoglevel() {
-    const loglevel = Number(getSelectValueId('selectSetLoglevel'));
-    sendAPI("MYMPD_API_LOGLEVEL", {
-        "loglevel": loglevel
-    }, function() {
-        settings.loglevel = loglevel
-    }, false);
-}
-
+/**
+ * Removes all settings from localStorage
+ * @returns {void}
+ */
 function resetLocalSettings() {
     for (const key in localSettings) {
         localStorage.removeItem(key);

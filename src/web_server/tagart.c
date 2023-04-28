@@ -1,17 +1,17 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "tagart.h"
+#include "src/web_server/tagart.h"
 
-#include "../lib/config_def.h"
-#include "../lib/log.h"
-#include "../lib/mimetype.h"
-#include "../lib/sds_extras.h"
-#include "../lib/validate.h"
+#include "src/lib/config_def.h"
+#include "src/lib/log.h"
+#include "src/lib/mimetype.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/validate.h"
 
 /**
  * Request handler for /tagart

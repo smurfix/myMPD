@@ -1,72 +1,144 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
+/** @module globales_js */
+
+/** @type {number} */
 const startTime = Date.now();
+
 let socket = null;
-let websocketConnected = false;
 let websocketTimer = null;
 let websocketKeepAliveTimer = null;
 let searchTimer = null;
+let resizeTimer = null;
+
+/** @type {number} */
 const searchTimerTimeout = 500;
-let currentSong = '';
+
 let currentSongObj = {};
 let currentState = {};
 let settings = {
+    /** @type {number} */
     "loglevel": 2
 };
+
+/** @type {string} */
 let settingsParsed = 'no';
+
 let progressTimer = null;
-let deferredA2HSprompt;
 let dragSrc;
 let dragEl;
+
+/** @type {boolean} */
 let showSyncedLyrics = false;
+
+/** @type {boolean} */
 let scrollSyncedLyrics = true;
+
+/** @type {boolean} */
 let appInited = false;
+
+/** @type {boolean} */
 let scriptsInited = false;
 let subdir = '';
+
+/** @type {boolean} */
 let uiEnabled = true;
+
 let allOutputs = null;
+
+/** @type {string} */
 const ligatureMore = 'menu';
-const progressBarTransition = 'width 1s linear';
+
+/** @type {string} */
 const smallSpace = '\u2009';
+
+/** @type {string} */
 const nDash = '\u2013';
+
+/** @type {string} */
 let tagAlbumArtist = 'AlbumArtist';
+
+/** @type {object} */
 const albumFilters = ["Composer", "Performer", "Conductor", "Ensemble"];
+
 const session = {
     "token": "",
     "timeout": 0
 };
+
+/** @type {number} */
 const sessionLifetime = 1780;
+
+/** @type {number} */
 const sessionRenewInterval = sessionLifetime * 500;
+
 let sessionTimer = null;
+
+/** log message buffer */
 const messages = [];
-const debugMode = document.getElementsByTagName("script")[0].src.replace(/^.*[/]/, '') === 'combined.js' ? false : true;
+/** @type {number} */
+const messagesMax = 100;
+
+/** @type {boolean} */
+const debugMode = document.querySelector("script").src.replace(/^.*[/]/, '') === 'combined.js' ? false : true;
+
 let webradioDb = null;
 const webradioDbPicsUri = 'https://jcorporation.github.io/webradiodb/db/pics/';
+
+/** @type {object} */
 const imageExtensions = ['webp', 'png', 'jpg', 'jpeg', 'svg', 'avif'];
+
+/** @type {string} */
 let locale = navigator.language || navigator.userLanguage;
+
+const localeMap = {
+    'de': 'de-DE',
+    'es': 'es-ES',
+    'fi': 'fi-FI',
+    'fr': 'fr-FR',
+    'it': 'it-IT',
+    'ja': 'ja-JP',
+    'ko': 'ko-KR',
+    'nl': 'nl-NL',
+    'zh': 'zh-Hans',
+    'zh-CN': 'zh-Hans',
+    'zh-TW': 'zh-Hant'
+};
+
 let materialIcons = {};
 let phrasesDefault = {};
 let phrases = {};
 
-//this settings are saved in the browsers localStorage
+/**
+ * This settings are saved in the browsers localStorage
+ */
 const localSettings = {
-    "scaleRatio": "1.0",
-    "localPlaybackAutoplay": false,
     "enforceMobile": false,
-    "partition": "default"
+    "localPlaybackAutoplay": false,
+    "partition": "default",
+    "scaleRatio": "1.0"
 };
 
-//get local settings
+/**
+ * Parses a string to boolean or number
+ * @param {string} str string to parse
+ * @returns {string | number | boolean} parsed string
+ */
 function parseString(str) {
-    return str === 'true' ? true :
-           str === 'false' ? false :
-           isNaN(str) ? str :
-           Number(str);
+    return str === 'true'
+        ? true
+        : str === 'false'
+            ? false
+            // @ts-ignore
+            : isNaN(str)
+                ? str
+                : Number(str);
 }
 
+//Get settings from localStorage
 for (const key in localSettings) {
     const value = localStorage.getItem(key);
     if (value !== null) {
@@ -77,24 +149,32 @@ for (const key in localSettings) {
 const userAgentData = {};
 userAgentData.hasIO = 'IntersectionObserver' in window ? true : false;
 
+/**
+ * Sets the useragentData object
+ * @returns {void}
+ */
 function setUserAgentData() {
-    //get interresting browser agent data
+    //get interesting browser agent data
     //https://developer.mozilla.org/en-US/docs/Web/API/User-Agent_Client_Hints_API
     if (navigator.userAgentData) {
         navigator.userAgentData.getHighEntropyValues(["platform"]).then(ua => {
+            /** @type {boolean} */
             userAgentData.isMobile = localSettings.enforceMobile === true ? true : ua.mobile;
             //Safari does not support this API
+            /** @type {boolean} */
             userAgentData.isSafari = false;
         });
     }
     else {
+        /** @type {boolean} */
         userAgentData.isMobile = localSettings.enforceMobile === true ? true : /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+        /** @type {boolean} */
         userAgentData.isSafari = /Safari/i.test(navigator.userAgent);
     }
 }
 setUserAgentData();
 
-//minimum mpd version to support all myMPD features
+//minimum stable mpd version to support all myMPD features
 const mpdVersion = {
     "major": 0,
     "minor": 23,
@@ -106,7 +186,7 @@ const browseFilesystemHistory = {};
 
 //list of stickers
 const stickerList = ['stickerPlayCount', 'stickerSkipCount', 'stickerLastPlayed',
-    'stickerLastSkipped', 'stickerLike'];
+    'stickerLastSkipped', 'stickerLike', 'stickerElapsed'];
 
 //application state
 const app = {};
@@ -143,7 +223,7 @@ app.cards = {
                 "limit": 100,
                 "filter": "any",
                 "sort": {
-                    "tag": "-",
+                    "tag": "Priority",
                     "desc": false
                 },
                 "tag": "-",
@@ -188,10 +268,10 @@ app.cards = {
                     "desc": false
                 },
                 "tag": "dir",
-                "search": "",
+                "search": "/",
                 "scrollPos": 0
             },
-            "Playlists": {
+            "Playlist": {
                 "active": "List",
                 "views": {
                     "List": {
@@ -221,9 +301,21 @@ app.cards = {
                 }
             },
             "Database": {
-                "active": "List",
+                "active": "AlbumList",
                 "views": {
-                    "List": {
+                    "TagList": {
+                        "offset": 0,
+                        "limit": 100,
+                        "filter": "any",
+                        "sort": {
+                            "tag": "-",
+                            "desc": false
+                        },
+                        "tag": "Album",
+                        "search": "",
+                        "scrollPos": 0
+                    },
+                    "AlbumList": {
                         "offset": 0,
                         "limit": 100,
                         "filter": "any",
@@ -235,7 +327,7 @@ app.cards = {
                         "search": "",
                         "scrollPos": 0
                     },
-                    "Detail": {
+                    "AlbumDetail": {
                         "offset": 0,
                         "limit": 100,
                         "filter": "-",
@@ -422,7 +514,8 @@ const webuiSettingsDefault = {
             "insertAfterCurrent": "Insert after current playing song",
             "replace": "Replace queue",
             "replacePlay": "Replace queue and play",
-            "view": "Song details"
+            "view": "Song details",
+            "context": "Context menu"
         },
         "inputType": "select",
         "title": "Click song",
@@ -436,7 +529,9 @@ const webuiSettingsDefault = {
             "insertAfterCurrent": "Insert after current playing song",
             "replace": "Replace queue",
             "replacePlay": "Replace queue and play",
-            "add": "Add to favorites"
+            "add": "Add to favorites",
+            "view": "Webradio details",
+            "context": "Context menu"
         },
         "inputType": "select",
         "title": "Click webradio",
@@ -450,7 +545,8 @@ const webuiSettingsDefault = {
             "insertAfterCurrent": "Insert after current playing song",
             "replace": "Replace queue",
             "replacePlay": "Replace queue and play",
-            "edit": "Edit webradio favorite"
+            "edit": "Edit webradio favorite",
+            "context": "Context menu"
         },
         "inputType": "select",
         "title": "Click webradio favorite",
@@ -461,6 +557,7 @@ const webuiSettingsDefault = {
         "validValues": {
             "play": "Play",
             "view": "Song details",
+            "context": "Context menu"
         },
         "inputType": "select",
         "title": "Click song in queue",
@@ -474,7 +571,8 @@ const webuiSettingsDefault = {
             "insertAfterCurrent": "Insert after current playing song",
             "replace": "Replace queue",
             "replacePlay": "Replace queue and play",
-            "view": "View playlist"
+            "view": "View playlist",
+            "context": "Context menu"
         },
         "inputType": "select",
         "title": "Click playlist",
@@ -488,7 +586,8 @@ const webuiSettingsDefault = {
             "insertAfterCurrent": "Insert after current playing song",
             "replace": "Replace queue",
             "replacePlay": "Replace queue and play",
-            "view": "View playlist"
+            "view": "View playlist",
+            "context": "Context menu"
         },
         "inputType": "select",
         "title": "Click filesystem playlist",
@@ -569,7 +668,7 @@ const webuiSettingsDefault = {
         "warn": "Browser has no MediaSession support"
     },
     "uiFooterQueueSettings": {
-        "defaultValue": false,
+        "defaultValue": true,
         "inputType": "checkbox",
         "title": "Show playback settings in footer",
         "form": "footerFrm"
@@ -583,6 +682,18 @@ const webuiSettingsDefault = {
         },
         "inputType": "select",
         "title": "Playback controls",
+        "form": "footerFrm"
+    },
+    "uiFooterVolumeLevel": {
+        "defaultValue": false,
+        "inputType": "checkbox",
+        "title": "Show volume level in footer",
+        "form": "footerFrm"
+    },
+    "uiFooterNotifications": {
+        "defaultValue": false,
+        "inputType": "checkbox",
+        "title": "Show notification icon",
         "form": "footerFrm"
     },
     "uiMaxElementsPerPage": {
@@ -663,11 +774,11 @@ const webuiSettingsDefault = {
         "defaultValue": true
     },
     "uiTheme": {
-        "defaultValue": "theme-dark",
+        "defaultValue": "dark",
         "validValues": {
-            "theme-autodetect": "Autodetect",
-            "theme-dark": "Dark",
-            "theme-light": "Light"
+            "auto": "Autodetect",
+            "dark": "Dark",
+            "light": "Light"
         },
         "inputType": "select",
         "title": "Theme",
@@ -734,28 +845,49 @@ const webuiSettingsDefault = {
         "title": "Startup view",
         "form": "startupFrm",
         "onChange": "eventChangeTheme"
+    },
+    "cloudMusicbrainz": {
+        "defaultValue": true,
+        "inputType": "checkbox",
+        "title": "Show MusicBrainz links",
+        "form": "cloudSettingsFrm"
+    },
+    "outputLigatures": {
+        "defaultValue": {
+            "default": "speaker",
+            "fifo": "read_more",
+            "httpd": "stream",
+            "null": "check_box_outline_blank",
+            "pipe": "terminal",
+            "recorder": "voicemail",
+            "shout": "cast",
+            "snapcast": "hub"
+        }
     }
 };
 
 //features
 const features = {
+    "featBinarylimit": true,
     "featCacert": false,
+    "featConsumeOneshot": false,
+    "featFingerprint": false,
     "featHome": true,
     "featLibrary": false,
     "featLocalPlayback": false,
     "featLyrics": false,
+    "featMediaSession": false,
     "featMounts": true,
     "featNeighbors": true,
     "featPartitions": true,
+    "featPlaylistDirAuto": false,
     "featPlaylists": true,
     "featScripting": true,
     "featSmartpls": true,
     "featStickers": false,
     "featTags": true,
     "featTimer": true,
-    "featTrigger": true,
-    "featBinarylimit": true,
-    "featFingerprint": false
+    "featTrigger": true
 };
 
 //keyboard shortcuts
@@ -770,26 +902,28 @@ const keymap = {
         "r": {"order": 7, "cmd": "togglePlaymode", "options": ["random"], "desc": "Toggle random"},
         "c": {"order": 8, "cmd": "togglePlaymode", "options": ["consume"], "desc": "Toggle consume"},
         "p": {"order": 9, "cmd": "togglePlaymode", "options": ["repeat"], "desc": "Toggle repeat"},
-        "i": {"order": 9, "cmd": "togglePlaymode", "options": ["single"], "desc": "Switch single mode"},
-    "update": {"order": 100, "desc": "Update"},
-        "U": {"order": 101, "cmd": "updateDB", "options": ["", true, false], "desc": "Update database"},
-        "R": {"order": 102, "cmd": "updateDB", "options": ["", true, true], "desc": "Rescan database"},
-        "P": {"order": 103, "cmd": "updateSmartPlaylists", "options": [false], "desc": "Update smart playlists", "req": "featSmartpls"},
+        "i": {"order": 9, "cmd": "togglePlaymode", "options": ["single"], "desc": "Toggle single mode"},
     "modals": {"order": 200, "desc": "Dialogs"},
         "A": {"order": 201, "cmd": "showAddToPlaylist", "options": ["STREAM"], "desc": "Add stream"},
         "C": {"order": 202, "cmd": "openModal", "options": ["modalConnection"], "desc": "Open MPD connection"},
-        "Q": {"order": 203, "cmd": "openModal", "options": ["modalQueueSettings"], "desc": "Open queue settings"},
-        "T": {"order": 204, "cmd": "openModal", "options": ["modalSettings"], "desc": "Open settings"},
+        "G": {"order": 207, "cmd": "openModal", "options": ["modalTrigger"], "desc": "Open trigger", "feature": "featTrigger"},
+        "I": {"order": 207, "cmd": "openModal", "options": ["modalTimer"], "desc": "Open timer", "feature": "featTimer"},
         "M": {"order": 205, "cmd": "openModal", "options": ["modalMaintenance"], "desc": "Open maintenance"},
-        "?": {"order": 206, "cmd": "openModal", "options": ["modalAbout"], "desc": "Open about"},
+        "N": {"order": 206, "cmd": "openModal", "options": ["modalNotifications"], "desc": "Open notifications"},
+        "O": {"order": 207, "cmd": "openModal", "options": ["modalMounts"], "desc": "Open mounts", "feature": "featMounts"},
+        "P": {"order": 207, "cmd": "openModal", "options": ["modalPartitions"], "desc": "Open partitions", "feature": "featPartitions"},
+        "Q": {"order": 203, "cmd": "openModal", "options": ["modalQueueSettings"], "desc": "Open queue settings"},
+        "S": {"order": 207, "cmd": "showListScriptModal", "options": [], "desc": "Open scripts", "feature": "featScripting"},
+        "T": {"order": 204, "cmd": "openModal", "options": ["modalSettings"], "desc": "Open settings"},
+        "?": {"order": 207, "cmd": "openModal", "options": ["modalAbout"], "desc": "Open about"},
     "navigation": {"order": 300, "desc": "Navigation"},
-        "0": {"order": 301, "cmd": "appGoto", "options": ["Home"], "desc": "Show home"},
+        "0": {"order": 301, "cmd": "appGoto", "options": ["Home"], "desc": "Show home", "feature": "featHome"},
         "1": {"order": 302, "cmd": "appGoto", "options": ["Playback"], "desc": "Show playback"},
         "2": {"order": 303, "cmd": "appGoto", "options": ["Queue", "Current"], "desc": "Show queue"},
         "3": {"order": 304, "cmd": "appGoto", "options": ["Queue", "LastPlayed"], "desc": "Show last played"},
         "4": {"order": 305, "cmd": "appGoto", "options": ["Queue", "Jukebox"], "desc": "Show jukebox queue"},
-        "5": {"order": 306, "cmd": "appGoto", "options": ["Browse", "Database"], "desc": "Show browse database", "req": "featTags"},
-        "6": {"order": 307, "cmd": "appGoto", "options": ["Browse", "Playlists"], "desc": "Show browse playlists", "req": "featPlaylists"},
+        "5": {"order": 306, "cmd": "appGoto", "options": ["Browse", "Database"], "desc": "Show browse database", "feature": "featTags"},
+        "6": {"order": 307, "cmd": "appGoto", "options": ["Browse", "Playlists"], "desc": "Show browse playlists", "feature": "featPlaylists"},
         "7": {"order": 308, "cmd": "appGoto", "options": ["Browse", "Filesystem"], "desc": "Show browse filesystem"},
         "8": {"order": 308, "cmd": "appGoto", "options": ["Browse", "Radio"], "desc": "Show browse webradio"},
         "9": {"order": 309, "cmd": "appGoto", "options": ["Search"], "desc": "Show search"},
@@ -798,19 +932,19 @@ const keymap = {
 
 //cache often accessed dom elements
 const domCache = {};
-domCache.body = document.getElementsByTagName('body')[0];
-domCache.main = document.getElementsByTagName('main')[0];
+domCache.body = document.querySelector('body');
 domCache.counter = document.getElementById('counter');
+domCache.footer = document.querySelector('footer');
+domCache.main = document.querySelector('main');
 domCache.progress = document.getElementById('footerProgress');
 domCache.progressBar = document.getElementById('footerProgressBar');
 domCache.progressPos = document.getElementById('footerProgressPos');
-domCache.notificationCount = document.getElementById('notificationCount');
 domCache.volumeBar = document.getElementById('volumeBar');
 
 //Get BSN object references for fast access
 const uiElements = {};
 //all modals
-for (const m of document.getElementsByClassName('modal')) {
+for (const m of document.querySelectorAll('.modal')) {
     uiElements[m.id] = BSN.Modal.getInstance(m);
 }
 //other directly accessed BSN objects
@@ -818,9 +952,9 @@ uiElements.dropdownHomeIconLigature = BSN.Dropdown.getInstance(document.getEleme
 uiElements.collapseJukeboxMode = BSN.Collapse.getInstance(document.getElementById('collapseJukeboxMode'));
 
 const LUAfunctions = {
-    "mympd_api_http_client": {
+    "mympd.http_client": {
         "desc": "HTTP client",
-        "func": "rc, response, header, body = mympd_api_http_client(method, uri, headers, payload)"
+        "func": "rc, code, header, body = mympd.http_client(method, uri, headers, payload)"
     },
     "mympd.init": {
         "desc": "Initializes the mympd_state lua table",
@@ -833,34 +967,36 @@ const LUAfunctions = {
 };
 
 const typeFriendly = {
-    'plist': 'Playlist',
-    'smartpls': 'Smart playlist',
-    'dir': 'Directory',
-    'song': 'Song',
-    'search': 'Search',
     'album': 'Album',
+    'dir': 'Directory',
+    'externalLink': 'External link',
+    'modal': 'Modal',
+    'plist': 'Playlist',
+    'script': 'Script',
+    'search': 'Search',
+    'smartpls': 'Smart playlist',
+    'song': 'Song',
     'stream': 'Stream',
     'view': 'View',
-    'script': 'Script',
-    'webradio': 'Webradio',
-    'externalLink': 'External link'
+    'webradio': 'Webradio'
 };
 
 const friendlyActions = {
-    'replaceQueue': 'Replace queue',
-    'replacePlayQueue': 'Replace queue and play',
-    'insertAfterCurrentQueue': 'Insert after current playing song',
-    'appendQueue': 'Append to queue',
-    'appendPlayQueue': 'Append to queue and play',
-    'replaceQueueAlbum': 'Replace queue',
-    'replacePlayQueueAlbum': 'Replace queue and play',
-    'insertAfterCurrentQueueAlbum': 'Insert after current playing song',
-    'appendQueueAlbum': 'Append to queue',
     'appendPlayQueueAlbum': 'Append to queue and play',
+    'appendPlayQueue': 'Append to queue and play',
+    'appendQueueAlbum': 'Append to queue',
+    'appendQueue': 'Append to queue',
     'appGoto': 'Goto view',
-    'homeIconGoto': 'Show',
     'execScriptFromOptions': 'Execute script',
-    'openExternalLink': 'Open external link'
+    'homeIconGoto': 'Show',
+    'insertAfterCurrentQueueAlbum': 'Insert after current playing song',
+    'insertAfterCurrentQueue': 'Insert after current playing song',
+    'openExternalLink': 'Open external link',
+    'openModal': 'Open modal',
+    'replacePlayQueueAlbum': 'Replace queue and play',
+    'replacePlayQueue': 'Replace queue and play',
+    'replaceQueueAlbum': 'Replace queue',
+    'replaceQueue': 'Replace queue'
 };
 
 const bgImageValues = [

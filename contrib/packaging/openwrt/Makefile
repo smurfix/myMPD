@@ -2,13 +2,13 @@
 # Copyright (C) 2021 Tomasz Maciej Nowak <tmn505@gmail.com>
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-# myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+# myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
 # https://github.com/jcorporation/mympd
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME := mympd
-PKG_VERSION := 10.0.1
+PKG_VERSION := 10.3.1
 PKG_RELEASE := 1
 
 PKG_SOURCE := $(PKG_NAME)-$(PKG_VERSION).tar.gz
@@ -24,10 +24,10 @@ PKG_BUILD_DIR := $(BUILD_DIR)/myMPD-$(PKG_VERSION)
 PKG_BUILD_PARALLEL := 1
 PKG_FORTIFY_SOURCE := 0
 PKG_CONFIG_DEPENDS := \
-	CONFIG_MYMPD_FLAC \
-	CONFIG_MYMPD_ID3TAG \
-	CONFIG_MYMPD_LUA \
-	CONFIG_MYMPD_SSL
+    CONFIG_MYMPD_FLAC \
+    CONFIG_MYMPD_ID3TAG \
+    CONFIG_MYMPD_LUA \
+    CONFIG_MYMPD_SSL
 
 CMAKE_BINARY_SUBDIR := release
 
@@ -48,48 +48,43 @@ Standalone and mobile friendly web MPD client with a tiny footprint and advanced
 endef
 
 define Package/mympd/config
-	if PACKAGE_mympd
+    if PACKAGE_mympd
 
-		config MYMPD_FLAC
-			bool "Extracting cover images from FLAC files"
-			default y
+        config MYMPD_FLAC
+            bool "Extracting cover images from FLAC files"
+            default y
 
-		config MYMPD_ID3TAG
-			bool "Extracting cover images from ID3 tags"
-			default y
+        config MYMPD_ID3TAG
+            bool "Extracting cover images from ID3 tags"
+            default y
 
-		config MYMPD_LUA
-			bool "LUA scripts support"
-			default n
+        config MYMPD_LUA
+            bool "LUA scripts support"
+            default n
 
-		config MYMPD_SSL
-			bool "HTTPS support (with OpenSSL)"
-			default n
+        config MYMPD_SSL
+            bool "HTTPS support (with OpenSSL)"
+            default n
 
-	endif
+    endif
 endef
 
 CMAKE_OPTIONS += \
-	-DCMAKE_BUILD_TYPE=RELEASE \
-	-DENABLE_FLAC=$(if $(CONFIG_MYMPD_FLAC),ON,OFF) \
-	-DENABLE_LIBID3TAG=$(if $(CONFIG_MYMPD_ID3TAG),ON,OFF) \
-	-DENABLE_LUA=$(if $(CONFIG_MYMPD_LUA),ON,OFF) \
-	-DENABLE_SSL=$(if $(CONFIG_MYMPD_SSL),ON,OFF)
-
-define Build/Prepare
-	$(call Build/Prepare/Default)
-	(cd $(PKG_BUILD_DIR); ./build.sh createassets)
-endef
+    -DCMAKE_BUILD_TYPE=Release \
+    -DMYMPD_ENABLE_FLAC=$(if $(CONFIG_MYMPD_FLAC),ON,OFF) \
+    -DMYMPD_ENABLE_LIBID3TAG=$(if $(CONFIG_MYMPD_ID3TAG),ON,OFF) \
+    -DMYMPD_ENABLE_LUA=$(if $(CONFIG_MYMPD_LUA),ON,OFF) \
+    -DMYMPD_ENABLE_SSL=$(if $(CONFIG_MYMPD_SSL),ON,OFF)
 
 define Package/mympd/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/mympd $(1)/usr/bin/
-	$(if $(CONFIG_MYMPD_LUA),$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/mympd-script $(1)/usr/bin/)
+    $(INSTALL_DIR) $(1)/usr/bin
+    $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/mympd $(1)/usr/bin/
+    $(if $(CONFIG_MYMPD_LUA),$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/mympd-script $(1)/usr/bin/)
 
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/mympd.config $(1)/etc/config/mympd
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/mympd.init $(1)/etc/init.d/mympd
+    $(INSTALL_DIR) $(1)/etc/config
+    $(INSTALL_CONF) ./files/mympd.config $(1)/etc/config/mympd
+    $(INSTALL_DIR) $(1)/etc/init.d
+    $(INSTALL_BIN) ./files/mympd.init $(1)/etc/init.d/mympd
 endef
 
 $(eval $(call BuildPackage,mympd))

@@ -33,7 +33,7 @@ The perl script `translate.pl` creates the `i18n.json` from these files, do not 
 - JSON key / value pairs
 - key is the phrase, value the translation
 - `%{smart_count}` is used for pluralization
-  - ` |||| ` separates the pluralization forms
+  - `` |||| `` separates the pluralization forms
   - the phrase before is used for number one
   - the phrase after is user for numbers zero or greater than one
   - more pluralization forms can be easily added (please open an issue)
@@ -66,10 +66,12 @@ You can check the translation files manually. The build process shows all missin
 ./build.sh translate
 ```
 
-Debug builds should use the new translation after a successfull build.
+Debug builds should use the new translation after a successful build.
 
 **To include it in a release build**
-- add it to `src/web_server/embedded_files.c`
-- add it to the struct `embedded_files` in `src/web_server/utility.c`
-- add it to `CMakeLists.txt`
-- add it to `src/compile_time.h.in`
+
+Add it to:
+- `src/web_server/embedded_files.c`
+- the struct `embedded_files` in `src/web_server/utility.c`
+- `CMakeLists.txt`
+- `src/compile_time.h.in`

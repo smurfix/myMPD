@@ -1,13 +1,13 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "volume.h"
+#include "src/mpd_client/volume.h"
 
-#include "errorhandler.h"
+#include "src/mpd_client/errorhandler.h"
 
 /**
  * Requests the volume from MPD.

@@ -1,13 +1,13 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
 
-#include "../../dist/utest/utest.h"
-#include "../../src/lib/mympd_state.h"
+#include "dist/utest/utest.h"
+#include "src/lib/mympd_state.h"
 
 UTEST(mympd_state, test_copy_tag_types) {
     struct t_tags src_taglist;

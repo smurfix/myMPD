@@ -1,17 +1,17 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "pictures.h"
+#include "src/mympd_api/pictures.h"
 
-#include "../lib/api.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/mimetype.h"
-#include "../lib/sds_extras.h"
+#include "src/lib/api.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/mimetype.h"
+#include "src/lib/sds_extras.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -27,7 +27,7 @@
  */
 sds mympd_api_settings_picture_list(sds workdir, sds buffer, long request_id, sds subdir) {
     enum mympd_cmd_ids cmd_id = MYMPD_API_PICTURE_LIST;
-    sds pic_dirname = sdscatfmt(sdsempty(), "%S/pics/%S", workdir, subdir);
+    sds pic_dirname = sdscatfmt(sdsempty(), "%S/%s/%S", workdir, DIR_WORK_PICS, subdir);
     errno = 0;
     DIR *pic_dir = opendir(pic_dirname);
     if (pic_dir == NULL) {

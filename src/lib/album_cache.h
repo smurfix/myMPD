@@ -1,16 +1,20 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #ifndef MYMPD_ALBUM_CACHE_H
 #define MYMPD_ALBUM_CACHE_H
 
-#include "../../dist/sds/sds.h"
-#include "../lib/mympd_state.h"
+#include "dist/sds/sds.h"
+#include "src/lib/mympd_state.h"
 
 #include <stdbool.h>
+
+bool album_cache_remove(sds workdir);
+bool album_cache_read(struct t_cache *album_cache, sds workdir);
+bool album_cache_write(struct t_cache *album_cache, sds workdir, struct t_tags *album_tags, bool free_data);
 
 sds album_cache_get_key(struct mpd_song *song, sds albumkey);
 struct mpd_song *album_cache_get_album(struct t_cache *album_cache, sds key);

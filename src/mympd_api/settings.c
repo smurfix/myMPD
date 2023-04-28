@@ -1,29 +1,30 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "settings.h"
+#include "src/mympd_api/settings.h"
 
-#include "../../dist/mjson/mjson.h"
-#include "../lib/api.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/list.h"
-#include "../lib/log.h"
-#include "../lib/mem.h"
-#include "../lib/msg_queue.h"
-#include "../lib/sds_extras.h"
-#include "../lib/state_files.h"
-#include "../lib/utility.h"
-#include "../lib/validate.h"
-#include "../mpd_client/errorhandler.h"
-#include "../mpd_client/jukebox.h"
-#include "timer.h"
-#include "timer_handlers.h"
-#include "trigger.h"
-
+#include "dist/mjson/mjson.h"
+#include "src/lib/api.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/list.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/msg_queue.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/state_files.h"
+#include "src/lib/utility.h"
+#include "src/lib/validate.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/jukebox.h"
+#include "src/mpd_client/presets.h"
+#include "src/mpd_client/tags.h"
+#include "src/mympd_api/timer.h"
+#include "src/mympd_api/timer_handlers.h"
+#include "src/mympd_api/trigger.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -33,7 +34,6 @@
  * Private declarations
  */
 
-static sds print_tags_array(sds buffer, const char *tagsname, struct t_tags tags);
 static sds set_invalid_value(sds buffer, sds key, sds value);
 static void enable_set_conn_options(struct t_mympd_state *mympd_state);
 
@@ -46,7 +46,7 @@ bool settings_to_webserver(struct t_mympd_state *mympd_state) {
     //push settings to web_server_queue
     struct set_mg_user_data_request *extra = malloc_assert(sizeof(struct set_mg_user_data_request));
     extra->music_directory = sdsdup(mympd_state->mpd_state->music_directory_value);
-    extra->playlist_directory = sdsdup(mympd_state->playlist_directory);
+    extra->playlist_directory = sdsdup(mympd_state->mpd_state->playlist_directory_value);
     extra->coverimage_names = sdsdup(mympd_state->coverimage_names);
     extra->thumbnail_names = sdsdup(mympd_state->thumbnail_names);
     extra->feat_albumart = mympd_state->mpd_state->feat_albumart;
@@ -175,7 +175,7 @@ bool mympd_api_settings_connection_save(sds key, sds value, int vtype, validate_
 
     if (rc == true) {
         sds state_filename = camel_to_snake(key);
-        rc = state_file_write(mympd_state->config->workdir, "state", state_filename, value);
+        rc = state_file_write(mympd_state->config->workdir, DIR_WORK_STATE, state_filename, value);
         FREE_SDS(state_filename);
     }
     return rc;
@@ -184,7 +184,7 @@ bool mympd_api_settings_connection_save(sds key, sds value, int vtype, validate_
 /**
  * Saves columns
  * @param mympd_state pointer to the t_mympd_state struct
- * @param table save columsn for this table
+ * @param table save columns for this table
  * @param cols json object with the columns
  * @return true on success, else false
  */
@@ -198,11 +198,17 @@ bool mympd_api_settings_cols_save(struct t_mympd_state *mympd_state, sds table, 
     else if (strcmp(table, "colsSearch") == 0) {
         mympd_state->cols_search = sds_replace(mympd_state->cols_search, cols);
     }
-    else if (strcmp(table, "colsBrowseDatabaseDetail") == 0) {
-        mympd_state->cols_browse_database_detail = sds_replace(mympd_state->cols_browse_database_detail, cols);
+    else if (strcmp(table, "colsBrowseDatabaseAlbumDetailInfo") == 0) {
+        mympd_state->cols_browse_database_album_detail_info = sds_replace(mympd_state->cols_browse_database_album_detail_info, cols);
     }
-    else if (strcmp(table, "colsBrowsePlaylistsDetail") == 0) {
-        mympd_state->cols_browse_playlists_detail = sds_replace(mympd_state->cols_browse_playlists_detail, cols);
+    else if (strcmp(table, "colsBrowseDatabaseAlbumDetail") == 0) {
+        mympd_state->cols_browse_database_album_detail = sds_replace(mympd_state->cols_browse_database_album_detail, cols);
+    }
+    else if (strcmp(table, "colsBrowseDatabaseAlbumList") == 0) {
+        mympd_state->cols_browse_database_album_list = sds_replace(mympd_state->cols_browse_database_album_list, cols);
+    }
+    else if (strcmp(table, "colsBrowsePlaylistDetail") == 0) {
+        mympd_state->cols_browse_playlist_detail = sds_replace(mympd_state->cols_browse_playlist_detail, cols);
     }
     else if (strcmp(table, "colsBrowseFilesystem") == 0) {
         mympd_state->cols_browse_filesystem = sds_replace(mympd_state->cols_browse_filesystem, cols);
@@ -223,7 +229,7 @@ bool mympd_api_settings_cols_save(struct t_mympd_state *mympd_state, sds table, 
         return false;
     }
     sds tablename = camel_to_snake(table);
-    bool rc = state_file_write(mympd_state->config->workdir, "state", tablename, cols);
+    bool rc = state_file_write(mympd_state->config->workdir, DIR_WORK_STATE, tablename, cols);
     FREE_SDS(tablename);
     return rc;
 }
@@ -417,7 +423,7 @@ bool mympd_api_settings_set(sds key, sds value, int vtype, validate_callback vcb
         return true;
     }
     sds state_filename = camel_to_snake(key);
-    bool rc = state_file_write(mympd_state->config->workdir, "state", state_filename, value);
+    bool rc = state_file_write(mympd_state->config->workdir, DIR_WORK_STATE, state_filename, value);
     FREE_SDS(state_filename);
     return rc;
 }
@@ -444,6 +450,13 @@ bool mympd_api_settings_partition_set(sds key, sds value, int vtype, validate_ca
             return false;
         }
         partition_state->highlight_color = sds_replace(partition_state->highlight_color, value);
+    }
+    else if (strcmp(key, "highlightColorContrast") == 0 && vtype == MJSON_TOK_STRING) {
+        if (vcb_ishexcolor(value) == false) {
+            *error = set_invalid_value(*error, key, value);
+            return false;
+        }
+        partition_state->highlight_color_contrast = sds_replace(partition_state->highlight_color_contrast, value);
     }
     else if (strcmp(key, "mpdStreamPort") == 0 && vtype == MJSON_TOK_NUMBER) {
         unsigned mpd_stream_port = (unsigned)strtoumax(value, NULL, 10);
@@ -559,6 +572,21 @@ bool mympd_api_settings_mpd_options_set(sds key, sds value, int vtype, validate_
             jukebox_changed = true;
         }
     }
+    else if (strcmp(key, "jukeboxIgnoreHated") == 0) {
+        if (vtype != MJSON_TOK_TRUE && vtype != MJSON_TOK_FALSE) {
+            *error = set_invalid_value(*error, key, value);
+            return false;
+        }
+        bool bool_buf = vtype == MJSON_TOK_TRUE ? true : false;
+        if (bool_buf != partition_state->jukebox_ignore_hated) {
+            partition_state->jukebox_ignore_hated = bool_buf;
+            jukebox_changed = true;
+        }
+    }
+    else if (strcmp(key, "name") == 0) {
+        //ignore
+        rc = true;
+    }
     else if (partition_state->conn_state == MPD_CONNECTED) {
         if (strcmp(key, "random") == 0) {
             if (vtype != MJSON_TOK_TRUE && vtype != MJSON_TOK_FALSE) {
@@ -577,12 +605,12 @@ bool mympd_api_settings_mpd_options_set(sds key, sds value, int vtype, validate_
             rc = mpd_run_repeat(partition_state->conn, bool_buf);
         }
         else if (strcmp(key, "consume") == 0) {
-            if (vtype != MJSON_TOK_TRUE && vtype != MJSON_TOK_FALSE) {
+            enum mpd_consume_state state = mpd_parse_consume_state(value);
+            if (state == MPD_CONSUME_UNKNOWN) {
                 *error = set_invalid_value(*error, key, value);
                 return false;
             }
-            bool bool_buf = vtype == MJSON_TOK_TRUE ? true : false;
-            rc = mpd_run_consume(partition_state->conn, bool_buf);
+            rc = mpd_run_consume_state(partition_state->conn, state);
         }
         else if (strcmp(key, "single") == 0) {
             enum mpd_single_state state = mpd_parse_single_state(value);
@@ -659,46 +687,48 @@ bool mympd_api_settings_mpd_options_set(sds key, sds value, int vtype, validate_
 void mympd_api_settings_statefiles_global_read(struct t_mympd_state *mympd_state) {
     MYMPD_LOG_NOTICE("Reading global states");
     sds workdir = mympd_state->config->workdir;
-    mympd_state->mpd_state->mpd_host = state_file_rw_string_sds(workdir, "state", "mpd_host", mympd_state->mpd_state->mpd_host, vcb_isname, false);
-    mympd_state->mpd_state->mpd_port = state_file_rw_uint(workdir, "state", "mpd_port", mympd_state->mpd_state->mpd_port, MPD_PORT_MIN, MPD_PORT_MAX, false);
-    mympd_state->mpd_state->mpd_pass = state_file_rw_string_sds(workdir, "state", "mpd_pass", mympd_state->mpd_state->mpd_pass, vcb_isname, false);
-    mympd_state->mpd_state->mpd_binarylimit = state_file_rw_uint(workdir, "state", "mpd_binarylimit", mympd_state->mpd_state->mpd_binarylimit, MPD_BINARY_SIZE_MIN, MPD_BINARY_SIZE_MAX, false);
-    mympd_state->mpd_state->mpd_timeout = state_file_rw_uint(workdir, "state", "mpd_timeout", mympd_state->mpd_state->mpd_timeout, MPD_TIMEOUT_MIN, MPD_TIMEOUT_MAX, false);
-    mympd_state->mpd_state->mpd_keepalive = state_file_rw_bool(workdir, "state", "mpd_keepalive", mympd_state->mpd_state->mpd_keepalive, false);
-    mympd_state->mpd_state->tag_list = state_file_rw_string_sds(workdir, "state", "tag_list", mympd_state->mpd_state->tag_list, vcb_istaglist, false);
-    mympd_state->tag_list_search = state_file_rw_string_sds(workdir, "state", "tag_list_search", mympd_state->tag_list_search, vcb_istaglist, false);
-    mympd_state->tag_list_browse = state_file_rw_string_sds(workdir, "state", "tag_list_browse", mympd_state->tag_list_browse, vcb_istaglist, false);
-    mympd_state->smartpls = state_file_rw_bool(workdir, "state", "smartpls", mympd_state->smartpls, false);
-    mympd_state->smartpls_sort = state_file_rw_string_sds(workdir, "state", "smartpls_sort", mympd_state->smartpls_sort, vcb_ismpdsort, false);
-    mympd_state->smartpls_prefix = state_file_rw_string_sds(workdir, "state", "smartpls_prefix", mympd_state->smartpls_prefix, vcb_isname, false);
-    mympd_state->smartpls_interval = state_file_rw_int(workdir, "state", "smartpls_interval", (int)mympd_state->smartpls_interval, TIMER_INTERVAL_MIN, TIMER_INTERVAL_MAX, false);
-    mympd_state->smartpls_generate_tag_list = state_file_rw_string_sds(workdir, "state", "smartpls_generate_tag_list", mympd_state->smartpls_generate_tag_list, vcb_istaglist, false);
-    mympd_state->mpd_state->last_played_count = state_file_rw_long(workdir, "state", "last_played_count", mympd_state->mpd_state->last_played_count, 0, MPD_PLAYLIST_LENGTH_MAX, false);
-    mympd_state->cols_queue_current = state_file_rw_string_sds(workdir, "state", "cols_queue_current", mympd_state->cols_queue_current, vcb_isname, false);
-    mympd_state->cols_search = state_file_rw_string_sds(workdir, "state", "cols_search", mympd_state->cols_search, vcb_isname, false);
-    mympd_state->cols_browse_database_detail = state_file_rw_string_sds(workdir, "state", "cols_browse_database_detail", mympd_state->cols_browse_database_detail, vcb_isname, false);
-    mympd_state->cols_browse_playlists_detail = state_file_rw_string_sds(workdir, "state", "cols_browse_playlists_detail", mympd_state->cols_browse_playlists_detail, vcb_isname, false);
-    mympd_state->cols_browse_filesystem = state_file_rw_string_sds(workdir, "state", "cols_browse_filesystem", mympd_state->cols_browse_filesystem, vcb_isname, false);
-    mympd_state->cols_playback = state_file_rw_string_sds(workdir, "state", "cols_playback", mympd_state->cols_playback, vcb_isname, false);
-    mympd_state->cols_queue_last_played = state_file_rw_string_sds(workdir, "state", "cols_queue_last_played", mympd_state->cols_queue_last_played, vcb_isname, false);
-    mympd_state->cols_queue_jukebox = state_file_rw_string_sds(workdir, "state", "cols_queue_jukebox", mympd_state->cols_queue_jukebox, vcb_isname, false);
-    mympd_state->cols_browse_radio_webradiodb = state_file_rw_string_sds(workdir, "state", "cols_browse_radio_webradiodb", mympd_state->cols_browse_radio_webradiodb, vcb_isname, false);
-    mympd_state->cols_browse_radio_radiobrowser = state_file_rw_string_sds(workdir, "state", "cols_browse_radio_radiobrowser", mympd_state->cols_browse_radio_radiobrowser, vcb_isname, false);
-    mympd_state->coverimage_names = state_file_rw_string_sds(workdir, "state", "coverimage_names", mympd_state->coverimage_names, vcb_isfilename, false);
-    mympd_state->thumbnail_names = state_file_rw_string_sds(workdir, "state", "thumbnail_names", mympd_state->thumbnail_names, vcb_isfilename, false);
-    mympd_state->music_directory = state_file_rw_string_sds(workdir, "state", "music_directory", mympd_state->music_directory, vcb_isfilepath, false);
-    mympd_state->playlist_directory = state_file_rw_string_sds(workdir, "state", "playlist_directory", mympd_state->playlist_directory, vcb_isfilepath, false);
-    mympd_state->mpd_state->booklet_name = state_file_rw_string_sds(workdir, "state", "booklet_name", mympd_state->mpd_state->booklet_name, vcb_isfilename, false);
-    mympd_state->volume_min = state_file_rw_uint(workdir, "state", "volume_min", mympd_state->volume_min, VOLUME_MIN, VOLUME_MAX, false);
-    mympd_state->volume_max = state_file_rw_uint(workdir, "state", "volume_max", mympd_state->volume_max, VOLUME_MIN, VOLUME_MAX, false);
-    mympd_state->volume_step = state_file_rw_uint(workdir, "state", "volume_step", mympd_state->volume_step, VOLUME_STEP_MIN, VOLUME_STEP_MAX, false);
-    mympd_state->webui_settings = state_file_rw_string_sds(workdir, "state", "webui_settings", mympd_state->webui_settings, validate_json_object, false);
-    mympd_state->lyrics.uslt_ext = state_file_rw_string_sds(workdir, "state", "lyrics_uslt_ext", mympd_state->lyrics.uslt_ext, vcb_isalnum, false);
-    mympd_state->lyrics.sylt_ext = state_file_rw_string_sds(workdir, "state", "lyrics_sylt_ext", mympd_state->lyrics.sylt_ext, vcb_isalnum, false);
-    mympd_state->lyrics.vorbis_uslt = state_file_rw_string_sds(workdir, "state", "lyrics_vorbis_uslt", mympd_state->lyrics.vorbis_uslt, vcb_isalnum, false);
-    mympd_state->lyrics.vorbis_sylt = state_file_rw_string_sds(workdir, "state", "lyrics_vorbis_sylt", mympd_state->lyrics.vorbis_sylt, vcb_isalnum, false);
-    mympd_state->listenbrainz_token = state_file_rw_string_sds(workdir, "state", "listenbrainz_token", mympd_state->listenbrainz_token, vcb_isalnum, false);
-    mympd_state->navbar_icons = state_file_rw_string_sds(workdir, "state", "navbar_icons", mympd_state->navbar_icons, validate_json_array, false);
+    mympd_state->mpd_state->mpd_host = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "mpd_host", mympd_state->mpd_state->mpd_host, vcb_isname, true);
+    mympd_state->mpd_state->mpd_port = state_file_rw_uint(workdir, DIR_WORK_STATE, "mpd_port", mympd_state->mpd_state->mpd_port, MPD_PORT_MIN, MPD_PORT_MAX, true);
+    mympd_state->mpd_state->mpd_pass = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "mpd_pass", mympd_state->mpd_state->mpd_pass, vcb_isname, true);
+    mympd_state->mpd_state->mpd_binarylimit = state_file_rw_uint(workdir, DIR_WORK_STATE, "mpd_binarylimit", mympd_state->mpd_state->mpd_binarylimit, MPD_BINARY_SIZE_MIN, MPD_BINARY_SIZE_MAX, true);
+    mympd_state->mpd_state->mpd_timeout = state_file_rw_uint(workdir, DIR_WORK_STATE, "mpd_timeout", mympd_state->mpd_state->mpd_timeout, MPD_TIMEOUT_MIN, MPD_TIMEOUT_MAX, true);
+    mympd_state->mpd_state->mpd_keepalive = state_file_rw_bool(workdir, DIR_WORK_STATE, "mpd_keepalive", mympd_state->mpd_state->mpd_keepalive, true);
+    mympd_state->mpd_state->tag_list = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "tag_list", mympd_state->mpd_state->tag_list, vcb_istaglist, true);
+    mympd_state->tag_list_search = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "tag_list_search", mympd_state->tag_list_search, vcb_istaglist, true);
+    mympd_state->tag_list_browse = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "tag_list_browse", mympd_state->tag_list_browse, vcb_istaglist, true);
+    mympd_state->smartpls = state_file_rw_bool(workdir, DIR_WORK_STATE, "smartpls", mympd_state->smartpls, true);
+    mympd_state->smartpls_sort = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "smartpls_sort", mympd_state->smartpls_sort, vcb_ismpdsort, true);
+    mympd_state->smartpls_prefix = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "smartpls_prefix", mympd_state->smartpls_prefix, vcb_isname, true);
+    mympd_state->smartpls_interval = state_file_rw_int(workdir, DIR_WORK_STATE, "smartpls_interval", (int)mympd_state->smartpls_interval, TIMER_INTERVAL_MIN, TIMER_INTERVAL_MAX, true);
+    mympd_state->smartpls_generate_tag_list = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "smartpls_generate_tag_list", mympd_state->smartpls_generate_tag_list, vcb_istaglist, true);
+    mympd_state->mpd_state->last_played_count = state_file_rw_long(workdir, DIR_WORK_STATE, "last_played_count", mympd_state->mpd_state->last_played_count, 0, MPD_PLAYLIST_LENGTH_MAX, true);
+    mympd_state->cols_queue_current = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_queue_current", mympd_state->cols_queue_current, vcb_isname, true);
+    mympd_state->cols_search = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_search", mympd_state->cols_search, vcb_isname, true);
+    mympd_state->cols_browse_database_album_detail_info = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_browse_database_album_detail_info", mympd_state->cols_browse_database_album_detail_info, vcb_isname, true);
+    mympd_state->cols_browse_database_album_detail = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_browse_database_album_detail", mympd_state->cols_browse_database_album_detail, vcb_isname, true);
+    mympd_state->cols_browse_database_album_list = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_browse_database_album_list", mympd_state->cols_browse_database_album_list, vcb_isname, true);
+    mympd_state->cols_browse_playlist_detail = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_browse_playlist_detail", mympd_state->cols_browse_playlist_detail, vcb_isname, true);
+    mympd_state->cols_browse_filesystem = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_browse_filesystem", mympd_state->cols_browse_filesystem, vcb_isname, true);
+    mympd_state->cols_playback = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_playback", mympd_state->cols_playback, vcb_isname, true);
+    mympd_state->cols_queue_last_played = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_queue_last_played", mympd_state->cols_queue_last_played, vcb_isname, true);
+    mympd_state->cols_queue_jukebox = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_queue_jukebox", mympd_state->cols_queue_jukebox, vcb_isname, true);
+    mympd_state->cols_browse_radio_webradiodb = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_browse_radio_webradiodb", mympd_state->cols_browse_radio_webradiodb, vcb_isname, true);
+    mympd_state->cols_browse_radio_radiobrowser = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "cols_browse_radio_radiobrowser", mympd_state->cols_browse_radio_radiobrowser, vcb_isname, true);
+    mympd_state->coverimage_names = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "coverimage_names", mympd_state->coverimage_names, vcb_isfilename, true);
+    mympd_state->thumbnail_names = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "thumbnail_names", mympd_state->thumbnail_names, vcb_isfilename, true);
+    mympd_state->music_directory = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "music_directory", mympd_state->music_directory, vcb_isfilepath, true);
+    mympd_state->playlist_directory = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "playlist_directory", mympd_state->playlist_directory, vcb_isfilepath, true);
+    mympd_state->mpd_state->booklet_name = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "booklet_name", mympd_state->mpd_state->booklet_name, vcb_isfilename, true);
+    mympd_state->volume_min = state_file_rw_uint(workdir, DIR_WORK_STATE, "volume_min", mympd_state->volume_min, VOLUME_MIN, VOLUME_MAX, true);
+    mympd_state->volume_max = state_file_rw_uint(workdir, DIR_WORK_STATE, "volume_max", mympd_state->volume_max, VOLUME_MIN, VOLUME_MAX, true);
+    mympd_state->volume_step = state_file_rw_uint(workdir, DIR_WORK_STATE, "volume_step", mympd_state->volume_step, VOLUME_STEP_MIN, VOLUME_STEP_MAX, true);
+    mympd_state->webui_settings = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "webui_settings", mympd_state->webui_settings, validate_json_object, true);
+    mympd_state->lyrics.uslt_ext = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "lyrics_uslt_ext", mympd_state->lyrics.uslt_ext, vcb_isalnum, true);
+    mympd_state->lyrics.sylt_ext = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "lyrics_sylt_ext", mympd_state->lyrics.sylt_ext, vcb_isalnum, true);
+    mympd_state->lyrics.vorbis_uslt = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "lyrics_vorbis_uslt", mympd_state->lyrics.vorbis_uslt, vcb_isalnum, true);
+    mympd_state->lyrics.vorbis_sylt = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "lyrics_vorbis_sylt", mympd_state->lyrics.vorbis_sylt, vcb_isalnum, true);
+    mympd_state->listenbrainz_token = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "listenbrainz_token", mympd_state->listenbrainz_token, vcb_isalnum, true);
+    mympd_state->navbar_icons = state_file_rw_string_sds(workdir, DIR_WORK_STATE, "navbar_icons", mympd_state->navbar_icons, validate_json_array, true);
 
     strip_slash(mympd_state->music_directory);
     strip_slash(mympd_state->playlist_directory);
@@ -712,15 +742,17 @@ void mympd_api_settings_statefiles_global_read(struct t_mympd_state *mympd_state
 void mympd_api_settings_statefiles_partition_read(struct t_partition_state *partition_state) {
     sds workdir = partition_state->mympd_state->config->workdir;
     MYMPD_LOG_NOTICE("\"%s\": Reading partition states from directory \"%s/%s\"", partition_state->name, workdir, partition_state->state_dir);
-    partition_state->auto_play = state_file_rw_bool(workdir, partition_state->state_dir, "auto_play", partition_state->auto_play, false);
-    partition_state->jukebox_mode = state_file_rw_uint(workdir, partition_state->state_dir, "jukebox_mode", partition_state->jukebox_mode, JUKEBOX_MODE_MIN, JUKEBOX_MODE_MAX, false);
-    partition_state->jukebox_playlist = state_file_rw_string_sds(workdir, partition_state->state_dir, "jukebox_playlist", partition_state->jukebox_playlist, vcb_isfilename, false);
-    partition_state->jukebox_queue_length = state_file_rw_long(workdir, partition_state->state_dir, "jukebox_queue_length", partition_state->jukebox_queue_length, JUKEBOX_QUEUE_MIN, JUKEBOX_QUEUE_MAX, false);
-    partition_state->jukebox_last_played = state_file_rw_long(workdir, partition_state->state_dir, "jukebox_last_played", partition_state->jukebox_last_played, JUKEBOX_LAST_PLAYED_MIN, JUKEBOX_LAST_PLAYED_MAX, false);
-    partition_state->jukebox_unique_tag.tags[0] = state_file_rw_int(workdir, partition_state->state_dir, "jukebox_unique_tag", partition_state->jukebox_unique_tag.tags[0], 0, MPD_TAG_COUNT, false);
-    partition_state->highlight_color = state_file_rw_string_sds(workdir, partition_state->state_dir, "highlight_color", partition_state->highlight_color, vcb_ishexcolor, false);
-    partition_state->mpd_stream_port = state_file_rw_uint(workdir, "state", "mpd_stream_port", partition_state->mpd_stream_port, MPD_PORT_MIN, MPD_PORT_MAX, false);
-    partition_state->stream_uri = state_file_rw_string_sds(workdir, partition_state->state_dir, "stream_uri", partition_state->stream_uri, vcb_isuri, false);
+    partition_state->auto_play = state_file_rw_bool(workdir, partition_state->state_dir, "auto_play", partition_state->auto_play, true);
+    partition_state->jukebox_mode = state_file_rw_uint(workdir, partition_state->state_dir, "jukebox_mode", partition_state->jukebox_mode, JUKEBOX_MODE_MIN, JUKEBOX_MODE_MAX, true);
+    partition_state->jukebox_playlist = state_file_rw_string_sds(workdir, partition_state->state_dir, "jukebox_playlist", partition_state->jukebox_playlist, vcb_isfilename, true);
+    partition_state->jukebox_queue_length = state_file_rw_long(workdir, partition_state->state_dir, "jukebox_queue_length", partition_state->jukebox_queue_length, JUKEBOX_QUEUE_MIN, JUKEBOX_QUEUE_MAX, true);
+    partition_state->jukebox_last_played = state_file_rw_long(workdir, partition_state->state_dir, "jukebox_last_played", partition_state->jukebox_last_played, JUKEBOX_LAST_PLAYED_MIN, JUKEBOX_LAST_PLAYED_MAX, true);
+    partition_state->jukebox_unique_tag.tags[0] = state_file_rw_int(workdir, partition_state->state_dir, "jukebox_unique_tag", partition_state->jukebox_unique_tag.tags[0], 0, MPD_TAG_COUNT, true);
+    partition_state->jukebox_ignore_hated = state_file_rw_bool(workdir, partition_state->state_dir, "jukebox_ignore_hated", MYMPD_JUKEBOX_IGNORE_HATED, true);
+    partition_state->highlight_color = state_file_rw_string_sds(workdir, partition_state->state_dir, "highlight_color", partition_state->highlight_color, vcb_ishexcolor, true);
+    partition_state->highlight_color_contrast = state_file_rw_string_sds(workdir, partition_state->state_dir, "highlight_color_contrast", partition_state->highlight_color_contrast, vcb_ishexcolor, true);
+    partition_state->mpd_stream_port = state_file_rw_uint(workdir, partition_state->state_dir, "mpd_stream_port", partition_state->mpd_stream_port, MPD_PORT_MIN, MPD_PORT_MAX, true);
+    partition_state->stream_uri = state_file_rw_string_sds(workdir, partition_state->state_dir, "stream_uri", partition_state->stream_uri, vcb_isuri, true);
 }
 
 /**
@@ -743,12 +775,12 @@ sds mympd_api_settings_get(struct t_partition_state *partition_state, sds buffer
     buffer = tojson_uint(buffer, "mpdTimeout", partition_state->mpd_state->mpd_timeout, true);
     buffer = tojson_bool(buffer, "mpdKeepalive", partition_state->mpd_state->mpd_keepalive, true);
     buffer = tojson_uint(buffer, "mpdBinarylimit", partition_state->mpd_state->mpd_binarylimit, true);
-#ifdef ENABLE_SSL
+#ifdef MYMPD_ENABLE_SSL
     buffer = tojson_bool(buffer, "pin", (sdslen(mympd_state->config->pin_hash) == 0 ? false : true), true);
 #else
     buffer = tojson_bool(buffer, "pin", false, true);
 #endif
-#ifdef DEBUG
+#ifdef MYMPD_DEBUG
     buffer = tojson_bool(buffer, "debugMode", true, true);
 #else
     buffer = tojson_bool(buffer, "debugMode", false, true);
@@ -760,7 +792,7 @@ sds mympd_api_settings_get(struct t_partition_state *partition_state, sds buffer
     buffer = tojson_bool(buffer, "smartpls", mympd_state->smartpls, true);
     buffer = tojson_sds(buffer, "smartplsSort", mympd_state->smartpls_sort, true);
     buffer = tojson_sds(buffer, "smartplsPrefix", mympd_state->smartpls_prefix, true);
-    buffer = tojson_llong(buffer, "smartplsInterval", (long long)mympd_state->smartpls_interval, true);
+    buffer = tojson_time(buffer, "smartplsInterval", mympd_state->smartpls_interval, true);
     buffer = tojson_long(buffer, "lastPlayedCount", mympd_state->mpd_state->last_played_count, true);
     buffer = tojson_sds(buffer, "musicDirectory", mympd_state->music_directory, true);
     buffer = tojson_sds(buffer, "playlistDirectory", mympd_state->playlist_directory, true);
@@ -774,8 +806,10 @@ sds mympd_api_settings_get(struct t_partition_state *partition_state, sds buffer
     buffer = tojson_sds(buffer, "lyricsVorbisSylt", mympd_state->lyrics.vorbis_sylt, true);
     buffer = tojson_raw(buffer, "colsQueueCurrent", mympd_state->cols_queue_current, true);
     buffer = tojson_raw(buffer, "colsSearch", mympd_state->cols_search, true);
-    buffer = tojson_raw(buffer, "colsBrowseDatabaseDetail", mympd_state->cols_browse_database_detail, true);
-    buffer = tojson_raw(buffer, "colsBrowsePlaylistsDetail", mympd_state->cols_browse_playlists_detail, true);
+    buffer = tojson_raw(buffer, "colsBrowseDatabaseAlbumDetailInfo", mympd_state->cols_browse_database_album_detail_info, true);
+    buffer = tojson_raw(buffer, "colsBrowseDatabaseAlbumDetail", mympd_state->cols_browse_database_album_detail, true);
+    buffer = tojson_raw(buffer, "colsBrowseDatabaseAlbumList", mympd_state->cols_browse_database_album_list, true);
+    buffer = tojson_raw(buffer, "colsBrowsePlaylistDetail", mympd_state->cols_browse_playlist_detail, true);
     buffer = tojson_raw(buffer, "colsBrowseFilesystem", mympd_state->cols_browse_filesystem, true);
     buffer = tojson_raw(buffer, "colsPlayback", mympd_state->cols_playback, true);
     buffer = tojson_raw(buffer, "colsQueueLastPlayed", mympd_state->cols_queue_last_played, true);
@@ -793,10 +827,15 @@ sds mympd_api_settings_get(struct t_partition_state *partition_state, sds buffer
     buffer = tojson_long(buffer, "jukeboxQueueLength", partition_state->jukebox_queue_length, true);
     buffer = tojson_char(buffer, "jukeboxUniqueTag", mpd_tag_name(partition_state->jukebox_unique_tag.tags[0]), true);
     buffer = tojson_long(buffer, "jukeboxLastPlayed", partition_state->jukebox_last_played, true);
+    buffer = tojson_bool(buffer, "jukeboxIgnoreHated", partition_state->jukebox_ignore_hated, true);
     buffer = tojson_bool(buffer, "autoPlay", partition_state->auto_play, true);
     buffer = tojson_char(buffer, "highlightColor", partition_state->highlight_color, true);
+    buffer = tojson_char(buffer, "highlightColorContrast", partition_state->highlight_color_contrast, true);
     buffer = tojson_uint(buffer, "mpdStreamPort", partition_state->mpd_stream_port, true);
     buffer = tojson_char(buffer, "streamUri", partition_state->stream_uri, true);
+    buffer = sdscat(buffer, "\"presets\": [");
+    buffer = presets_list(&partition_state->presets, buffer);
+    buffer = sdscatlen(buffer, "],", 2);
     if (partition_state->conn_state == MPD_CONNECTED) {
         //mpd options
         buffer = tojson_bool(buffer, "mpdConnected", true, true);
@@ -812,7 +851,8 @@ sds mympd_api_settings_get(struct t_partition_state *partition_state, sds buffer
         buffer = tojson_double(buffer, "mixrampDelay", mpd_status_get_mixrampdelay(status), true);
         buffer = tojson_bool(buffer, "repeat", mpd_status_get_repeat(status), true);
         buffer = tojson_bool(buffer, "random", mpd_status_get_random(status), true);
-        buffer = tojson_bool(buffer, "consume", mpd_status_get_consume(status), true);
+        enum mpd_consume_state consume_state = mpd_status_get_consume_state(status);
+        buffer = tojson_char(buffer, "consume", mpd_lookup_consume_state(consume_state), true);
         mpd_status_free(status);
 
         enum mpd_replay_gain_mode replay_gain_mode = mpd_run_replay_gain_status(partition_state->conn);
@@ -843,13 +883,17 @@ sds mympd_api_settings_get(struct t_partition_state *partition_state, sds buffer
         buffer = tojson_bool(buffer, "featPlaylistRmRange", partition_state->mpd_state->feat_playlist_rm_range, true);
         buffer = tojson_bool(buffer, "featWhence", partition_state->mpd_state->feat_whence, true);
         buffer = tojson_bool(buffer, "featAdvqueue", partition_state->mpd_state->feat_advqueue, true);
+        buffer = tojson_bool(buffer, "featConsumeOneshot", partition_state->mpd_state->feat_consume_oneshot, true);
+        buffer = tojson_bool(buffer, "featPlaylistDirAuto", partition_state->mpd_state->feat_playlist_dir_auto, true);
+        buffer = tojson_bool(buffer, "featStartsWith", partition_state->mpd_state->feat_starts_with, true);
+        buffer = tojson_bool(buffer, "featPcre", partition_state->mpd_state->feat_pcre, true);
     }
-#ifdef ENABLE_SSL
+#ifdef MYMPD_ENABLE_SSL
     buffer = tojson_bool(buffer, "featCacert", (mympd_state->config->custom_cert == false && mympd_state->config->ssl == true ? true : false), true);
 #else
     buffer = tojson_bool(buffer, "featCacert", false, true);
 #endif
-#ifdef ENABLE_LUA
+#ifdef MYMPD_ENABLE_LUA
     buffer = tojson_bool(buffer, "featScripting", true, false);
 #else
     buffer = tojson_bool(buffer, "featScripting", false, false);
@@ -858,16 +902,19 @@ sds mympd_api_settings_get(struct t_partition_state *partition_state, sds buffer
     if (partition_state->conn_state == MPD_CONNECTED) {
         buffer = sdscatlen(buffer, ",", 1);
         buffer = tojson_sds(buffer, "musicDirectoryValue", partition_state->mpd_state->music_directory_value, true);
+        buffer = tojson_sds(buffer, "playlistDirectoryValue", partition_state->mpd_state->playlist_directory_value, true);
         //taglists
-        buffer = print_tags_array(buffer, "tagList", partition_state->mpd_state->tags_mympd);
+        buffer = print_tags_array(buffer, "tagList", &partition_state->mpd_state->tags_mympd);
         buffer = sdscatlen(buffer, ",", 1);
-        buffer = print_tags_array(buffer, "tagListSearch", partition_state->mpd_state->tags_search);
+        buffer = print_tags_array(buffer, "tagListSearch", &partition_state->mpd_state->tags_search);
         buffer = sdscatlen(buffer, ",", 1);
-        buffer = print_tags_array(buffer, "tagListBrowse", partition_state->mpd_state->tags_browse);
+        buffer = print_tags_array(buffer, "tagListBrowse", &partition_state->mpd_state->tags_browse);
         buffer = sdscatlen(buffer, ",", 1);
-        buffer = print_tags_array(buffer, "tagListMpd", partition_state->mpd_state->tags_mpd);
+        buffer = print_tags_array(buffer, "tagListMpd", &partition_state->mpd_state->tags_mpd);
         buffer = sdscatlen(buffer, ",", 1);
-        buffer = print_tags_array(buffer, "smartplsGenerateTagList", mympd_state->smartpls_generate_tag_types);
+        buffer = print_tags_array(buffer, "tagListAlbum", &partition_state->mpd_state->tags_album);
+        buffer = sdscatlen(buffer, ",", 1);
+        buffer = print_tags_array(buffer, "smartplsGenerateTagList", &mympd_state->smartpls_generate_tag_types);
         //trigger events
         buffer = sdscat(buffer, ",\"triggerEvents\":{");
         buffer = mympd_api_trigger_print_event_list(buffer);
@@ -880,26 +927,6 @@ sds mympd_api_settings_get(struct t_partition_state *partition_state, sds buffer
 /**
  * Privat functions
  */
-
-/**
- * Helper function to print a t_tags struct as json array
- * @param buffer already allocated sds string to append the response
- * @param tagsname key for the json array
- * @param tags tags to print
- * @return pointer to buffer
- */
-static sds print_tags_array(sds buffer, const char *tagsname, struct t_tags tags) {
-    buffer = sdscatfmt(buffer, "\"%s\": [", tagsname);
-    for (unsigned i = 0; i < tags.len; i++) {
-        if (i > 0) {
-            buffer = sdscatlen(buffer, ",", 1);
-        }
-        const char *tagname = mpd_tag_name(tags.tags[i]);
-        buffer = sds_catjson(buffer, tagname, strlen(tagname));
-    }
-    buffer = sdscatlen(buffer, "]", 1);
-    return buffer;
-}
 
 /**
  * Helper function to set an error message

@@ -1,19 +1,21 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "utility.h"
+#include "src/web_server/utility.h"
 
-#include "../lib/filehandler.h"
-#include "../lib/log.h"
-#include "../lib/mem.h"
-#include "../lib/sds_extras.h"
-#include "../lib/utility.h"
+#include "src/lib/config_def.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/mimetype.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/utility.h"
 
-#ifdef EMBEDDED_ASSETS
+#ifdef MYMPD_EMBEDDED_ASSETS
     //embedded files for release build
     #include "embedded_files.c"
 #endif
@@ -21,6 +23,27 @@
 /**
  * Public functions
  */
+
+/**
+ * Prints the ip address from a mg_addr struct
+ * @param s already allocated sds string to append the ip
+ * @param addr pointer to struct mg_addr
+ * @return sds pointer to s
+ */
+sds print_ip(sds s, struct mg_addr *addr) {
+    if (addr->is_ip6 == false) {
+        uint8_t p[4];
+        memcpy(p, &addr->ip, sizeof(p));
+        s = sdscatprintf(s, "%d.%d.%d.%d", (int) p[0], (int) p[1], (int) p[2], (int) p[3]);
+    }
+    else {
+        uint16_t *p = (uint16_t *) addr->ip6;
+        s = sdscatprintf(s, "[%x:%x:%x:%x:%x:%x:%x:%x]", mg_htons(p[0]),
+                 mg_htons(p[1]), mg_htons(p[2]), mg_htons(p[3]), mg_htons(p[4]),
+                 mg_htons(p[5]), mg_htons(p[6]), mg_htons(p[7]));
+    }
+    return s;
+}
 
 /**
  * Sets the partition from uri and handles errors
@@ -55,8 +78,48 @@ void *mg_user_data_free(struct t_mg_user_data *mg_user_data) {
     sdsfreesplitres(mg_user_data->thumbnail_names, mg_user_data->thumbnail_names_len);
     list_clear(&mg_user_data->stream_uris);
     list_clear(&mg_user_data->session_list);
+    FREE_SDS(mg_user_data->custom_booklet_image);
+    FREE_SDS(mg_user_data->custom_mympd_image);
+    FREE_SDS(mg_user_data->custom_na_image);
+    FREE_SDS(mg_user_data->custom_stream_image);
     FREE_PTR(mg_user_data);
     return NULL;
+}
+
+/**
+ * Checks the covercache and serves the image
+ * @param nc mongoose connection
+ * @param hm http message
+ * @param mg_user_data pointer to mongoose configuration
+ * @param uri_decoded image uri
+ * @param offset embedded image offset
+ * @return true if an image is served,
+ *         false if waiting for mpd_client to handle request
+ */
+bool check_covercache(struct mg_connection *nc, struct mg_http_message *hm,
+        struct t_mg_user_data *mg_user_data, sds uri_decoded, int offset)
+{
+    if (mg_user_data->config->covercache_keep_days > 0) {
+        sds filename = sds_hash(uri_decoded);
+        sds covercachefile = sdscatfmt(sdsempty(), "%S/%s/%S-%i", mg_user_data->config->cachedir, DIR_CACHE_COVER, filename, offset);
+        FREE_SDS(filename);
+        covercachefile = webserver_find_image_file(covercachefile);
+        if (sdslen(covercachefile) > 0) {
+            const char *mime_type = get_mime_type_by_ext(covercachefile);
+            MYMPD_LOG_DEBUG("Serving file %s (%s)", covercachefile, mime_type);
+            static struct mg_http_serve_opts s_http_server_opts;
+            s_http_server_opts.root_dir = mg_user_data->browse_directory;
+            s_http_server_opts.extra_headers = EXTRA_HEADERS_IMAGE;
+            s_http_server_opts.mime_types = EXTRA_MIME_TYPES;
+            mg_http_serve_file(nc, hm, covercachefile, &s_http_server_opts);
+            webserver_handle_connection_close(nc);
+            FREE_SDS(covercachefile);
+            return true;
+        }
+        MYMPD_LOG_DEBUG("No covercache file found");
+        FREE_SDS(covercachefile);
+    }
+    return false;
 }
 
 /**
@@ -68,7 +131,7 @@ static const char *image_file_extensions[] = {
     NULL};
 
 /**
- * Finds the first image with basefilename by trying out extentions
+ * Finds the first image with basefilename by trying out extensions
  * @param basefilename basefilename to append extensions
  * @return pointer to basefilename
  */
@@ -140,7 +203,7 @@ void webserver_send_data(struct mg_connection *nc, const char *data, size_t len,
 }
 
 /**
- * Sends a 301 moved permamently header
+ * Sends a 301 moved permanently header
  * @param nc mongoose connection
  * @param location destination for the redirect
  */
@@ -172,7 +235,7 @@ void webserver_send_header_found(struct mg_connection *nc, const char *location)
  * @param nc mongoose connection
  */
 void webserver_handle_connection_close(struct mg_connection *nc) {
-    if (nc->label[2] == 'C') {
+    if (nc->data[2] == 'C') {
         MYMPD_LOG_DEBUG("Set connection %lu to is_draining", nc->id);
         nc->is_draining = 1;
     }
@@ -184,18 +247,66 @@ void webserver_handle_connection_close(struct mg_connection *nc) {
  * @param nc mongoose connection
  */
 void webserver_serve_na_image(struct mg_connection *nc) {
-    webserver_send_header_found(nc, "assets/coverimage-notavailable.svg");
+    struct t_mg_user_data *mg_user_data = nc->mgr->userdata;
+    if (sdslen(mg_user_data->custom_na_image) == 0) {
+        webserver_send_header_found(nc, "/assets/coverimage-notavailable.svg");
+    }
+    else {
+        sds uri = sdscatfmt(sdsempty(), "/browse/pics/thumbs/%S", mg_user_data->custom_na_image);
+        webserver_send_header_found(nc, uri);
+        FREE_SDS(uri);
+    }
 }
 
 /**
- * Redirects to the default stream image
+ * Redirects to the stream image
  * @param nc mongoose connection
  */
 void webserver_serve_stream_image(struct mg_connection *nc) {
-    webserver_send_header_found(nc, "assets/coverimage-stream.svg");
+    struct t_mg_user_data *mg_user_data = nc->mgr->userdata;
+    if (sdslen(mg_user_data->custom_stream_image) == 0) {
+        webserver_send_header_found(nc, "/assets/coverimage-stream.svg");
+    }
+    else {
+        sds uri = sdscatfmt(sdsempty(), "/browse/pics/thumbs/%S", mg_user_data->custom_stream_image);
+        webserver_send_header_found(nc, uri);
+        FREE_SDS(uri);
+    }
 }
 
-#ifdef EMBEDDED_ASSETS
+/**
+ * Redirects to the mympd image
+ * @param nc mongoose connection
+ */
+void webserver_serve_mympd_image(struct mg_connection *nc) {
+    struct t_mg_user_data *mg_user_data = nc->mgr->userdata;
+    if (sdslen(mg_user_data->custom_mympd_image) == 0) {
+        webserver_send_header_found(nc, "/assets/coverimage-mympd.svg");
+    }
+    else {
+        sds uri = sdscatfmt(sdsempty(), "/browse/pics/thumbs/%S", mg_user_data->custom_mympd_image);
+        webserver_send_header_found(nc, uri);
+        FREE_SDS(uri);
+    }
+}
+
+/**
+ * Redirects to the booklet image
+ * @param nc mongoose connection
+ */
+void webserver_serve_booklet_image(struct mg_connection *nc) {
+    struct t_mg_user_data *mg_user_data = nc->mgr->userdata;
+    if (sdslen(mg_user_data->custom_booklet_image) == 0) {
+        webserver_send_header_found(nc, "/assets/coverimage-booklet.svg");
+    }
+    else {
+        sds uri = sdscatfmt(sdsempty(), "/browse/pics/thumbs/%S", mg_user_data->custom_booklet_image);
+        webserver_send_header_found(nc, uri);
+        FREE_SDS(uri);
+    }
+}
+
+#ifdef MYMPD_EMBEDDED_ASSETS
 /**
  * Struct holding embedded file information
  */
@@ -222,9 +333,8 @@ bool webserver_serve_embedded_files(struct mg_connection *nc, sds uri) {
         {"/sw.js", "application/javascript; charset=utf-8", true, false, sw_js_data, sw_js_size},
         {"/mympd.webmanifest", "application/manifest+json", true, false, mympd_webmanifest_data, mympd_webmanifest_size},
         {"/assets/coverimage-notavailable.svg", "image/svg+xml", true, true, coverimage_notavailable_svg_data, coverimage_notavailable_svg_size},
-        {"/assets/MaterialIcons-Regular.woff2", "font/woff2", true, true, MaterialIcons_Regular_woff2_data, MaterialIcons_Regular_woff2_size},
+        {"/assets/MaterialIcons-Regular.woff2", "font/woff2", false, true, MaterialIcons_Regular_woff2_data, MaterialIcons_Regular_woff2_size},
         {"/assets/coverimage-stream.svg", "image/svg+xml", true, true, coverimage_stream_svg_data, coverimage_stream_svg_size},
-        {"/assets/coverimage-loading.svg", "image/svg+xml", true, true, coverimage_loading_svg_data, coverimage_loading_svg_size},
         {"/assets/coverimage-booklet.svg", "image/svg+xml", true, true, coverimage_booklet_svg_data, coverimage_booklet_svg_size},
         {"/assets/coverimage-mympd.svg", "image/svg+xml", true, true, coverimage_mympd_svg_data, coverimage_mympd_svg_size},
         {"/assets/mympd-background-dark.svg", "image/svg+xml", true, true, mympd_background_dark_svg_data, mympd_background_dark_svg_size},
@@ -238,6 +348,12 @@ bool webserver_serve_embedded_files(struct mg_connection *nc, sds uri) {
         #ifdef I18N_en_US
         {"/assets/i18n/en-US.json", "application/json", true, true, i18n_en_US_json_data, i18n_en_US_json_size},
         #endif
+        #ifdef I18N_es_AR
+        {"/assets/i18n/es-AR.json", "application/json", true, true, i18n_es_AR_json_data, i18n_es_AR_json_size},
+        #endif
+        #ifdef I18N_es_ES
+        {"/assets/i18n/es-ES.json", "application/json", true, true, i18n_es_ES_json_data, i18n_es_ES_json_size},
+        #endif
         #ifdef I18N_es_VE
         {"/assets/i18n/es-VE.json", "application/json", true, true, i18n_es_VE_json_data, i18n_es_VE_json_size},
         #endif
@@ -250,14 +366,23 @@ bool webserver_serve_embedded_files(struct mg_connection *nc, sds uri) {
         #ifdef I18N_it_IT
         {"/assets/i18n/it-IT.json", "application/json", true, true, i18n_it_IT_json_data, i18n_it_IT_json_size},
         #endif
+        #ifdef I18N_ja_JP
+        {"/assets/i18n/ja-JP.json", "application/json", true, true, i18n_ja_JP_json_data, i18n_ja_JP_json_size},
+        #endif
         #ifdef I18N_ko_KR
         {"/assets/i18n/ko-KR.json", "application/json", true, true, i18n_ko_KR_json_data, i18n_ko_KR_json_size},
         #endif
         #ifdef I18N_nl_NL
         {"/assets/i18n/nl-NL.json", "application/json", true, true, i18n_nl_NL_json_data, i18n_nl_NL_json_size},
         #endif
-        #ifdef I18N_zh_CN
-        {"/assets/i18n/zh-CN.json", "application/json", true, true, i18n_zh_CN_json_data, i18n_zh_CN_json_size},
+        #ifdef I18N_pl_PL
+        {"/assets/i18n/pl-PL.json", "application/json", true, true, i18n_pl_PL_json_data, i18n_pl_PL_json_size},
+        #endif
+        #ifdef I18N_ru_RU
+        {"/assets/i18n/ru-RU.json", "application/json", true, true, i18n_ru_RU_json_data, i18n_ru_RU_json_size},
+        #endif
+        #ifdef I18N_zh_Hans
+        {"/assets/i18n/zh-Hans.json", "application/json", true, true, i18n_zh_Hans_json_data, i18n_zh_Hans_json_size},
         #endif
         {NULL, NULL, false, false, NULL, 0}
     };
@@ -295,11 +420,9 @@ bool webserver_serve_embedded_files(struct mg_connection *nc, sds uri) {
         FREE_SDS(uri_decoded);
         return true;
     }
-    else {
-        sds errormsg = sdscatfmt(sdsempty(), "Embedded asset \"%S\" not found", uri_decoded);
-        webserver_send_error(nc, 404, errormsg);
-        FREE_SDS(errormsg);
-    }
+    sds errormsg = sdscatfmt(sdsempty(), "Embedded asset \"%S\" not found", uri_decoded);
+    webserver_send_error(nc, 404, errormsg);
+    FREE_SDS(errormsg);
     FREE_SDS(uri_decoded);
     return false;
 }

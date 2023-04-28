@@ -1,18 +1,18 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "api.h"
+#include "src/lib/api.h"
 
-#include "log.h"
-#include "mem.h"
-#include "msg_queue.h"
-#include "sds_extras.h"
+#include "dist/libmympdclient/include/mpd/client.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/msg_queue.h"
+#include "src/lib/sds_extras.h"
 
-#include <mpd/client.h>
 #include <string.h>
 
 static const char *mympd_cmd_strs[] = { MYMPD_CMDS(GEN_STR) };
@@ -59,7 +59,7 @@ bool is_protected_api_method(enum mympd_cmd_ids cmd_id) {
         case MYMPD_API_PARTITION_RM:
         case MYMPD_API_PARTITION_SAVE:
         case MYMPD_API_PARTITION_OUTPUT_MOVE:
-        case MYMPD_API_PLAYER_OUTPUT_ATTRIBUTS_SET:
+        case MYMPD_API_PLAYER_OUTPUT_ATTRIBUTES_SET:
         case MYMPD_API_PLAYLIST_RM_ALL:
         case MYMPD_API_SESSION_LOGOUT:
         case MYMPD_API_SESSION_VALIDATE:
@@ -190,7 +190,7 @@ void free_request(struct t_work_request *request) {
 }
 
 /**
- * Frees the reponse struct
+ * Frees the response struct
  * @param response response struct to free
  */
 void free_response(struct t_work_response *response) {

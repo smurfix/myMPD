@@ -1,13 +1,13 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #ifndef MYMPD_API_TIMER_HANDLERS_H
 #define MYMPD_API_TIMER_HANDLERS_H
 
-#include "../lib/mympd_state.h"
+#include "src/lib/mympd_state.h"
 
 //internal timer ids
 enum timer_ids {
@@ -19,5 +19,5 @@ enum timer_ids {
 void timer_handler_by_id(int timer_id, struct t_timer_definition *definition);
 void timer_handler_select(int timer_id, struct t_timer_definition *definition);
 bool mympd_api_timer_startplay(struct t_partition_state *partition_state,
-        unsigned volume, sds playlist, enum jukebox_modes jukebox_mode);
+        unsigned volume, sds playlist, sds preset);
 #endif

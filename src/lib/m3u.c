@@ -1,16 +1,16 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "m3u.h"
+#include "src/lib/m3u.h"
 
-#include "filehandler.h"
-#include "jsonrpc.h"
-#include "log.h"
-#include "sds_extras.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
 
 #include <errno.h>
 #include <string.h>
@@ -42,7 +42,7 @@ sds m3u_get_field(sds buffer, const char *field, const char *filename) {
     size_t field_len = strlen(field);
     size_t min_line_len = field_len + 2;
     sds line = sdsempty();
-    while (sds_getline(&line, fp, LINE_LENGTH_MAX) == 0) {
+    while (sds_getline(&line, fp, LINE_LENGTH_MAX) >= 0) {
         if (sdslen(line) > min_line_len &&
             strncmp(line, field, field_len) == 0)
         {
@@ -84,7 +84,7 @@ sds m3u_to_json(sds buffer, const char *filename, sds *m3ufields) {
     }
     int line_count = 0;
     sds field = sdsempty();
-    while (sds_getline(&line, fp, LINE_LENGTH_MAX) == 0) {
+    while (sds_getline(&line, fp, LINE_LENGTH_MAX) >= 0) {
         if (line[0] == '\0') {
             //skip blank lines
             continue;

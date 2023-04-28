@@ -1,18 +1,18 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "playlists.h"
+#include "src/mpd_client/playlists.h"
 
-#include "../lib/log.h"
-#include "../lib/random.h"
-#include "../lib/rax_extras.h"
-#include "../lib/sds_extras.h"
-#include "errorhandler.h"
-#include "tags.h"
+#include "src/lib/log.h"
+#include "src/lib/random.h"
+#include "src/lib/rax_extras.h"
+#include "src/lib/sds_extras.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/tags.h"
 
 #include <string.h>
 
@@ -27,22 +27,6 @@ static bool replace_playlist(struct t_partition_state *partition_state, const ch
 /**
  * Public functions
  */
-
-/**
- * Returns the mpd database last modification time
- * @param partition_state pointer to partition specific states
- * @return last modification time
- */
-time_t mpd_client_get_db_mtime(struct t_partition_state *partition_state) {
-    struct mpd_stats *stats = mpd_run_stats(partition_state->conn);
-    if (stats == NULL) {
-        mympd_check_error_and_recover(partition_state);
-        return 0;
-    }
-    time_t mtime = (time_t)mpd_stats_get_db_update_time(stats);
-    mpd_stats_free(stats);
-    return mtime;
-}
 
 /**
  * Returns the playlists last modification time

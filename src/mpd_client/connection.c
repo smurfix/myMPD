@@ -1,29 +1,29 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "connection.h"
+#include "src/mpd_client/connection.h"
 
-#include "../lib/api.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/sds_extras.h"
-#include "../mympd_api/trigger.h"
-#include "errorhandler.h"
-#include "features.h"
-#include "tags.h"
-
-#include <mpd/client.h>
+#include "dist/libmympdclient/include/mpd/client.h"
+#include "src/lib/api.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/features.h"
+#include "src/mpd_client/tags.h"
+#include "src/mympd_api/trigger.h"
 
 /**
  * Connects to mpd and sets initial connection settings
  * @param partition_state pointer to partition state
- * @return true on success else false
+ * @param detect_feat true = run feature detection, else not
+ * @return true on success, else false
  */
-bool mpd_client_connect(struct t_partition_state *partition_state) {
+bool mpd_client_connect(struct t_partition_state *partition_state, bool detect_feat) {
     if (partition_state->mpd_state->mpd_host[0] == '/') {
         MYMPD_LOG_NOTICE("\"%s\": Connecting to socket \"%s\"", partition_state->name, partition_state->mpd_state->mpd_host);
     }
@@ -72,7 +72,7 @@ bool mpd_client_connect(struct t_partition_state *partition_state) {
     MYMPD_LOG_NOTICE("\"%s\": Connected to MPD", partition_state->name);
     partition_state->conn_state = MPD_CONNECTED;
     //get mpd features
-    if (partition_state->is_default == true) {
+    if (detect_feat == true) {
         mpd_client_mpd_features(partition_state);
     }
     //set connection options
@@ -142,17 +142,12 @@ bool mpd_client_set_connection_options(struct t_partition_state *partition_state
 }
 
 /**
- * Disconnects from MPD, send notification and execute triggers
+ * Disconnects from MPD, sends a notification and execute triggers
  * @param partition_state pointer to partition state
  * @param new_conn_state new connection state
  */
 void mpd_client_disconnect(struct t_partition_state *partition_state, enum mpd_conn_states new_conn_state) {
-    if (partition_state->conn != NULL) {
-        MYMPD_LOG_INFO("\"%s\": Disconnecting from mpd", partition_state->name);
-        mpd_connection_free(partition_state->conn);
-    }
-    partition_state->conn = NULL;
-    partition_state->conn_state = new_conn_state;
+    mpd_client_disconnect_silent(partition_state, new_conn_state);
     send_jsonrpc_event(JSONRPC_EVENT_MPD_DISCONNECTED, partition_state->name);
     mympd_api_trigger_execute(&partition_state->mympd_state->trigger_list, TRIGGER_MYMPD_DISCONNECTED, partition_state->name);
 }

@@ -1,13 +1,13 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "log.h"
+#include "src/lib/log.h"
 
-#include "sds_extras.h"
+#include "src/lib/sds_extras.h"
 
 #include <pthread.h>
 #include <string.h>
@@ -69,6 +69,10 @@ void set_loglevel(int level) {
  * @param errnum errno
  */
 void mympd_log_errno(const char *file, int line, int errnum) {
+    if (errnum == 0) {
+        //do not log success
+        return;
+    }
     char err_text[256];
     int rc = strerror_r(errnum, err_text, 256);
     const char *err_str = rc == 0 ? err_text : "Unknown error";
@@ -112,7 +116,7 @@ void mympd_log(int level, const char *file, int line, const char *fmt, ...) {
         }
     }
     logline = sdscatprintf(logline, "%-8s %-10s", loglevel_names[level], thread_logname);
-    #ifdef DEBUG
+    #ifdef MYMPD_DEBUG
         logline = sdscatfmt(logline, "%s:%i: ", file, line);
     #else
         (void)file;

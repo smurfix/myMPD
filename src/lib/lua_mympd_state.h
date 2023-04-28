@@ -1,15 +1,15 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #ifndef MYMPD_LUA_MYMPD_STATE_H
 #define MYMPD_LUA_MYMPD_STATE_H
 
-#include <stdbool.h>
+#include "src/lib/list.h"
 
-#include "list.h"
+#include <stdbool.h>
 
 /**
  * Lua variable types
@@ -36,6 +36,7 @@ void lua_mympd_state_set_p(struct t_list *lua_mympd_state, const char *k, const 
 void lua_mympd_state_set_i(struct t_list *lua_mympd_state, const char *k, long long v);
 void lua_mympd_state_set_u(struct t_list *lua_mympd_state, const char *k, unsigned v);
 void lua_mympd_state_set_b(struct t_list *lua_mympd_state, const char *k, bool v);
+void lua_mympd_state_set_f(struct t_list *lua_mympd_state, const char *k, double v);
 void *lua_mympd_state_free(struct t_list *lua_mympd_state);
 
 #endif

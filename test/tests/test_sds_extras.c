@@ -1,14 +1,14 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
+#include "test/utility.h"
 
-#include "../../dist/utest/utest.h"
-#include "../../src/lib/sds_extras.h"
-#include "../utility.h"
+#include "dist/utest/utest.h"
+#include "src/lib/sds_extras.h"
 
 UTEST(utility, test_sds_split_comma_trim) {
     sds names = sdsnew("cover, folder");

@@ -30,16 +30,150 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
-#include <assert.h>
-#include <limits.h>
 #include "sds.h"
 #include "sdsalloc.h"
 
+#undef NDEBUG
+#include <assert.h>
+
+#include <ctype.h>
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 const char *SDS_NOINIT = "SDS_NOINIT";
+
+inline size_t sdslen(const sds s) {
+    unsigned char flags = s[-1];
+    switch(flags&SDS_TYPE_MASK) {
+        case SDS_TYPE_5:
+            return SDS_TYPE_5_LEN(flags);
+        case SDS_TYPE_8:
+            return SDS_HDR(8,s)->len;
+        case SDS_TYPE_16:
+            return SDS_HDR(16,s)->len;
+        case SDS_TYPE_32:
+            return SDS_HDR(32,s)->len;
+        case SDS_TYPE_64:
+            return SDS_HDR(64,s)->len;
+    }
+    return 0;
+}
+
+inline size_t sdsavail(const sds s) {
+    unsigned char flags = s[-1];
+    switch(flags&SDS_TYPE_MASK) {
+        case SDS_TYPE_5: {
+            return 0;
+        }
+        case SDS_TYPE_8: {
+            SDS_HDR_VAR(8,s);
+            return sh->alloc - sh->len;
+        }
+        case SDS_TYPE_16: {
+            SDS_HDR_VAR(16,s);
+            return sh->alloc - sh->len;
+        }
+        case SDS_TYPE_32: {
+            SDS_HDR_VAR(32,s);
+            return sh->alloc - sh->len;
+        }
+        case SDS_TYPE_64: {
+            SDS_HDR_VAR(64,s);
+            return sh->alloc - sh->len;
+        }
+    }
+    return 0;
+}
+
+inline void sdssetlen(sds s, size_t newlen) {
+    unsigned char flags = s[-1];
+    switch(flags&SDS_TYPE_MASK) {
+        case SDS_TYPE_5:
+            {
+                unsigned char *fp = ((unsigned char*)s)-1;
+                *fp = SDS_TYPE_5 | (newlen << SDS_TYPE_BITS);
+            }
+            break;
+        case SDS_TYPE_8:
+            SDS_HDR(8,s)->len = newlen;
+            break;
+        case SDS_TYPE_16:
+            SDS_HDR(16,s)->len = newlen;
+            break;
+        case SDS_TYPE_32:
+            SDS_HDR(32,s)->len = newlen;
+            break;
+        case SDS_TYPE_64:
+            SDS_HDR(64,s)->len = newlen;
+            break;
+    }
+}
+
+inline void sdsinclen(sds s, size_t inc) {
+    unsigned char flags = s[-1];
+    switch(flags&SDS_TYPE_MASK) {
+        case SDS_TYPE_5:
+            {
+                unsigned char *fp = ((unsigned char*)s)-1;
+                unsigned char newlen = SDS_TYPE_5_LEN(flags)+inc;
+                *fp = SDS_TYPE_5 | (newlen << SDS_TYPE_BITS);
+            }
+            break;
+        case SDS_TYPE_8:
+            SDS_HDR(8,s)->len += inc;
+            break;
+        case SDS_TYPE_16:
+            SDS_HDR(16,s)->len += inc;
+            break;
+        case SDS_TYPE_32:
+            SDS_HDR(32,s)->len += inc;
+            break;
+        case SDS_TYPE_64:
+            SDS_HDR(64,s)->len += inc;
+            break;
+    }
+}
+
+/* sdsalloc() = sdsavail() + sdslen() */
+inline size_t sdsalloc(const sds s) {
+    unsigned char flags = s[-1];
+    switch(flags&SDS_TYPE_MASK) {
+        case SDS_TYPE_5:
+            return SDS_TYPE_5_LEN(flags);
+        case SDS_TYPE_8:
+            return SDS_HDR(8,s)->alloc;
+        case SDS_TYPE_16:
+            return SDS_HDR(16,s)->alloc;
+        case SDS_TYPE_32:
+            return SDS_HDR(32,s)->alloc;
+        case SDS_TYPE_64:
+            return SDS_HDR(64,s)->alloc;
+    }
+    return 0;
+}
+
+inline void sdssetalloc(sds s, size_t newlen) {
+    unsigned char flags = s[-1];
+    switch(flags&SDS_TYPE_MASK) {
+        case SDS_TYPE_5:
+            /* Nothing to do, this type has no total allocation info. */
+            break;
+        case SDS_TYPE_8:
+            SDS_HDR(8,s)->alloc = newlen;
+            break;
+        case SDS_TYPE_16:
+            SDS_HDR(16,s)->alloc = newlen;
+            break;
+        case SDS_TYPE_32:
+            SDS_HDR(32,s)->alloc = newlen;
+            break;
+        case SDS_TYPE_64:
+            SDS_HDR(64,s)->alloc = newlen;
+            break;
+    }
+}
 
 static inline int sdsHdrSize(char type) {
     switch(type&SDS_TYPE_MASK) {
@@ -205,7 +339,7 @@ void sdsclear(sds s) {
 sds sdsMakeRoomFor(sds s, size_t addlen) {
     void *sh, *newsh;
     size_t avail = sdsavail(s);
-    size_t len, newlen;
+    size_t len, newlen, reqlen;
     char type, oldtype = s[-1] & SDS_TYPE_MASK;
     int hdrlen;
 
@@ -214,8 +348,7 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
 
     len = sdslen(s);
     sh = (char*)s-sdsHdrSize(oldtype);
-    newlen = (len+addlen);
-    assert(newlen > len);   /* Catch size_t overflow */
+    reqlen = newlen = (len+addlen);
     if (newlen < SDS_MAX_PREALLOC)
         newlen *= 2;
     else
@@ -229,7 +362,7 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
     if (type == SDS_TYPE_5) type = SDS_TYPE_8;
 
     hdrlen = sdsHdrSize(type);
-    assert(hdrlen + newlen + 1 > len);  /* Catch size_t overflow */
+    assert(hdrlen + newlen + 1 > reqlen); /* Catch size_t overflow */
     if (oldtype==type) {
         newsh = s_realloc(sh, hdrlen+newlen+1);
         if (newsh == NULL) return NULL;
@@ -503,7 +636,8 @@ int sdsll2str(char *s, long long value) {
     /* Generate the string representation, this method produces
      * a reversed string. */
     if (value < 0) {
-        /* Since v is unsigned, if value==LLONG_MIN, -LLONG_MIN will overflow. */
+        /* Since v is unsigned, if value==LLONG_MIN then
+         * -LLONG_MIN will overflow. */
         if (value != LLONG_MIN) {
             v = -value;
         } else {
@@ -1258,6 +1392,22 @@ int sdsTest(void) {
         x = sdscatprintf(sdsempty(),"%d",123);
         test_cond("sdscatprintf() seems working in the base case",
             sdslen(x) == 3 && memcmp(x,"123\0",4) == 0);
+
+        sdsfree(x);
+        x = sdscatprintf(sdsempty(),"a%cb",0);
+        test_cond("sdscatprintf() seems working with \\0 inside of result",
+            sdslen(x) == 3 && memcmp(x,"a\0""b\0",4) == 0)
+
+        {
+            sdsfree(x);
+            char etalon[1024*1024];
+            for (size_t i = 0; i < sizeof(etalon); i++) {
+                etalon[i] = '0';
+            }
+            x = sdscatprintf(sdsempty(),"%0*d",(int)sizeof(etalon),0);
+            test_cond("sdscatprintf() can print 1MB",
+                sdslen(x) == sizeof(etalon) && memcmp(x,etalon,sizeof(etalon)) == 0)
+        }
 
         sdsfree(x);
         x = sdsnew("--");

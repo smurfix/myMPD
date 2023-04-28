@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 #
+# Translation phrases maintenance script
 # Extracts the phrases from source, compares it to already translated phrases
 # writes the i18n.json and reports the differences
 
@@ -8,6 +9,7 @@ use strict;
 my $verbose = defined($ARGV[0]) ? 1 : 0;
 
 my $phrases;
+my $ignore;
 my $i18n;
 my $desc;
 my @langs = ();
@@ -27,6 +29,14 @@ while (my $line = <$file>) {
 }
 close $file;
 
+#ignore phrases
+open $file, "src/i18n/ignore_phrases.txt" or die "Can't open file \"src/i18n/ignore_phrases.txt\": $!";
+while (my $line = <$file>) {
+    chomp($line);
+    $ignore->{$line} = 1;
+}
+close $file;
+
 #phrases from src
 my @dirs = ("src/", "src/mpd_client/", "src/mpd_worker/", "src/mympd_api/", "src/web_server/", "htdocs/js/");
 my @files = ("htdocs/index.html");
@@ -37,33 +47,48 @@ for my $dirname (@dirs) {
         next if $entry eq "long-press-event.js";
         next if $entry eq "i18n.js";
         next if $entry eq "apidoc.js";
-        push @files, $dirname.$1 if $entry =~ /^(\w+\.(c|js))$/;
+        push @files, $dirname.$1 if $entry =~ /^([\w-]+\.(c|js))$/;
     }
     closedir $dir;
 }
 
+#add a phrase
+sub add_phrase {
+    my $p = $_[0];
+    if (not defined($ignore->{$p})) {
+        $phrases->{$p} = 1;
+    }
+}
+
+#Parse file for phrases
 for my $filename (@files) {
     open my $file, $filename or die "Can't open file \"$filename\": $!";
     while (my $line = <$file>) {
         if ($filename =~ /\.c$/) {
             while ($line =~ /JSONRPC_SEVERITY_\w+,\s+"([^"]+)"(\)|,)/g) {
-                $phrases->{$1} = 1;
+                add_phrase($1);
             }
             while ($line =~ /JSONRPC_SEVERITY_\w+,\s+\S+,\s+"([^"]+)"(\)|,)/g) {
-                $phrases->{$1} = 1;
+                add_phrase($1);
             }
         }
         elsif ($filename =~ /\.js$/) {
+            while ($line =~ /\"data-(\w+-)?phrase\":\s*"([^"]+)"/g) {
+                add_phrase($2);
+            }
             while ($line =~ /(\s+|\(|\+)tn?\('([^']+)'/g) {
-                $phrases->{$2} = 1;
+                add_phrase($2);
             }
             while ($line =~ /"desc":\s*"([^"]+)"/g) {
-                $phrases->{$1} = 1;
+                add_phrase($1);
+            }
+            while ($line =~ /(elCreateTextTnNr|elCreateTextTn)\('\w+', \{[^}]*\}, '([^']+)'/g) {
+                add_phrase($2);
             }
         }
         elsif ($filename =~ /\.html$/) {
             while ($line =~ /data-(\w+-)?phrase="([^"]+)"/g) {
-                $phrases->{$2} = 1;
+                add_phrase($2);
             }
         }
     }
@@ -131,7 +156,7 @@ for my $lang (sort @langs) {
     if ($i > 0) {
         print $i18nfile ",\n";
     }
-    print $i18nfile "    \"".$lang."\": {\"desc\":\"".$desc->{$lang}."\", \"missingPhrases\": ".$outdated{$lang}."}";
+    print $i18nfile "    \"".$lang."\": {\"desc\":\"".$desc->{$lang}." (".$lang.")\", \"missingPhrases\": ".$outdated{$lang}."}";
     if ($outdated{$lang} > 0) {
         print STDERR "$lang: $outdated{$lang} missing phrases\n";
     }

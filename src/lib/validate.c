@@ -1,18 +1,18 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "validate.h"
+#include "src/lib/validate.h"
 
-#include "../../dist/utf8/utf8.h"
-#include "log.h"
+#include "dist/libmympdclient/include/mpd/client.h"
+#include "dist/utf8/utf8.h"
+#include "src/lib/log.h"
 
 #include <ctype.h>
 #include <limits.h>
-#include <mpd/client.h>
 #include <string.h>
 
 /**
@@ -25,9 +25,10 @@ static const char *invalid_filename_chars = "\a\b\f\n\r\t\v/\\";
 static const char *invalid_filepath_chars = "\a\b\f\n\r\t\v";
 
 static const char *mympd_cols[]={"Pos", "Duration", "Type", "Priority", "LastPlayed", "Filename", "Filetype", "AudioFormat", "LastModified",
-    "Lyrics", "stickerPlayCount", "stickerSkipCount", "stickerLastPlayed", "stickerLastSkipped", "stickerLike",
+    "Lyrics", "stickerPlayCount", "stickerSkipCount", "stickerLastPlayed", "stickerLastSkipped", "stickerLike", "stickerElapsed",
     "Country", "Description", "Genre", "Homepage", "Language", "Name", "StreamUri", "Codec", "Bitrate", //Columns for webradiodb
     "clickcount", "country", "homepage", "language", "lastchangetime", "lastcheckok", "tags", "url_resolved", "votes", //Columns for radiobrowser
+    "Discs", "SongCount", //Columns for albums
     0};
 
 static bool check_for_invalid_chars(sds data, const char *invalid_chars);
@@ -168,7 +169,7 @@ bool vcb_isuri(sds data) {
 
 /**
  * Checks if string is a valid filename
- * Does not emmit a warning
+ * Does not emit a warning
  * @param data sds string to check
  * @return true on success else false
  */

@@ -1,31 +1,30 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "idle.h"
+#include "src/mpd_client/idle.h"
 
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/msg_queue.h"
-#include "../lib/mympd_state.h"
-#include "../lib/sds_extras.h"
-#include "../lib/sticker_cache.h"
-#include "../mympd_api/last_played.h"
-#include "../mympd_api/mympd_api_handler.h"
-#include "../mympd_api/queue.h"
-#include "../mympd_api/status.h"
-#include "../mympd_api/timer.h"
-#include "../mympd_api/timer_handlers.h"
-#include "../mympd_api/trigger.h"
-#include "connection.h"
-#include "errorhandler.h"
-#include "jukebox.h"
-#include "partitions.h"
-
-#include <mpd/client.h>
+#include "dist/libmympdclient/include/mpd/client.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/msg_queue.h"
+#include "src/lib/mympd_state.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/sticker_cache.h"
+#include "src/mpd_client/connection.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/jukebox.h"
+#include "src/mpd_client/partitions.h"
+#include "src/mympd_api/last_played.h"
+#include "src/mympd_api/mympd_api_handler.h"
+#include "src/mympd_api/queue.h"
+#include "src/mympd_api/status.h"
+#include "src/mympd_api/timer.h"
+#include "src/mympd_api/timer_handlers.h"
+#include "src/mympd_api/trigger.h"
 
 #include <poll.h>
 #include <string.h>
@@ -146,7 +145,7 @@ static void mpd_client_idle_partition(struct t_partition_state *partition_state,
         case MPD_DISCONNECTED:
             //try to connect
             MYMPD_LOG_INFO("Creating mpd connection for partition \"%s\"", partition_state->name);
-            if (mpd_client_connect(partition_state) == false) {
+            if (mpd_client_connect(partition_state, partition_state->is_default) == false) {
                 break;
             }
             if (partition_state->is_default == true) {
@@ -216,16 +215,17 @@ static void mpd_client_idle_partition(struct t_partition_state *partition_state,
             bool jukebox_add_song = false;
             bool set_played = false;
             bool set_stickers = partition_state->is_default &&
-                partition_state->mpd_state->sticker_queue.length > 0;
+                partition_state->mpd_state->sticker_queue.length > 0 &&
+                partition_state->mpd_state->sticker_cache.building == false;
             //handle jukebox and last played only in mpd play state
             if (partition_state->play_state == MPD_STATE_PLAY) {
                 time_t now = time(NULL);
                 //check if we should set the played state of current song
-                if (now > partition_state->set_song_played_time &&
-                    partition_state->set_song_played_time > 0 &&
-                    partition_state->last_last_played_id != partition_state->song_id)
+                if (now > partition_state->song_scrobble_time &&
+                    partition_state->song_scrobble_time > 0 &&
+                    partition_state->last_song_scrobble_time != partition_state->song_scrobble_time)
                 {
-                    MYMPD_LOG_DEBUG("\"%s\": Song has played half: %lld", partition_state->name, (long long)partition_state->set_song_played_time);
+                    MYMPD_LOG_DEBUG("\"%s\": Song scrobble time reached: %lld", partition_state->name, (long long)partition_state->song_scrobble_time);
                     set_played = true;
                 }
                 //check if the jukebox should add a song
@@ -272,17 +272,21 @@ static void mpd_client_idle_partition(struct t_partition_state *partition_state,
                 }
                 //set song played state
                 if (set_played == true) {
-                    partition_state->last_last_played_id = partition_state->song_id;
+                    partition_state->last_scrobbled_id = partition_state->song_id;
+                    partition_state->last_song_scrobble_time = partition_state->song_scrobble_time;
 
                     if (partition_state->mpd_state->last_played_count > 0) {
+                        //add song to the last_played list
                         mympd_api_last_played_add_song(partition_state, partition_state->song_id);
                     }
                     if (partition_state->mpd_state->feat_stickers == true) {
+                        //set stickers
                         sticker_inc_play_count(&partition_state->mpd_state->sticker_queue,
                             partition_state->song_uri);
                         sticker_set_last_played(&partition_state->mpd_state->sticker_queue,
                             partition_state->song_uri, partition_state->last_song_start_time);
                     }
+                    //scrobble event
                     mympd_api_trigger_execute(&partition_state->mympd_state->trigger_list, TRIGGER_MYMPD_SCROBBLE, partition_state->name);
                 }
                 //trigger jukebox
@@ -389,6 +393,21 @@ static void mpd_client_parse_idle(struct t_partition_state *partition_state, uns
                 }
                 case MPD_IDLE_PLAYER:
                     //player status has changed - partition specific event
+                    if (partition_state->mpd_state->feat_stickers == true &&
+                        partition_state->song_id > -1)
+                    {
+                        //set song elapsed sticker
+                        time_t now = time(NULL);
+                        time_t elapsed = now - partition_state->song_start_time;
+                        time_t total_time = partition_state->song_end_time - partition_state->song_start_time - elapsed;
+                        if (elapsed < 10 ||
+                            total_time < 10)
+                        {
+                            //10 seconds inaccuracy
+                            elapsed = 0;
+                        }
+                        sticker_set_elapsed(&partition_state->mpd_state->sticker_queue, partition_state->song_uri, elapsed);
+                    }
                     //get and put mpd state
                     buffer = mympd_api_status_get(partition_state, buffer, REQUEST_ID_NOTIFY);
                     //check if song has changed
@@ -397,8 +416,8 @@ static void mpd_client_parse_idle(struct t_partition_state *partition_state, uns
                         partition_state->last_song_uri != NULL)
                     {
                         time_t now = time(NULL);
-                        if (partition_state->mpd_state->feat_stickers == true &&   //stickers enabled
-                            partition_state->last_song_set_song_played_time > now) //time in the future
+                        if (partition_state->mpd_state->feat_stickers == true &&  //stickers enabled
+                            partition_state->last_song_scrobble_time > now)       //time is in the future
                         {
                             //last song skipped
                             time_t elapsed = now - partition_state->last_song_start_time;

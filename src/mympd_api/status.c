@@ -1,23 +1,23 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "status.h"
+#include "src/mympd_api/status.h"
 
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/lua_mympd_state.h"
-#include "../lib/sds_extras.h"
-#include "../lib/utility.h"
-#include "../mpd_client/errorhandler.h"
-#include "../mpd_client/tags.h"
-#include "../mpd_client/volume.h"
-#include "extra_media.h"
-#include "sticker.h"
-#include "webradios.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/lua_mympd_state.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/utility.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/tags.h"
+#include "src/mpd_client/volume.h"
+#include "src/mympd_api/extra_media.h"
+#include "src/mympd_api/sticker.h"
+#include "src/mympd_api/webradios.h"
 
 /**
  * Private definitions
@@ -78,6 +78,10 @@ sds mympd_api_status_print(struct t_partition_state *partition_state, sds buffer
     const struct mpd_audio_format *audioformat = mpd_status_get_audio_format(status);
     buffer = printAudioFormat(buffer, audioformat);
     buffer = sdscatlen(buffer, ",", 1);
+    buffer = tojson_uint(buffer, "updateState", mpd_status_get_update_id(status), true);
+    const bool updateCacheState = partition_state->mpd_state->album_cache.building ||
+        partition_state->mpd_state->sticker_cache.building;
+    buffer = tojson_bool(buffer, "updateCacheState", updateCacheState, true);
     buffer = tojson_char(buffer, "lastError", mpd_status_get_error(status), false);
     return buffer;
 }
@@ -142,13 +146,14 @@ sds mympd_api_status_get(struct t_partition_state *partition_state, sds buffer, 
         }
         return buffer;
     }
-
+    time_t now = time(NULL);
     int song_id = mpd_status_get_song_id(status);
     if (partition_state->song_id != song_id) {
+        //song has changed, save old state
         partition_state->last_song_id = partition_state->song_id;
         partition_state->last_song_end_time = partition_state->song_end_time;
         partition_state->last_song_start_time = partition_state->song_start_time;
-        partition_state->last_song_set_song_played_time = partition_state->set_song_played_time;
+        partition_state->last_song_scrobble_time = partition_state->song_scrobble_time;
         struct mpd_song *song = mpd_run_current_song(partition_state->conn);
         if (song != NULL) {
             partition_state->last_song_uri = sds_replace(partition_state->last_song_uri, partition_state->song_uri);
@@ -172,31 +177,24 @@ sds mympd_api_status_get(struct t_partition_state *partition_state, sds buffer, 
 
     time_t total_time = (time_t)mpd_status_get_total_time(status);
     time_t elapsed_time = (time_t)mympd_api_get_elapsed_seconds(status);
+    //scrobble time is half length of song or SCROBBLE_TIME_MAX (4 minutes) whatever is shorter
+    time_t scrobble_time = total_time > SCROBBLE_TIME_TOTAL ? SCROBBLE_TIME_MAX
+                                                            : total_time / 2;
 
-    time_t now = time(NULL);
-    time_t uptime = now - partition_state->mympd_state->config->startup_time;
+    partition_state->song_start_time = now - elapsed_time;
+    partition_state->song_end_time = total_time == 0 ? 0 : now + total_time - elapsed_time;
 
-    if (total_time == 0) {
-        //no song end time for streams
-        partition_state->song_end_time = 0;
+    if (total_time <= SCROBBLE_TIME_MIN ||  //don't track songs with length < SCROBBLE_TIME_MIN (10s)
+        elapsed_time > scrobble_time)       //don't track songs that exceeded scrobble time
+    {
+        partition_state->song_scrobble_time = 0;
     }
     else {
-        partition_state->song_end_time = now + total_time - elapsed_time;
+        partition_state->song_scrobble_time = now - elapsed_time + scrobble_time;
     }
-    partition_state->song_start_time = now - elapsed_time;
-    time_t half_time = total_time / 2;
-
-    if (total_time <= 10 ||  //don't track songs with length < 10s
-        uptime < half_time)  //don't track songs with played more then half before startup
-    {
-        partition_state->set_song_played_time = 0;
-    }
-    else if (half_time > 240) {  //set played after 4 minutes
-        partition_state->set_song_played_time = now - elapsed_time + 240;
-    }
-    else { //set played after halftime of song
-        partition_state->set_song_played_time = elapsed_time < half_time ? now - (long)elapsed_time + (long)half_time : now;
-    }
+    MYMPD_LOG_DEBUG("Now %lld, start time %lld, scrobble time %lld, end time %lld",
+        (long long)now, (long long)partition_state->song_start_time, 
+        (long long)partition_state->song_scrobble_time, (long long)partition_state->song_end_time);
 
     if (request_id == REQUEST_ID_NOTIFY) {
         buffer = jsonrpc_notify_start(buffer, JSONRPC_EVENT_UPDATE_STATE);
@@ -215,17 +213,22 @@ sds mympd_api_status_get(struct t_partition_state *partition_state, sds buffer, 
  * Copies mpd and myMPD states to the lua_mympd_state struct
  * @param lua_partition_state pointer to struct t_list
  * @param partition_state pointer to partition state
- * @param listenbrainz_token listenbrainz token
  * @return true on success, else false
  */
-bool mympd_api_status_lua_mympd_state_set(struct t_list *lua_partition_state, struct t_partition_state *partition_state,
-        sds listenbrainz_token)
-{
+bool mympd_api_status_lua_mympd_state_set(struct t_list *lua_partition_state, struct t_partition_state *partition_state) {
+    enum mpd_replay_gain_mode replay_gain_mode = mpd_run_replay_gain_status(partition_state->conn);
+    if (replay_gain_mode == MPD_REPLAY_UNKNOWN) {
+        if (mympd_check_error_and_recover(partition_state) == false) {
+            return false;
+        }
+    }
+
     struct mpd_status *status = mpd_run_status(partition_state->conn);
     if (status == NULL) {
         mympd_check_error_and_recover(partition_state);
         return false;
     }
+
     lua_mympd_state_set_i(lua_partition_state, "play_state", mpd_status_get_state(status));
     lua_mympd_state_set_i(lua_partition_state, "volume", mpd_status_get_volume(status));
     lua_mympd_state_set_i(lua_partition_state, "song_pos", mpd_status_get_song_pos(status));
@@ -239,22 +242,30 @@ bool mympd_api_status_lua_mympd_state_set(struct t_list *lua_partition_state, st
     lua_mympd_state_set_b(lua_partition_state, "repeat", mpd_status_get_repeat(status));
     lua_mympd_state_set_b(lua_partition_state, "random", mpd_status_get_random(status));
     lua_mympd_state_set_i(lua_partition_state, "single_state", mpd_status_get_single_state(status));
-    lua_mympd_state_set_b(lua_partition_state, "consume", mpd_status_get_consume(status));
+    lua_mympd_state_set_i(lua_partition_state, "consume_state", mpd_status_get_consume_state(status));
     lua_mympd_state_set_u(lua_partition_state, "crossfade", mpd_status_get_crossfade(status));
+    lua_mympd_state_set_f(lua_partition_state, "mixrampdelay", mpd_status_get_mixrampdelay(status));
+    lua_mympd_state_set_f(lua_partition_state, "mixrampdb", mpd_status_get_mixrampdb(status));
+
+    lua_mympd_state_set_i(lua_partition_state, "replaygain", replay_gain_mode);
+
     lua_mympd_state_set_p(lua_partition_state, "music_directory", partition_state->mpd_state->music_directory_value);
+    lua_mympd_state_set_p(lua_partition_state, "playlist_directory", partition_state->mpd_state->playlist_directory_value);
     lua_mympd_state_set_p(lua_partition_state, "workdir", partition_state->mympd_state->config->workdir);
+    lua_mympd_state_set_p(lua_partition_state, "cachedir", partition_state->mympd_state->config->cachedir);
+    lua_mympd_state_set_b(lua_partition_state, "auto_play", partition_state->auto_play);
     lua_mympd_state_set_i(lua_partition_state, "jukebox_mode", partition_state->jukebox_mode);
     lua_mympd_state_set_p(lua_partition_state, "jukebox_playlist", partition_state->jukebox_playlist);
     lua_mympd_state_set_i(lua_partition_state, "jukebox_queue_length", partition_state->jukebox_queue_length);
     lua_mympd_state_set_i(lua_partition_state, "jukebox_last_played", partition_state->jukebox_last_played);
+    lua_mympd_state_set_b(lua_partition_state, "jukebox_ignore_hated", partition_state->jukebox_ignore_hated);
+    lua_mympd_state_set_p(lua_partition_state, "jukebox_unique_tag", mpd_tag_name(partition_state->jukebox_unique_tag.tags[0]));
+    lua_mympd_state_set_p(lua_partition_state, "listenbrainz_token", partition_state->mympd_state->listenbrainz_token);
     if (partition_state->mpd_state->feat_partitions == true) {
         lua_mympd_state_set_p(lua_partition_state, "partition", mpd_status_get_partition(status));
     }
+
     mpd_status_free(status);
-    mpd_response_finish(partition_state->conn);
-    mympd_check_error_and_recover(partition_state);
-    lua_mympd_state_set_p(lua_partition_state, "jukebox_unique_tag", mpd_tag_name(partition_state->jukebox_unique_tag.tags[0]));
-    lua_mympd_state_set_p(lua_partition_state, "listenbrainz_token", listenbrainz_token);
     return true;
 }
 
@@ -303,9 +314,9 @@ sds mympd_api_status_current_song(struct t_partition_state *partition_state, sds
     buffer = jsonrpc_respond_start(buffer, cmd_id, request_id);
     buffer = tojson_uint(buffer, "pos", mpd_song_get_pos(song), true);
     buffer = tojson_long(buffer, "currentSongId", partition_state->song_id, true);
-    buffer = get_song_tags(buffer, partition_state, &partition_state->mpd_state->tags_mympd, song);
+    buffer = get_song_tags(buffer, partition_state->mpd_state->feat_tags, &partition_state->mpd_state->tags_mympd, song);
     buffer = sdscatlen(buffer, ",", 1);
-    buffer = mympd_api_sticker_list(buffer, &partition_state->mpd_state->sticker_cache, mpd_song_get_uri(song));
+    buffer = mympd_api_sticker_get_print(buffer, &partition_state->mpd_state->sticker_cache, mpd_song_get_uri(song));
     buffer = sdscatlen(buffer, ",", 1);
     buffer = mympd_api_get_extra_media(partition_state->mpd_state, buffer, uri, false);
     if (is_streamuri(uri) == true) {
@@ -325,7 +336,7 @@ sds mympd_api_status_current_song(struct t_partition_state *partition_state, sds
     }
     buffer = sdscatlen(buffer, ",", 1);
     time_t start_time = get_current_song_start_time(partition_state);
-    buffer = tojson_llong(buffer, "startTime", (long long)start_time, false);
+    buffer = tojson_time(buffer, "startTime", start_time, false);
     buffer = jsonrpc_end(buffer);
     return buffer;
 }

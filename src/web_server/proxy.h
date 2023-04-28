@@ -1,15 +1,15 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #ifndef MYMPD_WEB_SERVER_PROXY_H
 #define MYMPD_WEB_SERVER_PROXY_H
 
-#include "../../dist/mongoose/mongoose.h"
-#include "../../dist/sds/sds.h"
-#include "../lib/api.h"
+#include "dist/mongoose/mongoose.h"
+#include "dist/sds/sds.h"
+#include "src/lib/api.h"
 
 #include <stdbool.h>
 
@@ -28,5 +28,6 @@ void handle_backend_close(struct mg_connection *nc, struct t_backend_nc_data *ba
 void free_backend_nc_data(struct t_backend_nc_data *data);
 struct mg_connection *create_backend_connection(struct mg_connection *nc, struct mg_connection *backend_nc,
         sds uri, mg_event_handler_t fn);
-void forward_backend_to_frontend(struct mg_connection *nc, int ev, void *ev_data, void *fn_data);
+void forward_backend_to_frontend_stream(struct mg_connection *nc, int ev, void *ev_data, void *fn_data);
+void forward_backend_to_frontend_covercache(struct mg_connection *nc, int ev, void *ev_data, void *fn_data);
 #endif

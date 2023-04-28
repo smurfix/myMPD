@@ -1,14 +1,14 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "lua_mympd_state.h"
+#include "src/lib/lua_mympd_state.h"
 
-#include "mem.h"
-#include "sds_extras.h"
+#include "src/lib/mem.h"
+#include "src/lib/sds_extras.h"
 
 /**
  * Private definitions
@@ -40,6 +40,18 @@ void lua_mympd_state_set_p(struct t_list *lua_mympd_state, const char *k, const 
 void lua_mympd_state_set_i(struct t_list *lua_mympd_state, const char *k, long long v) {
     struct t_lua_mympd_state_value *value = malloc_assert(sizeof(struct t_lua_mympd_state_value));
     value->i = v;
+    list_push(lua_mympd_state, k, LUA_TYPE_INTEGER, NULL, value);
+}
+
+/**
+ * Pushes a double to the lua_mympd_state list
+ * @param lua_mympd_state pointer to a t_list struct
+ * @param k variable name
+ * @param v variable value
+ */
+void lua_mympd_state_set_f(struct t_list *lua_mympd_state, const char *k, double v) {
+    struct t_lua_mympd_state_value *value = malloc_assert(sizeof(struct t_lua_mympd_state_value));
+    value->f = v;
     list_push(lua_mympd_state, k, LUA_TYPE_INTEGER, NULL, value);
 }
 

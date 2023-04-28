@@ -1,14 +1,14 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "utility.h"
+#include "src/lib/utility.h"
 
-#include "log.h"
-#include "sds_extras.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
 
 #include <errno.h>
 #include <ifaddrs.h>
@@ -17,34 +17,15 @@
 #include <string.h>
 #include <sys/stat.h>
 
-//private definitions
+/**
+ * Private definitions
+ */
+static sds get_mympd_host(sds mpd_host, sds http_host);
 static sds get_local_ip(void);
 
-//public functions
-
 /**
- * Gets an environment variable and checks its length
- * @param env_var environment variable name
- * @param max_len maximum length
- * @return environment variable value or NULL if it is not set or to long
+ * Public functions
  */
-const char *getenv_check(const char *env_var, size_t max_len) {
-    const char *env_value = getenv(env_var); /* Flawfinder: ignore */
-    if (env_value == NULL) {
-        MYMPD_LOG_DEBUG("Environment variable \"%s\" not set", env_var);
-        return NULL;
-    }
-    if (env_value[0] == '\0') {
-        MYMPD_LOG_DEBUG("Environment variable \"%s\" is empty", env_var);
-        return NULL;
-    }
-    if (strlen(env_value) > max_len) {
-        MYMPD_LOG_WARN("Environment variable \"%s\" is too long", env_var);
-        return NULL;
-    }
-    MYMPD_LOG_INFO("Got environment variable \"%s\" with value \"%s\"", env_var, env_value);
-    return env_value;
-}
 
 /**
  * Sleep function
@@ -219,12 +200,68 @@ void sanitize_filename(sds filename) {
 }
 
 /**
+ * List of special mympd uris to resolv
+ */
+struct t_mympd_uris {
+    const char *uri;       //!< mympd uri to resolv
+    const char *resolved;  //!< resolved path
+};
+
+const struct t_mympd_uris mympd_uris[] = {
+    {"mympd://webradio/", "/browse/webradios/"},
+    {"mympd://", "/"},
+    {NULL,                NULL}
+};
+
+/**
+ * Resolves mympd:// uris to the real myMPD host address and respects the mympd_uri config option
+ * @param uri uri to resolv
+ * @param mpd_host mpd host
+ * @param config pointer to config struct
+ * @return resolved uri
+ */
+sds resolv_mympd_uri(sds uri, sds mpd_host, struct t_config *config) {
+    const struct t_mympd_uris *p = NULL;
+    for (p = mympd_uris; p->uri != NULL; p++) {
+        size_t len = strlen(p->uri);
+        if (strncmp(uri, p->uri, len) == 0) {
+            sdsrange(uri, (ssize_t)len, -1);
+            sds new_uri = sdsempty();
+            if (strcmp(config->mympd_uri, "auto") != 0) {
+                //use defined uri
+                new_uri = sdscatfmt(new_uri, "%S%s%S", config->mympd_uri, p->resolved, uri);
+                FREE_SDS(uri);
+                return new_uri;
+            }
+            //calculate uri
+            sds host = get_mympd_host(mpd_host, config->http_host);
+            if (config->http == false) {
+                //use ssl port
+                new_uri = sdscatfmt(new_uri, "https://%S:%i%s%S", host, config->ssl_port, p->resolved, uri);
+            }
+            else {
+                new_uri = sdscatfmt(new_uri, "http://%S:%i%s%S", host, config->http_port, p->resolved, uri);
+            }
+            FREE_SDS(uri);
+            FREE_SDS(host);
+            return new_uri;
+        }
+    }
+    //uri could not be resolved
+    return uri;
+}
+
+/**
+ * Private functions
+ */
+
+/**
  * Gets the listening address of the embedded webserver
  * @param mpd_host mpd_host config setting
  * @param http_host http_host config setting
  * @return address of the embedded webserver as sds string
  */
-sds get_mympd_host(sds mpd_host, sds http_host) {
+static sds get_mympd_host(sds mpd_host, sds http_host) {
     if (strcmp(http_host, "0.0.0.0") != 0) {
         //host defined in configuration
         return sdsdup(http_host);
@@ -237,8 +274,6 @@ sds get_mympd_host(sds mpd_host, sds http_host) {
     return get_local_ip();
 }
 
-//private functions
-
 /**
  * Gets the ip address of the first interface
  * @return ip address as sds string
@@ -250,7 +285,7 @@ static sds get_local_ip(void) {
 
     errno = 0;
     if (getifaddrs(&ifaddr) == -1) {
-        MYMPD_LOG_ERROR("Can not get list of inteface ip addresses");
+        MYMPD_LOG_ERROR("Can not get list of interface ip addresses");
         MYMPD_LOG_ERRNO(errno);
         return sdsempty();
     }

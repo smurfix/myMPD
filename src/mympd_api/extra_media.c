@@ -1,17 +1,17 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "extra_media.h"
+#include "src/mympd_api/extra_media.h"
 
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/mimetype.h"
-#include "../lib/sds_extras.h"
-#include "../lib/utility.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/mimetype.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/utility.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -19,11 +19,11 @@
 #include <string.h>
 
 //optional includes
-#ifdef ENABLE_LIBID3TAG
+#ifdef MYMPD_ENABLE_LIBID3TAG
     #include <id3tag.h>
 #endif
 
-#ifdef ENABLE_FLAC
+#ifdef MYMPD_ENABLE_FLAC
     #include <FLAC/metadata.h>
 #endif
 
@@ -92,7 +92,7 @@ sds mympd_api_get_extra_media(struct t_mpd_state *mpd_state, sds buffer, const c
  * @param mpd_state pointer to the shared mpd state
  * @param uri song uri to get extra media for
  * @param booklet_path pointer to sds to populate with the booklet path
- * @param images pointer to already alocated list
+ * @param images pointer to already allocated list
  * @param is_dirname true if uri is a directory, else false
  */
 static void get_extra_files(struct t_mpd_state *mpd_state, const char *uri, sds *booklet_path, struct t_list *images, bool is_dirname) {
@@ -170,7 +170,7 @@ static int get_embedded_covers_count(const char *media_file) {
  */
 static int get_embedded_covers_count_id3(const char *media_file) {
     int count = 0;
-    #ifdef ENABLE_LIBID3TAG
+    #ifdef MYMPD_ENABLE_LIBID3TAG
     struct id3_file *file_struct = id3_file_open(media_file, ID3_FILE_MODE_READONLY);
     if (file_struct == NULL) {
         MYMPD_LOG_ERROR("Can't parse id3_file: %s", media_file);
@@ -203,7 +203,7 @@ static int get_embedded_covers_count_id3(const char *media_file) {
  */
 static int get_embedded_covers_count_flac(const char *media_file, bool is_ogg) {
     int count = 0;
-    #ifdef ENABLE_FLAC
+    #ifdef MYMPD_ENABLE_FLAC
     FLAC__Metadata_Chain *chain = FLAC__metadata_chain_new();
 
     if(! (is_ogg? FLAC__metadata_chain_read_ogg(chain, media_file) : FLAC__metadata_chain_read(chain, media_file)) ) {

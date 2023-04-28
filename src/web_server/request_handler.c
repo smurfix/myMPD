@@ -1,22 +1,22 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "request_handler.h"
+#include "src/web_server/request_handler.h"
 
-#include "../lib/api.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/msg_queue.h"
-#include "../lib/sds_extras.h"
-#include "proxy.h"
-#include "radiobrowser.h"
-#include "sessions.h"
-#include "utility.h"
-#include "webradiodb.h"
+#include "src/lib/api.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/msg_queue.h"
+#include "src/lib/sds_extras.h"
+#include "src/web_server/proxy.h"
+#include "src/web_server/radiobrowser.h"
+#include "src/web_server/sessions.h"
+#include "src/web_server/utility.h"
+#include "src/web_server/webradiodb.h"
 
 /**
  * Request handler for api requests /api
@@ -70,7 +70,7 @@ bool request_handler_api(struct mg_connection *nc, sds body, struct mg_str *auth
     }
 
     sds session = sdsempty();
-    #ifdef ENABLE_SSL
+    #ifdef MYMPD_ENABLE_SSL
     if (sdslen(mg_user_data->config->pin_hash) > 0 &&
         is_protected_api_method(cmd_id) == true)
     {
@@ -244,16 +244,47 @@ void request_handler_proxy(struct mg_connection *nc, struct mg_http_message *hm,
     if (sdslen(query) > 4 &&
         strncmp(query, "uri=", 4) == 0)
     {
-        //remove &uri=
+        //remove uri=
         sdsrange(query, 4, -1);
         //decode uri
         uri_decoded = sds_urldecode(uri_decoded, query, sdslen(query), false);
         if (is_allowed_proxy_uri(uri_decoded) == true) {
-            create_backend_connection(nc, backend_nc, uri_decoded, forward_backend_to_frontend);
+            create_backend_connection(nc, backend_nc, uri_decoded, forward_backend_to_frontend_stream);
         }
         else {
             webserver_send_error(nc, 403, "Host is not allowed");
             nc->is_draining = 1;
+        }
+    }
+    else {
+        webserver_send_error(nc, 400, "Invalid query parameter");
+        nc->is_draining = 1;
+    }
+    FREE_SDS(query);
+    FREE_SDS(uri_decoded);
+}
+
+/**
+ * Request handler for proxy connections /proxy-covercache
+ * @param nc mongoose connection
+ * @param hm http body
+ * @param backend_nc mongoose backend connection
+ */
+void request_handler_proxy_covercache(struct mg_connection *nc, struct mg_http_message *hm,
+        struct mg_connection *backend_nc)
+{
+    sds query = sdsnewlen(hm->query.ptr, hm->query.len);
+    sds uri_decoded = sdsempty();
+    if (sdslen(query) > 4 &&
+        strncmp(query, "uri=", 4) == 0)
+    {
+        //remove uri=
+        sdsrange(query, 4, -1);
+        //decode uri
+        uri_decoded = sds_urldecode(uri_decoded, query, sdslen(query), false);
+        struct t_mg_user_data *mg_user_data = (struct t_mg_user_data *)nc->mgr->userdata;
+        if (check_covercache(nc, hm, mg_user_data, uri_decoded, 0) == false) {
+            create_backend_connection(nc, backend_nc, uri_decoded, forward_backend_to_frontend_covercache);
         }
     }
     else {
@@ -296,7 +327,7 @@ void request_handler_serverinfo(struct mg_connection *nc) {
     }
 }
 
-#ifdef ENABLE_SSL
+#ifdef MYMPD_ENABLE_SSL
 /**
  * Request handler for /ca.crt
  * @param nc mongoose connection

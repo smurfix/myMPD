@@ -1,17 +1,17 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "search_local.h"
+#include "src/mpd_client/search_local.h"
 
-#include "../../dist/utf8/utf8.h"
-#include "../lib/log.h"
-#include "../lib/mem.h"
-#include "../lib/sds_extras.h"
-#include "../lib/utility.h"
+#include "dist/utf8/utf8.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/utility.h"
 
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
@@ -34,7 +34,7 @@ enum search_operators {
 };
 
 /**
- * Struct to hold a parsed search expression trible
+ * Struct to hold a parsed search expression triple
  */
 struct t_search_expression {
     int tag;                   //!< tag to search in
@@ -106,16 +106,17 @@ struct t_list *parse_search_expression_to_list(sds expression) {
         struct t_search_expression *expr = malloc_assert(sizeof(struct t_search_expression));
         expr->value = sdsempty();
         expr->re_compiled = NULL;
-        size_t i = 0;
         char *p = tokens[j];
+        char *end = p + sdslen(tokens[j]) - 1; //ignore concluding apostrophe
         //tag
-        for (i = 0; i < sdslen(tokens[j]); i++, p++) {
-            if (tokens[j][i] == ' ') {
+        while (p < end) {
+            if (*p == ' ') {
                 break;
             }
             tag = sds_catchar(tag, *p);
+            p++;
         }
-        if (i + 1 >= sdslen(tokens[j])) {
+        if (p + 1 >= end) {
             MYMPD_LOG_ERROR("Can not parse search expression");
             free_search_expression(expr);
             break;
@@ -126,16 +127,17 @@ struct t_list *parse_search_expression_to_list(sds expression) {
         {
             expr->tag = -2;
         }
-        i++;
+        //skip space
         p++;
         //operator
-        for (; i < sdslen(tokens[j]); i++, p++) {
-            if (tokens[j][i] == ' ') {
+        while (p < end) {
+            if (*p == ' ') {
                 break;
             }
             op = sds_catchar(op, *p);
+            p++;
         }
-        if (i + 2 >= sdslen(tokens[j])) {
+        if (p + 2 >= end) {
             MYMPD_LOG_ERROR("Can not parse search expression");
             free_search_expression(expr);
             break;
@@ -151,11 +153,20 @@ struct t_list *parse_search_expression_to_list(sds expression) {
             free_search_expression(expr);
             break;
         }
-        i = i + 2;
+        //skip space and apostrophe
         p = p + 2;
         //value
-        for (; i < sdslen(tokens[j]) - 1; i++, p++) {
+        while (p < end) {
+            if (*p == '\\') {
+                if (p + 1 >= end) {
+                    //escape char should not be the last
+                    break;
+                }
+                //skip escaping backslash
+                p++;
+            }
             expr->value = sds_catchar(expr->value, *p);
+            p++;
         }
         //push to list
         if (expr->op == SEARCH_OP_REGEX ||

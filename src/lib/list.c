@@ -1,17 +1,17 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "list.h"
+#include "src/lib/list.h"
 
-#include "filehandler.h"
-#include "log.h"
-#include "mem.h"
-#include "random.h"
-#include "sds_extras.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/random.h"
+#include "src/lib/sds_extras.h"
 
 #include <string.h>
 
@@ -98,6 +98,33 @@ void list_free_cb_ignore_user_data(struct t_list_node *current) {
  */
 void list_free_cb_sds_user_data(struct t_list_node *current) {
     FREE_SDS(current->user_data);
+}
+
+/**
+ * Callback function to free user_data of generic pointer.
+ * @param current list node
+ */
+void list_free_cb_ptr_user_data(struct t_list_node *current) {
+    FREE_PTR(current->user_data);
+}
+
+/**
+ * Gets a list node index by key.
+ * @param l list
+ * @param key key to get
+ * @return int index of the key, -1 if not found
+ */
+int list_get_node_idx(const struct t_list *l, const char *key) {
+    struct t_list_node *current = l->head;
+    int i = 0;
+    while (current != NULL) {
+        if (strcmp(current->key, key) == 0) {
+            return i;
+        }
+        current = current->next;
+        i++;
+    }
+    return -1;
 }
 
 /**
@@ -357,7 +384,7 @@ bool list_replace(struct t_list *l, long idx, const char *key, long long value_i
 }
 
 /**
- * Replaces a list nodes values at pos .
+ * Replaces a list nodes values at pos.
  * Frees the old user_data pointer.
  * @param l list
  * @param idx index of node to change
@@ -534,7 +561,7 @@ bool list_write_to_disk(sds filepath, struct t_list *l, list_node_to_line_callba
         current = current->next;
     }
     FREE_SDS(buffer);
-    bool rc = rename_tmp_file(fp, tmp_file, filepath, write_rc);
+    bool rc = rename_tmp_file(fp, tmp_file, write_rc);
     FREE_SDS(tmp_file);
     return rc;
 }

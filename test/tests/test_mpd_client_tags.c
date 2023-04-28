@@ -1,24 +1,29 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
 
-#include "../../dist/utest/utest.h"
+#include "dist/utest/utest.h"
+
+#include "dist/libmympdclient/src/isong.h"
+#include "src/lib/album_cache.h"
+#include "src/mpd_client/search_local.h"
+#include "src/mpd_client/tags.h"
+
 #include <mpd/client.h>
-#include "../../dist/libmpdclient/src/isong.h"
-#include "../../src/lib/album_cache.h"
-#include "../../src/mpd_client/search_local.h"
-#include "../../src/mpd_client/tags.h"
+
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
 
 struct mpd_song *new_song(void) {
-	struct mpd_song *song = malloc(sizeof(struct mpd_song));
-	song->uri = strdup("/music/test.mp3");
+    struct mpd_song *song = malloc(sizeof(struct mpd_song));
+    song->uri = strdup("/music/test.mp3");
 
-	for (unsigned i = 0; i < MPD_TAG_COUNT; ++i) {
-		song->tags[i].value = NULL;
+    for (unsigned i = 0; i < MPD_TAG_COUNT; ++i) {
+        song->tags[i].value = NULL;
     }
     mympd_mpd_song_add_tag_dedup(song, MPD_TAG_ARTIST, "Einstürzende Neubauten");
     mympd_mpd_song_add_tag_dedup(song, MPD_TAG_ARTIST, "Blixa Bargeld");
@@ -29,25 +34,25 @@ struct mpd_song *new_song(void) {
     mympd_mpd_song_add_tag_dedup(song, MPD_TAG_TRACK, "01");
     mympd_mpd_song_add_tag_dedup(song, MPD_TAG_DISC, "01");
 
-	song->duration = 10;
-	song->duration_ms = 10000;
-	song->start = 0;
-	song->end = 0;
-	song->last_modified = 2000;
-	song->pos = 0;
-	song->id = 0;
-	song->prio = 0;
+    song->duration = 10;
+    song->duration_ms = 10000;
+    song->start = 0;
+    song->end = 0;
+    song->last_modified = 2000;
+    song->pos = 0;
+    song->id = 0;
+    song->prio = 0;
 
-	memset(&song->audio_format, 0, sizeof(song->audio_format));
+    memset(&song->audio_format, 0, sizeof(song->audio_format));
     song->audio_format.channels = 2;
     song->audio_format.sample_rate = 44100;
     song->audio_format.bits = 24;
 
 #ifndef NDEBUG
-	song->finished = false;
+    song->finished = false;
 #endif
 
-	return song;
+    return song;
 }
 
 UTEST(album_cache, test_album_cache_get_key) {
@@ -241,6 +246,7 @@ UTEST(mpd_client_search_local, test_search_mpd_song) {
 
 bool search_by_expression(const char *expr_string) {
     struct mpd_song *song = new_song();
+    mympd_mpd_song_add_tag_dedup(song, MPD_TAG_ARTIST, "MG's");
     //browse tag types
     struct t_tags tags;
     reset_t_tags(&tags);
@@ -275,5 +281,8 @@ UTEST(mpd_client_search_local, test_search_mpd_song_expression) {
     ASSERT_TRUE(search_by_expression("((Artist =~ 'Blixa.*'))"));        //regex match
 
     ASSERT_FALSE(search_by_expression("((Artist != 'Blixa Bargeld'))")); //not exact match
-    ASSERT_FALSE(search_by_expression("((Artist !~ 'Blixa.*'))")); //regex mismatch
+    ASSERT_FALSE(search_by_expression("((Artist !~ 'Blixa.*'))"));       //regex mismatch
+
+    ASSERT_TRUE(search_by_expression("((Artist contains 'MG\\'s'))"));   //escaping
+    ASSERT_FALSE(search_by_expression("((Artist contains 'MGs\\))"));   //escaping
 }

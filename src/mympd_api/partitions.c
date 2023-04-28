@@ -1,21 +1,21 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "partitions.h"
+#include "src/mympd_api/partitions.h"
 
-#include "../lib/api.h"
-#include "../lib/filehandler.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/mympd_state.h"
-#include "../lib/sds_extras.h"
-#include "../lib/utility.h"
-#include "../mpd_client/connection.h"
-#include "../mpd_client/errorhandler.h"
-#include "../mpd_client/partitions.h"
+#include "src/lib/api.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/mympd_state.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/utility.h"
+#include "src/mpd_client/connection.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/partitions.h"
 
 /**
  * Lists partitions
@@ -50,7 +50,7 @@ sds mympd_api_partition_list(struct t_mympd_state *mympd_state, sds buffer, long
 
 /**
  * Disconnects and removes a partition.
- * Assigned outputs are moved to the default partitition: https://github.com/MusicPlayerDaemon/MPD/discussions/1611
+ * Assigned outputs are moved to the default partition: https://github.com/MusicPlayerDaemon/MPD/discussions/1611
  * @param partition_state pointer to partition state for default partition
  * @param buffer already allocated sds string to append the response
  * @param request_id jsonrpc request id

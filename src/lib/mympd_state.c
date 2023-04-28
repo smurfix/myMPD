@@ -1,38 +1,45 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "mympd_state.h"
+#include "src/lib/mympd_state.h"
 
-#include "../mpd_client/jukebox.h"
-#include "../mympd_api/home.h"
-#include "../mympd_api/last_played.h"
-#include "../mympd_api/timer.h"
-#include "../mympd_api/trigger.h"
-#include "album_cache.h"
-#include "mem.h"
-#include "sds_extras.h"
-#include "sticker_cache.h"
-#include "utility.h"
+#include "src/lib/album_cache.h"
+#include "src/lib/mem.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/sticker_cache.h"
+#include "src/lib/utility.h"
+#include "src/mpd_client/jukebox.h"
+#include "src/mpd_client/presets.h"
+#include "src/mympd_api/home.h"
+#include "src/mympd_api/last_played.h"
+#include "src/mympd_api/timer.h"
+#include "src/mympd_api/trigger.h"
 
 #include <string.h>
 
 /**
- * Saves in-memory states to disc. This is done on shutdown and on SIHUP.
+ * Saves in-memory states to disc. This is done on shutdown and on SIGHUP.
  * @param mympd_state pointer to central myMPD state
+ * @param free_data true=free the struct, else not
  */
-void mympd_state_save(struct t_mympd_state *mympd_state) {
+void mympd_state_save(struct t_mympd_state *mympd_state, bool free_data) {
     mympd_api_home_file_save(&mympd_state->home_list, mympd_state->config->workdir);
     mympd_api_timer_file_save(&mympd_state->timer_list, mympd_state->config->workdir);
     mympd_api_trigger_file_save(&mympd_state->trigger_list, mympd_state->config->workdir);
+    sticker_cache_write(&mympd_state->mpd_state->sticker_cache, mympd_state->config->workdir, free_data);
 
     struct t_partition_state *partition_state = mympd_state->partition_state;
     while (partition_state != NULL) {
         mympd_api_last_played_file_save(partition_state);
+        presets_save(partition_state);
         partition_state = partition_state->next;
+    }
+    if (free_data == true) {
+        mympd_state_free(mympd_state);
     }
 }
 
@@ -61,8 +68,10 @@ void mympd_state_default(struct t_mympd_state *mympd_state, struct t_config *con
     mympd_state->smartpls_interval = MYMPD_SMARTPLS_INTERVAL;
     mympd_state->cols_queue_current = sdsnew(MYMPD_COLS_QUEUE_CURRENT);
     mympd_state->cols_search = sdsnew(MYMPD_COLS_SEARCH);
-    mympd_state->cols_browse_database_detail = sdsnew(MYMPD_COLS_BROWSE_DATABASE_DETAIL);
-    mympd_state->cols_browse_playlists_detail = sdsnew(MYMPD_COLS_BROWSE_PLAYLISTS_DETAIL);
+    mympd_state->cols_browse_database_album_detail_info = sdsnew(MYMPD_COLS_BROWSE_DATABASE_ALBUM_DETAIL_INFO);
+    mympd_state->cols_browse_database_album_detail = sdsnew(MYMPD_COLS_BROWSE_DATABASE_ALBUM_DETAIL);
+    mympd_state->cols_browse_database_album_list = sdsnew(MYMPD_COLS_BROWSE_DATABASE_ALBUM_LIST);
+    mympd_state->cols_browse_playlist_detail = sdsnew(MYMPD_COLS_BROWSE_PLAYLIST_DETAIL);
     mympd_state->cols_browse_filesystem = sdsnew(MYMPD_COLS_BROWSE_FILESYSTEM);
     mympd_state->cols_playback = sdsnew(MYMPD_COLS_PLAYBACK);
     mympd_state->cols_queue_last_played = sdsnew(MYMPD_COLS_QUEUE_LAST_PLAYED);
@@ -120,8 +129,10 @@ void mympd_state_free(struct t_mympd_state *mympd_state) {
     FREE_SDS(mympd_state->smartpls_generate_tag_list);
     FREE_SDS(mympd_state->cols_queue_current);
     FREE_SDS(mympd_state->cols_search);
-    FREE_SDS(mympd_state->cols_browse_database_detail);
-    FREE_SDS(mympd_state->cols_browse_playlists_detail);
+    FREE_SDS(mympd_state->cols_browse_database_album_detail_info);
+    FREE_SDS(mympd_state->cols_browse_database_album_detail);
+    FREE_SDS(mympd_state->cols_browse_database_album_list);
+    FREE_SDS(mympd_state->cols_browse_playlist_detail);
     FREE_SDS(mympd_state->cols_browse_filesystem);
     FREE_SDS(mympd_state->cols_playback);
     FREE_SDS(mympd_state->cols_queue_last_played);
@@ -159,11 +170,13 @@ void mpd_state_default(struct t_mpd_state *mpd_state, struct t_mympd_state *mymp
     mpd_state->mpd_pass = sdsnew(MYMPD_MPD_PASS);
     mpd_state->mpd_binarylimit = MYMPD_MPD_BINARYLIMIT;
     mpd_state->music_directory_value = sdsempty();
+    mpd_state->playlist_directory_value = sdsempty();
     mpd_state->tag_list = sdsnew(MYMPD_MPD_TAG_LIST);
     reset_t_tags(&mpd_state->tags_mympd);
     reset_t_tags(&mpd_state->tags_mpd);
     reset_t_tags(&mpd_state->tags_search);
     reset_t_tags(&mpd_state->tags_browse);
+    reset_t_tags(&mpd_state->tags_album);
     mpd_state->tag_albumartist = MPD_TAG_ALBUM_ARTIST;
     //sticker cache
     mpd_state->sticker_cache.building = false;
@@ -182,7 +195,7 @@ void mpd_state_default(struct t_mpd_state *mpd_state, struct t_mympd_state *mymp
 }
 
 /**
- * Sets all feat states to disabled
+ * Sets all feature states to disabled
  * @param mpd_state pointer to mpd_state
  */
 void mpd_state_features_disable(struct t_mpd_state *mpd_state) {
@@ -199,6 +212,10 @@ void mpd_state_features_disable(struct t_mpd_state *mpd_state) {
     mpd_state->feat_playlist_rm_range = false;
     mpd_state->feat_whence = false;
     mpd_state->feat_advqueue = false;
+    mpd_state->feat_consume_oneshot = false;
+    mpd_state->feat_playlist_dir_auto = false;
+    mpd_state->feat_starts_with = false;
+    mpd_state->feat_pcre = true;
 }
 
 /**
@@ -209,6 +226,7 @@ void mpd_state_free(struct t_mpd_state *mpd_state) {
     FREE_SDS(mpd_state->mpd_pass);
     FREE_SDS(mpd_state->tag_list);
     FREE_SDS(mpd_state->music_directory_value);
+    FREE_SDS(mpd_state->playlist_directory_value);
     //lists
     list_clear(&mpd_state->sticker_queue);
     //caches
@@ -229,6 +247,7 @@ void mpd_state_free(struct t_mpd_state *mpd_state) {
 void partition_state_default(struct t_partition_state *partition_state, const char *name, struct t_mympd_state *mympd_state) {
     partition_state->name = sdsnew(name);
     partition_state->highlight_color = sdsnew(PARTITION_HIGHLIGHT_COLOR);
+    partition_state->highlight_color_contrast = sdsnew(PARTITION_HIGHLIGHT_COLOR_CONTRAST);
     sds partition_dir = sdsnew(name);
     sanitize_filename(partition_dir);
     partition_state->state_dir = sdscatfmt(sdsempty(), "state/%S", partition_dir);
@@ -245,16 +264,15 @@ void partition_state_default(struct t_partition_state *partition_state, const ch
     partition_state->last_song_uri = sdsempty();
     partition_state->queue_version = 0;
     partition_state->queue_length = 0;
-    partition_state->last_last_played_id = -1;
-    partition_state->song_end_time = 0;
+    partition_state->last_scrobbled_id = -1;
     partition_state->song_start_time = 0;
-    partition_state->last_song_end_time = 0;
+    partition_state->song_scrobble_time = 0;
+    partition_state->song_end_time = 0;
     partition_state->last_song_start_time = 0;
+    partition_state->last_song_scrobble_time = 0;
+    partition_state->last_song_end_time = 0;
     partition_state->last_skipped_id = 0;
-    partition_state->set_song_played_time = 0;
-    partition_state->last_song_set_song_played_time = 0;
     partition_state->crossfade = 0;
-    partition_state->set_song_played_time = 0;
     partition_state->auto_play = MYMPD_AUTO_PLAY;
     partition_state->next = NULL;
     //jukebox
@@ -267,6 +285,7 @@ void partition_state_default(struct t_partition_state *partition_state, const ch
     partition_state->jukebox_last_played = MYMPD_JUKEBOX_LAST_PLAYED;
     partition_state->jukebox_queue_length = MYMPD_JUKEBOX_QUEUE_LENGTH;
     partition_state->jukebox_enforce_unique = MYMPD_JUKEBOX_ENFORCE_UNIQUE;
+    partition_state->jukebox_ignore_hated = MYMPD_JUKEBOX_IGNORE_HATED;
     //add pointer to other states
     partition_state->mympd_state = mympd_state;
     partition_state->mpd_state = mympd_state->mpd_state;
@@ -286,8 +305,10 @@ void partition_state_default(struct t_partition_state *partition_state, const ch
     //local playback
     partition_state->mpd_stream_port = PARTITION_MPD_STREAM_PORT;
     partition_state->stream_uri = sdsempty();
-    //init last played songs list
+    //lists
     list_init(&partition_state->last_played);
+    list_init(&partition_state->presets);
+    presets_load(partition_state);
 }
 
 /**
@@ -297,6 +318,7 @@ void partition_state_default(struct t_partition_state *partition_state, const ch
 void partition_state_free(struct t_partition_state *partition_state) {
     FREE_SDS(partition_state->name);
     FREE_SDS(partition_state->highlight_color);
+    FREE_SDS(partition_state->highlight_color_contrast);
     FREE_SDS(partition_state->state_dir);
     FREE_SDS(partition_state->song_uri);
     FREE_SDS(partition_state->last_song_uri);
@@ -306,6 +328,7 @@ void partition_state_free(struct t_partition_state *partition_state) {
     FREE_SDS(partition_state->jukebox_playlist);
     //lists
     list_clear(&partition_state->last_played);
+    list_clear(&partition_state->presets);
     //local playback
     FREE_SDS(partition_state->stream_uri);
     //struct itself

@@ -1,16 +1,16 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "home.h"
+#include "src/mympd_api/home.h"
 
-#include "../lib/filehandler.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/sds_extras.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/sds_extras.h"
 
 #include <errno.h>
 
@@ -103,7 +103,7 @@ bool mympd_api_home_file_read(struct t_list *home_list, sds workdir) {
     }
 
     sds line = sdsempty();
-    while (sds_getline(&line, fp, LINE_LENGTH_MAX) == 0) {
+    while (sds_getline(&line, fp, LINE_LENGTH_MAX) >= 0) {
         if (validate_json_object(line) == false) {
             MYMPD_LOG_ERROR("Invalid line");
             break;

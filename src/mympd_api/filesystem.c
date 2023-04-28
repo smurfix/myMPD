@@ -1,23 +1,23 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "filesystem.h"
+#include "src/mympd_api/filesystem.h"
 
-#include "../../dist/utf8/utf8.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/mem.h"
-#include "../lib/rax_extras.h"
-#include "../lib/sds_extras.h"
-#include "../lib/smartpls.h"
-#include "../lib/utility.h"
-#include "../mpd_client/errorhandler.h"
-#include "../mpd_client/tags.h"
-#include "extra_media.h"
-#include "sticker.h"
+#include "dist/utf8/utf8.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/mem.h"
+#include "src/lib/rax_extras.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/smartpls.h"
+#include "src/lib/utility.h"
+#include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/tags.h"
+#include "src/mympd_api/extra_media.h"
+#include "src/mympd_api/sticker.h"
 
 #include <libgen.h>
 #include <string.h>
@@ -30,7 +30,7 @@
  * Struct representing the entity in the rax tree
  */
 struct t_dir_entry {
-    sds name;                   //!< entity name (e.g. filname, playlistname, directory name)
+    sds name;                   //!< entity name (e.g. filename, playlistname, directory name)
     struct mpd_entity *entity;  //!< pointer to the generic mpd entity struct
 };
 
@@ -126,7 +126,7 @@ sds mympd_api_browse_filesystem(struct t_partition_state *partition_state, sds b
         char *path_cpy = strdup(path);
         char *parent_dir = dirname(path_cpy);
         buffer = sdscat(buffer, "{\"Type\":\"parentDir\",\"name\":\"parentDir\",");
-        buffer = tojson_char(buffer, "uri", (parent_dir[0] == '.' ? "" : parent_dir), false);
+        buffer = tojson_char(buffer, "uri", (parent_dir[0] == '.' ? "/" : parent_dir), false);
         buffer = sdscatlen(buffer, "}", 1);
         entity_count++;
         entities_returned++;
@@ -148,7 +148,7 @@ sds mympd_api_browse_filesystem(struct t_partition_state *partition_state, sds b
                 case MPD_ENTITY_TYPE_SONG: {
                     const struct mpd_song *song = mpd_entity_get_song(entry_data->entity);
                     buffer = sdscat(buffer, "{\"Type\":\"song\",");
-                    buffer = get_song_tags(buffer, partition_state, tagcols, song);
+                    buffer = get_song_tags(buffer, partition_state->mpd_state->feat_tags, tagcols, song);
                     buffer = sdscatlen(buffer, ",", 1);
                     sds filename = sdsnew(mpd_song_get_uri(song));
                     basename_uri(filename);
@@ -156,7 +156,7 @@ sds mympd_api_browse_filesystem(struct t_partition_state *partition_state, sds b
                     FREE_SDS(filename);
                     if (partition_state->mpd_state->feat_stickers) {
                         buffer = sdscatlen(buffer, ",", 1);
-                        buffer = mympd_api_sticker_list(buffer, &partition_state->mpd_state->sticker_cache, mpd_song_get_uri(song));
+                        buffer = mympd_api_sticker_get_print(buffer, &partition_state->mpd_state->sticker_cache, mpd_song_get_uri(song));
                     }
                     buffer = sdscatlen(buffer, "}", 1);
                     break;

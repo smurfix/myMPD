@@ -1,8 +1,14 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
+/** @module scripts_js */
+
+/**
+ * Initialization functions for the script elements
+ * @returns {void}
+ */
 function initScripts() {
     document.getElementById('inputScriptArgument').addEventListener('keyup', function(event) {
         if (event.key === 'Enter') {
@@ -22,13 +28,7 @@ function initScripts() {
     document.getElementById('listScriptsList').addEventListener('click', function(event) {
         event.stopPropagation();
         event.preventDefault();
-        if (event.target.nodeName === 'TD') {
-            if (getData(event.target.parentNode, 'script') === '') {
-                return false;
-            }
-            showEditScript(getData(event.target.parentNode, 'script'));
-        }
-        else if (event.target.nodeName === 'A') {
+        if (event.target.nodeName === 'A') {
             const action = getData(event.target, 'action');
             const script = getData(event.target.parentNode.parentNode, 'script');
             switch(action) {
@@ -42,11 +42,13 @@ function initScripts() {
                     addScriptToHome(script, getData(event.target.parentNode.parentNode, 'href'));
                     break;
             }
+            return;
         }
-    }, false);
 
-    document.getElementById('modalScripts').addEventListener('shown.bs.modal', function () {
-        showListScripts();
+        const target = getParent(event.target, 'TR');
+        if (checkTargetClick(target) === true) {
+            showEditScript(getData(target, 'script'));
+        }
     }, false);
 
     document.getElementById('btnDropdownAddAPIcall').parentNode.addEventListener('show.bs.dropdown', function() {
@@ -80,9 +82,9 @@ function initScripts() {
     const selectAPIcallEl = document.getElementById('selectAPIcall');
     elClear(selectAPIcallEl);
     selectAPIcallEl.appendChild(
-        elCreateText('option', {"value": ""}, tn('Select method'))
+        elCreateTextTn('option', {"value": ""}, 'Select method')
     );
-    for (const m in APImethods) {
+    for (const m of Object.keys(APImethods).sort()) {
         selectAPIcallEl.appendChild(
             elCreateText('option', {"value": m}, m)
         );
@@ -106,11 +108,12 @@ function initScripts() {
         }
         const el = document.getElementById('textareaScriptContent');
         const [start, end] = [el.selectionStart, el.selectionEnd];
-        const newText = 'rc, raw_result = mympd_api_raw("' + method + '", json.encode(' +
+        const newText =
+            'options = {}\n' +
             apiParamsToArgs(APImethods[method].params) +
-            '))\n' +
+            'rc, result = mympd.api("' + method + '", options)\n' +
             'if rc == 0 then\n' +
-            '    result = json.decode(raw_result)\n' +
+            '\n' +
             'end\n';
         el.setRangeText(newText, start, end, 'preserve');
         BSN.Dropdown.getInstance(document.getElementById('btnDropdownAddAPIcall')).hide();
@@ -120,7 +123,7 @@ function initScripts() {
     const selectFunctionEl = document.getElementById('selectFunction');
     elClear(selectFunctionEl);
     selectFunctionEl.appendChild(
-        elCreateText('option', {"value": ""}, tn('Select function'))
+        elCreateTextTn('option', {"value": ""}, 'Select function')
     );
     for (const m in LUAfunctions) {
         selectFunctionEl.appendChild(
@@ -152,6 +155,10 @@ function initScripts() {
     }, false);
 }
 
+/**
+ * Fetches the list of available scripts to import
+ * @returns {void}
+ */
 function getImportScriptList() {
     const sel = document.getElementById('selectImportScript');
     sel.setAttribute('disabled', 'disabled');
@@ -166,6 +173,11 @@ function getImportScriptList() {
     }, true);
 }
 
+/**
+ * Imports a script
+ * @param {string} script script to import
+ * @returns {void}
+ */
 function getImportScript(script) {
     document.getElementById('textareaScriptContent').setAttribute('disabled', 'disabled');
     httpGet(subdir + '/proxy?uri=' + myEncodeURI('https://jcorporation.github.io/myMPD/scripting/scripts/' + script), function(text) {
@@ -192,43 +204,50 @@ function getImportScript(script) {
     }, false);
 }
 
+/**
+ * Adds the documented api params to the options lua table for the add api call function
+ * @param {object} p parameters object
+ * @returns {string} lua code
+ */
 function apiParamsToArgs(p) {
-    let args = '{';
-    let i = 0;
+    let args = '';
     for (const param in p) {
-        if (i > 0) {
-            args += ', ';
-        }
-        i++;
-        args += param + ' = ';
-        if (p[param].params !== undefined) {
-            args += apiParamsToArgs(p[param].params);
-        }
-        else {
-            if (p[param].type === 'text') {
+        args += 'options["' + param + '"] = ';
+        switch(p[param].type) {
+            case APItypes.text:
                 args += '"' + p[param].example + '"';
+                break;
+            case APItypes.array:
+                args += '{' + p[param].example.slice(1, -1) + '}';
+                break;
+            case APItypes.object: {
+                args += '{}';
+                break;
             }
-            else {
+            default:
                 args += p[param].example;
-            }
         }
+        args += '\n';
     }
-    args += '}';
     return args;
 }
 
+/**
+ * Saves a script
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function saveScript() {
     cleanupModalId('modalScripts');
     let formOK = true;
 
     const nameEl = document.getElementById('inputScriptName');
-    if (!validatePlnameEl(nameEl)) {
+    if (!validatePlistEl(nameEl)) {
         formOK = false;
     }
 
     const orderEl = document.getElementById('inputScriptOrder');
-    if (!validateInt(orderEl)) {
+    if (!validateIntEl(orderEl)) {
         formOK = false;
     }
 
@@ -248,6 +267,11 @@ function saveScript() {
     }
 }
 
+/**
+ * Handler for the MYMPD_API_SCRIPT_SAVE jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function saveScriptCheckError(obj) {
     if (obj.error) {
         showModalAlert(obj);
@@ -257,9 +281,13 @@ function saveScriptCheckError(obj) {
     }
 }
 
+/**
+ * Appends an argument to the list of script arguments
+ * @returns {void}
+ */
 function addScriptArgument() {
     const el = document.getElementById('inputScriptArgument');
-    if (validatePrintable(el)) {
+    if (validatePrintableEl(el)) {
         document.getElementById('selectScriptArguments').appendChild(
             elCreateText('option', {}, el.value)
         );
@@ -267,13 +295,45 @@ function addScriptArgument() {
     }
 }
 
+/**
+ * Removes an argument from the list of script arguments
+ * @param {Event} ev triggering element
+ * @returns {void}
+ */
 function removeScriptArgument(ev) {
     const el = document.getElementById('inputScriptArgument');
+    // @ts-ignore
     el.value = ev.target.text;
     ev.target.remove();
     setFocus(el);
 }
 
+/**
+ * Opens the scripts modal and shows the edit tab
+ * @param {string} script name to edit
+ * @returns {void}
+ */
+//eslint-disable-next-line no-unused-vars
+function showEditScriptModal(script) {
+    uiElements.modalScripts.show();
+    showEditScript(script);
+}
+
+/**
+ * Opens the scripts modal and shows the list tab
+ * @returns {void}
+ */
+//eslint-disable-next-line no-unused-vars
+function showListScriptModal() {
+    uiElements.modalScripts.show();
+    showListScripts();
+}
+
+/**
+ * Shows the edit script tab
+ * @param {string} script script name
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function showEditScript(script) {
     cleanupModalId('modalScripts');
@@ -297,6 +357,11 @@ function showEditScript(script) {
     setFocusId('inputScriptName');
 }
 
+/**
+ * Parses the MYMPD_API_SCRIPT_GET jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function parseEditScript(obj) {
     document.getElementById('inputOldScriptName').value = obj.result.script;
     document.getElementById('inputScriptName').value = obj.result.script;
@@ -312,6 +377,10 @@ function parseEditScript(obj) {
     document.getElementById('textareaScriptContent').value = obj.result.content;
 }
 
+/**
+ * Shows the list scripts tab
+ * @returns {void}
+ */
 function showListScripts() {
     cleanupModalId('modalScripts');
     document.getElementById('listScripts').classList.add('active');
@@ -321,6 +390,12 @@ function showListScripts() {
     getScriptList(true);
 }
 
+/**
+ * Deletes a script after confirmation
+ * @param {EventTarget} el triggering element
+ * @param {string} script script to delete
+ * @returns {void}
+ */
 function deleteScript(el, script) {
     showConfirmInline(el.parentNode.previousSibling, tn('Do you really want to delete the script?', {"script": script}), tn('Yes, delete it'), function() {
         sendAPI("MYMPD_API_SCRIPT_RM", {
@@ -329,6 +404,11 @@ function deleteScript(el, script) {
     });
 }
 
+/**
+ * Handler for the MYMPD_API_SCRIPT_RM jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function deleteScriptCheckError(obj) {
     if (obj.error) {
         showModalAlert(obj);
@@ -338,12 +418,22 @@ function deleteScriptCheckError(obj) {
     }
 }
 
+/**
+ * Gets the list of scripts
+ * @param {boolean} all true = get all scripts, false = get all scripts with pos > 0
+ * @returns {void}
+ */
 function getScriptList(all) {
     sendAPI("MYMPD_API_SCRIPT_LIST", {
         "all": all
     }, parseScriptList, true);
 }
 
+/**
+ * Parses the MYMPD_API_SCRIPT_LIST jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
 function parseScriptList(obj) {
     const tbodyScripts = document.getElementById('listScriptsList');
     elClear(tbodyScripts);
@@ -358,9 +448,7 @@ function parseScriptList(obj) {
 
     const timerActions = elCreateEmpty('optgroup', {"id": "timerActionsScriptsOptGroup", "label": tn('Script')});
     setData(timerActions, 'value', 'script');
-    const scriptMaxListLen = 4;
     const scriptListLen = obj.result.data.length;
-    let showScriptListLen = 0;
     if (scriptListLen > 0) {
         obj.result.data.sort(function(a, b) {
             return a.metadata.order - b.metadata.order;
@@ -368,18 +456,20 @@ function parseScriptList(obj) {
         for (let i = 0; i < scriptListLen; i++) {
             //scriptlist in main menu
             if (obj.result.data[i].metadata.order > 0) {
-                showScriptListLen++;
-                const a = elCreateText('a', {"class": ["dropdown-item", "alwaysEnabled"], "href": "#"}, obj.result.data[i].name);
+                const a = elCreateNodes('a', {"class": ["dropdown-item", "alwaysEnabled", "py-2"], "href": "#"}, [
+                    elCreateText('span', {"class": ["mi", "me-2"]}, "code"),
+                    elCreateText('span', {}, obj.result.data[i].name)
+                ]);
                 setData(a, 'href', {"script": obj.result.data[i].name, "arguments": obj.result.data[i].metadata.arguments});
                 mainmenuScripts.appendChild(a);
             }
             //scriptlist in scripts modal
-            const tr = elCreateNodes('tr', {}, [
+            const tr = elCreateNodes('tr', {"title": tn('Edit')}, [
                 elCreateText('td', {}, obj.result.data[i].name),
                 elCreateNodes('td', {"data-col": "Action"}, [
-                    elCreateText('a', {"href": "#", "title": tn('Delete'), "data-action": "delete", "class": ["me-2", "mi", "color-darkgrey"]}, 'delete'),
-                    elCreateText('a', {"href": "#", "title": tn('Execute'), "data-action": "execute", "class": ["me-2", "mi", "color-darkgrey"]}, 'play_arrow'),
-                    elCreateText('a', {"href": "#", "title": tn('Add to homescreen'), "data-action": "add2home", "class": ["me-2", "mi", "color-darkgrey"]}, 'add_to_home_screen')
+                    elCreateText('a', {"href": "#", "data-title-phrase": "Delete", "data-action": "delete", "class": ["me-2", "mi", "color-darkgrey"]}, 'delete'),
+                    elCreateText('a', {"href": "#", "data-title-phrase": "Execute", "data-action": "execute", "class": ["me-2", "mi", "color-darkgrey"]}, 'play_arrow'),
+                    elCreateText('a', {"href": "#", "data-title-phrase": "Add to homescreen", "data-action": "add2home", "class": ["me-2", "mi", "color-darkgrey"]}, 'add_to_home_screen')
                 ])
             ]);
             setData(tr, 'script', obj.result.data[i].name);
@@ -397,21 +487,11 @@ function parseScriptList(obj) {
         }
     }
 
-    const navScripting = document.getElementById('navScripting');
-    if (showScriptListLen > scriptMaxListLen) {
-        elShow(navScripting);
-        elHide(navScripting.previousElementSibling);
-        document.getElementById('scripts').classList.add('collapse', 'menu-indent');
+    if (scriptListLen === 0) {
+        elHide(mainmenuScripts.previousElementSibling);
     }
     else {
-        elHide(navScripting);
-        if (showScriptListLen === 0) {
-            elHide(navScripting.previousElementSibling);
-        }
-        else {
-            elShow(navScripting.previousElementSibling);
-        }
-        document.getElementById('scripts').classList.remove('collapse', 'menu-indent');
+        elShow(mainmenuScripts.previousElementSibling);
     }
     //update timer actions select
     const old = document.getElementById('timerActionsScriptsOptGroup');
@@ -423,18 +503,29 @@ function parseScriptList(obj) {
     }
 }
 
+/**
+ * Executes a script and uses a comma separated list of options as arguments
+ * @param {string} cmd script to execute
+ * @param {string} options options parsed as comma separated list of arguments
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function execScriptFromOptions(cmd, options) {
     const args = options !== undefined && options !== '' ? options.split(',') : [];
     execScript({"script": cmd, "arguments": args});
 }
 
+/**
+ * Executes a script and asks for argument values
+ * @param {object} cmd script and arguments object to execute
+ * @returns {void}
+ */
 function execScript(cmd) {
     if (cmd.arguments.length === 0) {
         sendAPI("MYMPD_API_SCRIPT_EXECUTE", {
             "script": cmd.script,
             "arguments": {}
-        });
+        }, null, false);
     }
     else {
         const arglist = document.getElementById('execScriptArguments');
@@ -454,17 +545,21 @@ function execScript(cmd) {
     }
 }
 
+/**
+ * Executes a script after asking for argument values
+ * @returns {void}
+ */
 //eslint-disable-next-line no-unused-vars
 function execScriptArgs() {
     const script = document.getElementById('modalExecScriptScriptname').value;
     const args = {};
-    const inputs = document.getElementById('execScriptArguments').getElementsByTagName('input');
+    const inputs = document.querySelectorAll('#execScriptArguments input');
     for (let i = 0, j = inputs.length; i < j; i++) {
         args[inputs[i].name] = inputs[i].value;
     }
     sendAPI("MYMPD_API_SCRIPT_EXECUTE", {
         "script": script,
         "arguments": args
-    });
+    }, null, false);
     uiElements.modalExecScript.hide();
 }

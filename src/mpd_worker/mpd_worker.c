@@ -1,19 +1,19 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "mpd_worker.h"
+#include "src/mpd_worker/mpd_worker.h"
 
-#include "../../dist/sds/sds.h"
-#include "../lib/log.h"
-#include "../lib/mem.h"
-#include "../lib/mympd_state.h"
-#include "../lib/sds_extras.h"
-#include "../mpd_client/connection.h"
-#include "api.h"
+#include "dist/sds/sds.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/mympd_state.h"
+#include "src/lib/sds_extras.h"
+#include "src/mpd_client/connection.h"
+#include "src/mpd_worker/api.h"
 
 #include <pthread.h>
 #include <sys/prctl.h>
@@ -71,6 +71,7 @@ bool mpd_worker_start(struct t_mympd_state *mympd_state, struct t_work_request *
     mpd_worker_state->mpd_state->feat_whence = mympd_state->mpd_state->feat_whence;
     mpd_worker_state->mpd_state->tag_albumartist = mympd_state->partition_state->mpd_state->tag_albumartist;
     copy_tag_types(&mympd_state->mpd_state->tags_mympd, &mpd_worker_state->mpd_state->tags_mympd);
+    copy_tag_types(&mympd_state->mpd_state->tags_album, &mpd_worker_state->mpd_state->tags_album);
 
     if (pthread_create(&mpd_worker_thread, &attr, mpd_worker_run, mpd_worker_state) != 0) {
         MYMPD_LOG_ERROR("Can not create mpd_worker thread");
@@ -94,7 +95,7 @@ static void *mpd_worker_run(void *arg) {
     prctl(PR_SET_NAME, thread_logname, 0, 0, 0);
     struct t_mpd_worker_state *mpd_worker_state = (struct t_mpd_worker_state *) arg;
 
-    if (mpd_client_connect(mpd_worker_state->partition_state) == true) {
+    if (mpd_client_connect(mpd_worker_state->partition_state, false) == true) {
         //call api handler
         mpd_worker_api(mpd_worker_state);
         //disconnect

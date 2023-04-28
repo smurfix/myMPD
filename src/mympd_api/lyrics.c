@@ -1,29 +1,29 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #include "compile_time.h"
-#include "lyrics.h"
+#include "src/mympd_api/lyrics.h"
 
-#include "../lib/filehandler.h"
-#include "../lib/jsonrpc.h"
-#include "../lib/log.h"
-#include "../lib/mem.h"
-#include "../lib/mimetype.h"
-#include "../lib/sds_extras.h"
-#include "../lib/utility.h"
+#include "src/lib/filehandler.h"
+#include "src/lib/jsonrpc.h"
+#include "src/lib/log.h"
+#include "src/lib/mem.h"
+#include "src/lib/mimetype.h"
+#include "src/lib/sds_extras.h"
+#include "src/lib/utility.h"
 
 #include <errno.h>
 #include <string.h>
 
 //optional includes
-#ifdef ENABLE_LIBID3TAG
+#ifdef MYMPD_ENABLE_LIBID3TAG
     #include <id3tag.h>
 #endif
 
-#ifdef ENABLE_FLAC
+#ifdef MYMPD_ENABLE_FLAC
     #include <FLAC/metadata.h>
 #endif
 
@@ -37,7 +37,7 @@ static void lyricsextract_unsynced_id3(struct t_list *extracted, sds media_file)
 static void lyricsextract_synced_id3(struct t_list *extracted, sds media_file);
 static void lyricsextract_flac(struct t_list *extracted, sds media_file, bool is_ogg, const char *comment_name, bool synced);
 
-#ifdef ENABLE_LIBID3TAG
+#ifdef MYMPD_ENABLE_LIBID3TAG
 static sds decode_sylt(const id3_byte_t *binary_data, id3_length_t binary_length, enum id3_field_textencoding encoding);
 static const char *mympd_id3_field_getlanguage(union id3_field const *field);
 #endif
@@ -110,7 +110,7 @@ sds mympd_api_lyrics_get(struct t_lyrics *lyrics, sds music_directory, sds buffe
  * Retrieves lyrics and appends it to extracted list
  * @param lyrics pointer to lyrics configuration
  * @param extracted t_list struct to append found lyrics
- * @param mediafile absolut filepath of song uri
+ * @param mediafile absolute filepath of song uri
  * @param mime_type_mediafile mime type of the song uri
  */
 static void lyrics_get(struct t_lyrics *lyrics, struct t_list *extracted,
@@ -145,51 +145,39 @@ static void lyrics_get(struct t_lyrics *lyrics, struct t_list *extracted,
 /**
  * Reads lyrics from a textfiles
  * @param extracted t_list struct to append found lyrics
- * @param mediafile absolut filepath of song uri
+ * @param mediafile absolute filepath of song uri
  * @param ext file extension
- * @param synced true for synced lyrice else false
+ * @param synced true for synced lyrics else false
  */
 static void lyrics_fromfile(struct t_list *extracted, sds mediafile, const char *ext, bool synced) {
     //try file in folder in the music directory
     sds lyricsfile = replace_file_extension(mediafile, ext);
     MYMPD_LOG_DEBUG("Trying to open lyrics file: %s", lyricsfile);
-    errno = 0;
-    FILE *fp = fopen(lyricsfile, OPEN_FLAGS_READ);
-    sds buffer = sdsempty();
-    if (fp != NULL) {
+    sds text = sdsempty();
+    int rc = sds_getfile(&text, lyricsfile, LYRICS_SIZE_MAX, false, false);
+    if (rc > 0) {
+        sds buffer = sdsempty();
         buffer = sdscatlen(buffer, "{", 1);
         buffer = tojson_bool(buffer, "synced", synced, true);
         buffer = tojson_char_len(buffer, "lang", "", 0, true);
         buffer = tojson_char_len(buffer, "desc", "", 0, true);
-        sds text = sdsempty();
-        sds_getfile(&text, fp, LYRICS_SIZE_MAX, false);
-        (void) fclose(fp);
         buffer = tojson_sds(buffer, "text", text, false);
         buffer = sdscatlen(buffer, "}", 1);
-        FREE_SDS(text);
         list_push(extracted, buffer, 0 , NULL, NULL);
+        FREE_SDS(buffer);
     }
-    else {
-        if (errno == ENOENT) {
-            MYMPD_LOG_DEBUG("No lyrics file found in music directory");
-        }
-        else {
-            MYMPD_LOG_ERROR("Error opening lyrics file \"%s\"", lyricsfile);
-            MYMPD_LOG_ERRNO(errno);
-        }
-    }
-    FREE_SDS(buffer);
+    FREE_SDS(text);
     FREE_SDS(lyricsfile);
 }
 
 /**
  * Extracts unsynced lyrics from a id3 tagged mp3 file
  * @param extracted t_list struct to append found lyrics
- * @param media_file absolut filename to read lyrics from
+ * @param media_file absolute filename to read lyrics from
  * @return number of retrieved lyrics
  */
 static void lyricsextract_unsynced_id3(struct t_list *extracted, sds media_file) {
-    #ifdef ENABLE_LIBID3TAG
+    #ifdef MYMPD_ENABLE_LIBID3TAG
     MYMPD_LOG_DEBUG("Exctracting unsynced lyrics from %s", media_file);
     struct id3_file *file_struct = id3_file_open(media_file, ID3_FILE_MODE_READONLY);
     if (file_struct == NULL) {
@@ -265,11 +253,11 @@ static void lyricsextract_unsynced_id3(struct t_list *extracted, sds media_file)
 /**
  * Extracts synced lyrics from a id3 tagged mp3 file
  * @param extracted t_list struct to append found lyrics
- * @param media_file absolut filename to read lyrics from
+ * @param media_file absolute filename to read lyrics from
  * @return number of retrieved lyrics
  */
 static void lyricsextract_synced_id3(struct t_list *extracted, sds media_file) {
-    #ifdef ENABLE_LIBID3TAG
+    #ifdef MYMPD_ENABLE_LIBID3TAG
     MYMPD_LOG_DEBUG("Exctracting synced lyrics from \"%s\"", media_file);
     struct id3_file *file_struct = id3_file_open(media_file, ID3_FILE_MODE_READONLY);
     if (file_struct == NULL) {
@@ -353,7 +341,7 @@ static void lyricsextract_synced_id3(struct t_list *extracted, sds media_file) {
     #endif
 }
 
-#ifdef ENABLE_LIBID3TAG
+#ifdef MYMPD_ENABLE_LIBID3TAG
 
 /**
  * Custom function to get the id3 language field
@@ -514,14 +502,14 @@ static sds decode_sylt(const id3_byte_t *binary_data, id3_length_t binary_length
 /**
  * Extracts unsynced lyrics from a vorbis comment
  * @param extracted t_list struct to append found lyrics
- * @param media_file absolut filename to read lyrics from
+ * @param media_file absolute filename to read lyrics from
  * @param is_ogg true if is a ogg file else false (flac)
  * @param comment_name name of vorbis comment with the lyrics
  * @param synced true for synced lyrics else false
  * @return number of retrieved lyrics
  */
 static void lyricsextract_flac(struct t_list *extracted, sds media_file, bool is_ogg, const char *comment_name, bool synced) {
-    #ifdef ENABLE_FLAC
+    #ifdef MYMPD_ENABLE_FLAC
     MYMPD_LOG_DEBUG("Exctracting lyrics from \"%s\"", media_file);
     FLAC__Metadata_Chain *chain = FLAC__metadata_chain_new();
 

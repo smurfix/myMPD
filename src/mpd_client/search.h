@@ -1,13 +1,13 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #ifndef MYMPD_MPD_CLIENT_SEARCH_H
 #define MYMPD_MPD_CLIENT_SEARCH_H
 
-#include "../lib/mympd_state.h"
+#include "src/lib/mympd_state.h"
 
 sds mpd_client_search_response(struct t_partition_state *partition_state, sds buffer, long request_id,
         const char *expression, const char *sort, bool sortdesc, unsigned offset, unsigned limit,

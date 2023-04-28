@@ -1,17 +1,17 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2022 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 #ifndef MYMPD_WEB_SERVER_SESSIONS_H
 #define MYMPD_WEB_SERVER_SESSIONS_H
 
-#include "../../dist/mongoose/mongoose.h"
-#include "../../dist/sds/sds.h"
-#include "../lib/api.h"
-#include "../lib/list.h"
-#include "utility.h"
+#include "dist/mongoose/mongoose.h"
+#include "dist/sds/sds.h"
+#include "src/lib/api.h"
+#include "src/lib/list.h"
+#include "src/web_server/utility.h"
 
 #include <stdbool.h>
 
