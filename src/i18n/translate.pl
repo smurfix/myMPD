@@ -71,6 +71,19 @@ for my $filename (@files) {
             while ($line =~ /JSONRPC_SEVERITY_\w+,\s+\S+,\s+"([^"]+)"(\)|,)/g) {
                 add_phrase($1);
             }
+            while ($line =~ /JSONRPC_FACILITY_\w+,\s+"([^"]+)",\s+"([^"]+)"\)/g) {
+                add_phrase($1);
+                add_phrase($2);
+            }
+            while ($line =~ /JSONRPC_FACILITY_\w+,\s+"([^"]+)"(\)|,)/g) {
+                add_phrase($1);
+            }
+            while ($line =~ /\*error\s+=\s+sdscat\(\*error,\s+"([^"]+)"\)/g) {
+                add_phrase($1);
+            }
+            while ($line =~ /set_invalid_value\(error,\s+path,\s+key,\s+value,\s+"([^"]+)"\)/g) {
+                add_phrase($1);
+            }
         }
         elsif ($filename =~ /\.js$/) {
             while ($line =~ /\"data-(\w+-)?phrase\":\s*"([^"]+)"/g) {
@@ -83,6 +96,9 @@ for my $filename (@files) {
                 add_phrase($1);
             }
             while ($line =~ /(elCreateTextTnNr|elCreateTextTn)\('\w+', \{[^}]*\}, '([^']+)'/g) {
+                add_phrase($2);
+            }
+            while ($line =~ /"(title|help|invalid|unit|hintText|warn)":\s+"([^"]+)"/g) {
                 add_phrase($2);
             }
         }
@@ -126,7 +142,7 @@ for my $lang (@langs) {
 #read language descriptions
 open my $descfile, "src/i18n/i18n.txt"  or die "Can not open src/i18n/i18n.txt: $!";
 while (my $line = <$descfile>) {
-    if ($line =~ /^(\w+-\w+):(.*)$/) {
+    if ($line =~ /^[\w+-]+:(\w+-\w+):(.*)$/) {
         $desc->{$1} = $2;
     }
 }
@@ -172,6 +188,20 @@ close $docfile;
 #check for obsolet translations
 for my $key (sort keys %$i18n) {
     if (not defined($phrases->{$key})) {
-        warn "Obsolet translation \"".$key."\" for lang ".join(", ", keys %{$i18n->{$key}})."\n" if $verbose eq 1;
+        warn "Obsolete translation \"".$key."\" for lang ".join(", ", keys %{$i18n->{$key}})."\n" if $verbose eq 1;
     }
 }
+
+open my $phrasesfile, ">src/i18n/json/phrases.json" or die "Can not open \"src/i18n/json/phrases.json\": $!";
+print $phrasesfile "[\n";
+$i = 0;
+for my $key (sort keys %$phrases) {
+    #$key =~ s/"/\\"/g;
+    if ($i > 0) {
+        print $phrasesfile ",\n";
+    }
+    print $phrasesfile "{\"term\":\"$key\"}";
+    $i++;
+}
+print $phrasesfile "\n]\n";
+close $phrasesfile;

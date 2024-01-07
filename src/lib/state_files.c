@@ -29,7 +29,7 @@
 bool check_partition_state_dir(sds workdir, sds partition) {
     sds partition_dir = sdsdup(partition);
     sanitize_filename(partition_dir);
-    sds state_dir_name = sdscatfmt(sdsempty(), "%S/state/%S", workdir, partition_dir);
+    sds state_dir_name = sdscatfmt(sdsempty(), "%S/%s/%S", workdir, DIR_WORK_STATE, partition_dir);
     DIR *state_dir = opendir(state_dir_name);
     FREE_SDS(partition_dir);
     FREE_SDS(state_dir_name);
@@ -62,6 +62,7 @@ sds camel_to_snake(sds text) {
 
 /**
  * Reads a string from a file or writes the file with a default value if not exists or value is invalid
+ * Frees the default value.
  * @param workdir mympd working directory
  * @param dir subdir 
  * @param name filename to read/write
@@ -95,8 +96,8 @@ sds state_file_rw_string(sds workdir, const char *dir, const char *name, const c
     FILE *fp = fopen(cfg_file, OPEN_FLAGS_READ);
     if (fp == NULL) {
         if (errno != ENOENT) {
-            MYMPD_LOG_ERROR("Can not open file \"%s\"", cfg_file);
-            MYMPD_LOG_ERRNO(errno);
+            MYMPD_LOG_ERROR(NULL, "Can not open file \"%s\"", cfg_file);
+            MYMPD_LOG_ERRNO(NULL, errno);
         }
         if (write == true) {
             //file does not exist, create it with default value and return
@@ -116,7 +117,7 @@ sds state_file_rw_string(sds workdir, const char *dir, const char *name, const c
     {
         sdsclear(result);
         result = sdscat(result, def_value);
-        MYMPD_LOG_ERROR("Validation failed for state \"%s\"", name);
+        MYMPD_LOG_ERROR(NULL, "Validation failed for state \"%s\"", name);
         return result;
     }
     if (n <= 0) {
@@ -124,7 +125,7 @@ sds state_file_rw_string(sds workdir, const char *dir, const char *name, const c
         sdsclear(result);
         result = sdscat(result, def_value);
     }
-    MYMPD_LOG_DEBUG("State %s: %s", name, result);
+    MYMPD_LOG_DEBUG(NULL, "State %s: %s", name, result);
     return result;
 }
 
@@ -141,7 +142,9 @@ bool state_file_rw_bool(sds workdir, const char *dir, const char *name, bool def
     bool value = def_value;
     sds line = state_file_rw_string(workdir, dir, name, def_value == true ? "true" : "false", NULL, write);
     if (sdslen(line) > 0) {
-        value = line[0] == 't' ? true : false;
+        value = line[0] == 't'
+            ? true
+            : false;
     }
     FREE_SDS(line);
     return value;
@@ -160,6 +163,26 @@ bool state_file_rw_bool(sds workdir, const char *dir, const char *name, bool def
  */
 int state_file_rw_int(sds workdir, const char *dir, const char *name, int def_value, int min, int max, bool write) {
     return (int)state_file_rw_long(workdir, dir, name, def_value, min, max, write);
+}
+
+/**
+ * Reads a tag name from a file, parses it to a mpd_tag_type or writes the file with a default value if not exists or value is invalid
+ * @param workdir mympd working directory
+ * @param dir subdir
+ * @param name filename to read/write
+ * @param def_value default value as mpd_tag_type
+ * @param write if true create the file if not exists
+ * @return parsed string as mpd_tag_type
+ */
+enum mpd_tag_type state_file_rw_tag(sds workdir, const char *dir, const char *name, enum mpd_tag_type def_value, bool write) {
+    sds line = state_file_rw_string(workdir, dir, name, mpd_tag_name(def_value), NULL, write);
+    enum mpd_tag_type value = sdslen(line) > 0
+        ? mpd_tag_name_iparse(line)
+        : def_value;
+    FREE_SDS(line);
+    return value == MPD_TAG_UNKNOWN
+        ? def_value
+        : value;
 }
 
 /**

@@ -13,7 +13,7 @@
  * @returns {void}
  */
  function selectTag(containerId, descId, setTo) {
-    const btns = document.getElementById(containerId);
+    const btns = elGetById(containerId);
     let aBtn = btns.querySelector('.active');
     if (aBtn !== null) {
         aBtn.classList.remove('active');
@@ -22,7 +22,7 @@
     if (aBtn !== null) {
         aBtn.classList.add('active');
         if (descId !== undefined) {
-            const descEl = document.getElementById(descId);
+            const descEl = elGetById(descId);
             if (descEl !== null) {
                 descEl.textContent = aBtn.textContent;
                 descEl.setAttribute('data-phrase', aBtn.getAttribute('data-phrase'));
@@ -48,8 +48,13 @@ function addTagList(elId, list) {
         stack.appendChild(
             elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "filename"}, 'Filename')
         );
+        if (elId === 'SearchSearchTags') {
+            stack.appendChild(
+                elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "base"}, 'Path')
+            );
+        }
     }
-    if (elId === 'searchDatabaseAlbumListTags') {
+    if (elId === 'BrowseDatabaseAlbumListSearchTags') {
         stack.appendChild(
             elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "any"}, 'Any Tag')
         );
@@ -59,26 +64,24 @@ function addTagList(elId, list) {
             elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": settings[list][i]}, settings[list][i])
         );
     }
-    if (elId === 'BrowseNavFilesystemDropdown' ||
-        elId === 'BrowseNavPlaylistDropdown' ||
-        elId === 'BrowseNavRadioFavoritesDropdown' ||
-        elId === 'BrowseNavWebradiodbDropdown' ||
-        elId === 'BrowseNavRadiobrowserDropdown')
+    if (elId === 'BrowseFilesystemNavDropdown' ||
+        elId === 'BrowsePlaylistListNavDropdown' ||
+        elId === 'BrowseRadioFavoritesNavDropdown' ||
+        elId === 'BrowseRadioWebradiodbNavDropdown' ||
+        elId === 'BrowseRadioRadiobrowserNavDropdown')
     {
-        if (features.featTags === true) {
-            elClear(stack);
-            stack.appendChild(
-                elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Database"}, 'Database')
-            );
-        }
+        elClear(stack);
+        stack.appendChild(
+            elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Database"}, 'Database')
+        );
     }
     if (elId === 'BrowseDatabaseAlbumListTagDropdown' ||
         elId === 'BrowseDatabaseTagListTagDropdown' ||
-        elId === 'BrowseNavFilesystemDropdown' ||
-        elId === 'BrowseNavPlaylistDropdown' ||
-        elId === 'BrowseNavRadioFavoritesDropdown' ||
-        elId === 'BrowseNavWebradiodbDropdown' ||
-        elId === 'BrowseNavRadiobrowserDropdown')
+        elId === 'BrowseFilesystemNavDropdown' ||
+        elId === 'BrowsePlaylistListNavDropdown' ||
+        elId === 'BrowseRadioFavoritesNavDropdown' ||
+        elId === 'BrowseRadioWebradiodbNavDropdown' ||
+        elId === 'BrowseRadioRadiobrowserNavDropdown')
     {
         if (elId === 'BrowseDatabaseAlbumListTagDropdown' ||
             elId === 'BrowseDatabaseTagListTagDropdown')
@@ -88,28 +91,30 @@ function addTagList(elId, list) {
             );
         }
         stack.appendChild(
-            elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Playlist"}, 'Playlists')
-        );
-        if (elId === 'BrowseNavPlaylistDropdown') {
-            stack.lastChild.classList.add('active');
-        }
-        stack.appendChild(
             elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Filesystem"}, 'Filesystem')
         );
-        if (elId === 'BrowseNavFilesystemDropdown') {
+        if (elId === 'BrowseFilesystemNavDropdown') {
             stack.lastChild.classList.add('active');
+        }
+        if (features.featPlaylists === true) {
+            stack.appendChild(
+                elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Playlist"}, 'Playlists')
+            );
+            if (elId === 'BrowsePlaylistListNavDropdown') {
+                stack.lastChild.classList.add('active');
+            }
         }
         stack.appendChild(
             elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Radio"}, 'Webradios')
         );
-        if (elId === 'BrowseNavRadioFavoritesDropdown' ||
-            elId === 'BrowseNavWebradiodbDropdown' ||
-            elId === 'BrowseNavRadiobrowserDropdown')
+        if (elId === 'BrowseRadioFavoritesNavDropdown' ||
+            elId === 'BrowseRadioWebradiodbNavDropdown' ||
+            elId === 'BrowseRadioRadiobrowserNavDropdown')
         {
             stack.lastChild.classList.add('active');
         }
     }
-    else if (elId === 'databaseAlbumListSortTagsList') {
+    else if (elId === 'BrowseDatabaseAlbumListSortTagsList') {
         if (settings.tagList.includes('Date') === true &&
             settings[list].includes('Date') === false)
         {
@@ -117,11 +122,13 @@ function addTagList(elId, list) {
                 elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Date"}, 'Date')
             );
         }
-        stack.appendChild(
-            elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "LastModified"}, 'Last modified')
-        );
+        if (settings.albumMode === 'adv') {
+            stack.appendChild(
+                elCreateTextTn('button', {"class": ["btn", "btn-secondary", "btn-sm"], "data-tag": "Last-Modified"}, 'Last modified')
+            );
+        }
     }
-    else if (elId === 'searchQueueTags') {
+    else if (elId === 'QueueCurrentSearchTags') {
         if (features.featAdvqueue === true)
         {
             stack.appendChild(
@@ -129,7 +136,7 @@ function addTagList(elId, list) {
             );
         }
     }
-    const el = document.getElementById(elId);
+    const el = elGetById(elId);
     elReplaceChild(el, stack);
 }
 
@@ -140,10 +147,10 @@ function addTagList(elId, list) {
  * @returns {void}
  */
 function addTagListSelect(elId, list) {
-    const select = document.getElementById(elId);
+    const select = elGetById(elId);
     elClear(select);
-    if (elId === 'saveSmartPlaylistSort' ||
-        elId === 'selectSmartplsSort')
+    if (elId === 'modalSmartPlaylistEditSortInput' ||
+        elId === 'modalSettingsSmartplsSortInput')
     {
         select.appendChild(
             elCreateTextTn('option', {"value": ""}, 'Disabled')
@@ -151,24 +158,29 @@ function addTagListSelect(elId, list) {
         select.appendChild(
             elCreateTextTn('option', {"value": "shuffle"}, 'Shuffle')
         );
-        const optGroup = elCreateEmpty('optgroup', {"label": tn('Sort by tag'), "data-label-phrase": "Sort by tag"});
-        optGroup.appendChild(
+        select.appendChild(
+            elCreateTextTn('option', {"value": "Last-Modified"}, 'Last-Modified')
+        );
+        select.appendChild(
             elCreateTextTn('option', {"value": "filename"}, 'Filename')
         );
-        for (let i = 0, j = settings[list].length; i < j; i++) {
-            optGroup.appendChild(
-                elCreateTextTn('option', {"value": settings[list][i]}, settings[list][i])
+        if (features.featTags === true) {
+            const optGroup = elCreateEmpty('optgroup', {"label": tn('Sort by tag'), "data-label-phrase": "Sort by tag"});
+            for (let i = 0, j = settings[list].length; i < j; i++) {
+                optGroup.appendChild(
+                    elCreateTextTn('option', {"value": settings[list][i]}, settings[list][i])
+                );
+            }
+            select.appendChild(optGroup);
+        }
+    }
+    else if (elId === 'modalPlaybackJukeboxUniqueTagInput') {
+        if (settings.tagListBrowse.includes('Title') === false) {
+            //Title tag should be always in the list
+            select.appendChild(
+                elCreateTextTn('option', {"value": "Title"}, 'Song')
             );
         }
-        select.appendChild(optGroup);
-    }
-    else if (elId === 'selectJukeboxUniqueTag' &&
-        settings.tagListBrowse.includes('Title') === false)
-    {
-        //Title tag should be always in the list
-        select.appendChild(
-            elCreateTextTn('option', {"value": "Title"}, 'Song')
-        );
         for (let i = 0, j = settings[list].length; i < j; i++) {
             select.appendChild(
                 elCreateTextTn('option', {"value": settings[list][i]}, settings[list][i])
@@ -178,7 +190,7 @@ function addTagListSelect(elId, list) {
 }
 
 /**
- * Parses the bits to the bitrate
+ * Parses the bits to the bitrate from mpd audioformat
  * @param {number} bits bits to parse
  * @returns {string} bitrate as string
  */
@@ -191,14 +203,43 @@ function parseBits(bits) {
 }
 
 /**
+ * Parses the channels information from mpd audioformat
+ * @param {number} channels number of channels
+ * @returns {string} the parses number of channels as text
+ */
+function parseChannels(channels) {
+    switch(channels) {
+        case 0:  return '';
+        case 1:  return tn('Mono');
+        case 2:  return tn('Stereo');
+        default: return channels.toString();
+    }
+}
+
+/**
+ * Combines name and title to display extm3u name
+ * @param {string} name name tag
+ * @param {string} title title tag
+ * @returns {string} the title to display
+ */
+function getDisplayTitle(name, title) {
+    if (title === name) {
+        return title;
+    }
+    return isEmptyTag(name) === false
+        ? name + ': ' + title
+        : title;
+}
+
+/**
  * Returns a tag value as dom element
  * @param {string} key the tag type
  * @param {string | number | object} value the tag value
  * @returns {Node} the created node
  */
 function printValue(key, value) {
-    if (value === undefined || value === null || value === '') {
-        return document.createTextNode('-');
+    if (isEmptyTag(value) === true) {
+        return document.createTextNode('');
     }
     switch(key) {
         case 'Type':
@@ -207,26 +248,39 @@ function printValue(key, value) {
                 case 'smartpls': return elCreateText('span', {"class": ["mi"]}, 'queue_music');
                 case 'plist':    return elCreateText('span', {"class": ["mi"]}, 'list');
                 case 'dir':      return elCreateText('span', {"class": ["mi"]}, 'folder_open');
-                case 'stream':	 return elCreateText('span', {"class": ["mi"]}, 'stream');
+                case 'stream':   return elCreateText('span', {"class": ["mi"]}, 'stream');
                 case 'webradio': return elCreateText('span', {"class": ["mi"]}, 'radio');
                 default:         return elCreateText('span', {"class": ["mi"]}, 'radio_button_unchecked');
             }
         case 'Duration':
             return document.createTextNode(fmtSongDuration(value));
-        case 'AudioFormat':
-            return document.createTextNode(parseBits(value.bits) + smallSpace + nDash + smallSpace + value.sampleRate / 1000 + tn('kHz'));
+        case 'AudioFormat': {
+            const text = [];
+            text.push(parseBits(value.bits));
+            text.push(value.sampleRate / 1000 + tn('kHz'));
+            const channels = parseChannels(value.channels);
+            if (channels !== '') {
+                text.push(channels);
+            }
+            return document.createTextNode(text.join(smallSpace + nDash + smallSpace));
+        }
         case 'Pos':
             //mpd is 0-indexed but humans wants 1-indexed lists
             return document.createTextNode(value + 1);
-        case 'LastModified':
+        case 'Last-Modified':
         case 'LastPlayed':
-        case 'stickerLastPlayed':
-        case 'stickerLastSkipped':
+        case 'lastPlayed':
+        case 'lastSkipped':
             return document.createTextNode(value === 0 ? tn('never') : fmtDate(value));
-        case 'stickerLike':
+        case 'like':
             return elCreateText('span', {"class": ["mi"]},
-                value === 0 ? 'thumb_down' : value === 1 ? 'radio_button_unchecked' : 'thumb_up');
-        case 'stickerElapsed':
+                value === 0
+                    ? 'thumb_down'
+                    : value === 1 
+                        ? 'horizontal_rule'
+                        : 'thumb_up'
+            );
+        case 'elapsed':
             return document.createTextNode(fmtSongDuration(value));
         case 'Artist':
         case 'ArtistSort':
@@ -261,10 +315,10 @@ function printValue(key, value) {
             return span;
         }
         case 'Genre':
-            //multi value tags - print comma separated
             if (typeof value === 'string') {
                 return document.createTextNode(value);
             }
+            //multi value tags - return comma separated
             return document.createTextNode(
                 value.join(', ')
             );
@@ -281,6 +335,10 @@ function printValue(key, value) {
             }
             return elCreateText('a', {"class": ["text-success", "external"],
                 "href": value, "rel": "noreferrer", "target": "_blank"}, value);
+        case 'Languages':
+            return document.createTextNode(
+                value.join(', ')
+            );
         case 'lastcheckok':
             //radiobrowser.info
             return elCreateText('span', {"class": ["mi"]},
@@ -291,6 +349,9 @@ function printValue(key, value) {
         case 'SongCount':
             return document.createTextNode(tn('Num songs', {"smartCount": value}));
         case 'Discs':
+            if (value === 0) {
+                return document.createTextNode('-');
+            }
             return document.createTextNode(tn('Num discs', {"smartCount": value}));
         default:
             if (key.indexOf('MUSICBRAINZ') === 0) {
@@ -303,16 +364,12 @@ function printValue(key, value) {
 }
 
 /**
- * Checks if tag matches the value
- * @param {string | object} tag tag to check
- * @param {string} value value to check
+ * Checks if tag is empty
+ * @param {string | Array} tagValue tag value to check
  * @returns {boolean} true if tag matches value, else false
  */
-function checkTagValue(tag, value) {
-    if (typeof tag === 'string') {
-        return tag === value;
-    }
-    return tag[0] === value;
+function isEmptyTag(tagValue) {
+    return tagValue === undefined || tagValue === null || tagValue.length === 0;
 }
 
 /**
@@ -337,10 +394,15 @@ function getMBtagLink(tag, value) {
         case 'MUSICBRAINZ_TRACKID':
             MBentity = 'recording';
             break;
+        case 'MUSICBRAINZ_RELEASEGROUPID':
+            MBentity = 'release-group';
+            break;
+        // No Default
     }
-    if (MBentity === '' ||
-        value === '-')
-    {
+    if (isEmptyTag(value) === true) {
+        return elCreateText('span', {}, '');
+    }
+    else if (MBentity === '') {
         return elCreateText('span', {}, value);
     }
     else {
@@ -351,7 +413,7 @@ function getMBtagLink(tag, value) {
 }
 
 /**
- * Returns MusicBrainz tags as links
+ * Returns Links to MusicBrainz artist und album
  * @param {object} songObj mpd song object
  * @param {boolean} showArtists true=show artists, false=show albumartists
  * @returns {HTMLElement} dom node with musicbrainz links
@@ -361,32 +423,48 @@ function addMusicbrainzFields(songObj, showArtists) {
         return null;
     }
 
-    const artist = showArtists === false ? 'MUSICBRAINZ_ALBUMARTISTID' : 'MUSICBRAINZ_ARTISTID';
-    if ((songObj.MUSICBRAINZ_ALBUMID !== '-' && songObj.MUSICBRAINZ_ALBUMID !== undefined) ||
-        (songObj[artist] !== undefined && checkTagValue(songObj[artist], '-') === false))
-    {
-        const mbField = elCreateNode('div', {"class": ["col-xl-6"]},
-            elCreateTextTn('small', {}, 'MusicBrainz')
+    const artist = showArtists === false
+        ? 'MUSICBRAINZ_ALBUMARTISTID'
+        : 'MUSICBRAINZ_ARTISTID';
+
+    const mbField = elCreateNode('div', {"class": ["col-xl-6"]},
+        elCreateTextTn('small', {}, 'MusicBrainz')
+    );
+
+    if (isEmptyTag(songObj.MUSICBRAINZ_RELEASEGROUPID) === false) {
+        //use releasegroupid
+        const albumLink = getMBtagLink('MUSICBRAINZ_RELEASEGROUPID', songObj.MUSICBRAINZ_RELEASEGROUPID);
+        albumLink.textContent = tn('Goto album');
+        mbField.appendChild(
+            elCreateNode('p', {"class": ["mb-1"]}, albumLink)
         );
-        if (songObj.MUSICBRAINZ_ALBUMID !== '-') {
-            const albumLink = getMBtagLink('MUSICBRAINZ_ALBUMID', songObj.MUSICBRAINZ_ALBUMID);
-            albumLink.textContent = tn('Goto album');
+    }
+    else if (isEmptyTag(songObj.MUSICBRAINZ_ALBUMID) === false) {
+        //fallback to albumid
+        const albumLink = getMBtagLink('MUSICBRAINZ_ALBUMID', songObj.MUSICBRAINZ_ALBUMID);
+        albumLink.textContent = tn('Goto album');
+        mbField.appendChild(
+            elCreateNode('p', {"class": ["mb-1"]}, albumLink)
+        );
+    }
+    if (isEmptyTag(songObj[artist]) === false) {
+        //show albumartists or artists
+        for (let i = 0, j = songObj[artist].length; i < j; i++) {
+            const artistLink = getMBtagLink(artist, songObj[artist][i]);
+            artistLink.textContent = artist === 'MUSICBRAINZ_ALBUMARTISTID'
+                ? songObj.AlbumArtist[i]
+                : songObj.Artist[i];
+            if (artistLink.textContent === '') {
+                // skip empty tag values
+                // count of mbids and artists are not equal
+                continue;
+            }
             mbField.appendChild(
-                elCreateNode('p', {"class": ["mb-1"]}, albumLink)
+                elCreateNode('p', {"class": ["mb-1"]}, artistLink)
             );
         }
-        if (songObj[artist] !== undefined &&
-            checkTagValue(songObj[artist], '-') === false)
-        {
-            for (let i = 0, j = songObj[artist].length; i < j; i++) {
-                const artistLink = getMBtagLink(artist, songObj[artist][i]);
-                artistLink.textContent = songObj.AlbumArtist[i];
-                mbField.appendChild(
-                    elCreateNode('p', {"class": ["mb-1"]}, artistLink)
-                );
-            }
-        }
-        return mbField;
     }
-    return null;
+    return mbField.childNodes.length > 1
+        ? mbField
+        : null;
 }

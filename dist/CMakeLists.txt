@@ -4,7 +4,7 @@
 
 add_subdirectory(libmympdclient)
 add_subdirectory(mjson)
+add_subdirectory(mpack)
 add_subdirectory(mongoose)
 add_subdirectory(rax)
 add_subdirectory(sds)
-add_subdirectory(tinymt)

@@ -46,26 +46,29 @@ void radiobrowser_api(struct mg_connection *nc, struct mg_connection *backend_nc
     sds uri = sdsempty();
     const char *cmd = get_cmd_id_method_name(cmd_id);
 
+    struct t_jsonrpc_parse_error parse_error;
+    jsonrpc_parse_error_init(&parse_error);
+
     switch(cmd_id) {
         case MYMPD_API_CLOUD_RADIOBROWSER_CLICK_COUNT:
-            if (json_get_string(body, "$.params.uuid", 0, FILEPATH_LEN_MAX, &uuid, vcb_isalnum, &error) == true) {
+            if (json_get_string(body, "$.params.uuid", 0, FILEPATH_LEN_MAX, &uuid, vcb_isalnum, &parse_error) == true) {
                 uri = sdscatfmt(uri, "/json/url/%S", uuid);
             }
             break;
         case MYMPD_API_CLOUD_RADIOBROWSER_NEWEST:
-            if (json_get_long(body, "$.params.offset", 0, MPD_PLAYLIST_LENGTH_MAX, &offset, &error) == true &&
-                json_get_long(body, "$.params.limit", MPD_RESULTS_MIN, MPD_RESULTS_MAX, &limit, &error) == true)
+            if (json_get_long(body, "$.params.offset", 0, MPD_PLAYLIST_LENGTH_MAX, &offset, &parse_error) == true &&
+                json_get_long(body, "$.params.limit", MPD_RESULTS_MIN, MPD_RESULTS_MAX, &limit, &parse_error) == true)
             {
                 uri = sdscatfmt(uri, "/json/stations/lastchange?hidebroken=true&offset=%l&limit=%l", offset, limit);
             }
             break;
         case MYMPD_API_CLOUD_RADIOBROWSER_SEARCH:
-            if (json_get_long(body, "$.params.offset", 0, MPD_PLAYLIST_LENGTH_MAX, &offset, &error) == true &&
-                json_get_long(body, "$.params.limit", MPD_RESULTS_MIN, MPD_RESULTS_MAX, &limit, &error) == true &&
-                json_get_string(body, "$.params.tags", 0, NAME_LEN_MAX, &tags, vcb_isname, &error) == true &&
-                json_get_string(body, "$.params.country", 0, NAME_LEN_MAX, &country, vcb_isname, &error) == true &&
-                json_get_string(body, "$.params.language", 0, NAME_LEN_MAX, &language, vcb_isname, &error) == true &&
-                json_get_string(body, "$.params.searchstr", 0, NAME_LEN_MAX, &searchstr, vcb_isname, &error) == true)
+            if (json_get_long(body, "$.params.offset", 0, MPD_PLAYLIST_LENGTH_MAX, &offset, &parse_error) == true &&
+                json_get_long(body, "$.params.limit", MPD_RESULTS_MIN, MPD_RESULTS_MAX, &limit, &parse_error) == true &&
+                json_get_string(body, "$.params.tags", 0, NAME_LEN_MAX, &tags, vcb_isname, &parse_error) == true &&
+                json_get_string(body, "$.params.country", 0, NAME_LEN_MAX, &country, vcb_isname, &parse_error) == true &&
+                json_get_string(body, "$.params.language", 0, NAME_LEN_MAX, &language, vcb_isname, &parse_error) == true &&
+                json_get_string(body, "$.params.searchstr", 0, NAME_LEN_MAX, &searchstr, vcb_isname, &parse_error) == true)
             {
                 sds searchstr_encoded = sds_urlencode(sdsempty(), searchstr, sdslen(searchstr));
                 uri = sdscatfmt(uri, "/json/stations/search?hidebroken=true&offset=%l&limit=%l&name=%S&tag=%S&country=%S&language=%S",
@@ -77,7 +80,7 @@ void radiobrowser_api(struct mg_connection *nc, struct mg_connection *backend_nc
             uri = sdscat(uri, "/json/servers");
             break;
         case MYMPD_API_CLOUD_RADIOBROWSER_STATION_DETAIL:
-            if (json_get_string(body, "$.params.uuid", 0, FILEPATH_LEN_MAX, &uuid, vcb_isalnum, &error) == true) {
+            if (json_get_string(body, "$.params.uuid", 0, FILEPATH_LEN_MAX, &uuid, vcb_isalnum, &parse_error) == true) {
                 uri = sdscatfmt(uri, "/json/stations/byuuid?uuids=%S", uuid);
             }
             break;
@@ -85,11 +88,18 @@ void radiobrowser_api(struct mg_connection *nc, struct mg_connection *backend_nc
             error = sdscat(error, "Invalid API request");
     }
 
-    if (sdslen(error) > 0) {
+    if (parse_error.message != NULL) {
+        // jsonrpc parsing error
+        sds response = jsonrpc_respond_message_phrase(sdsempty(), cmd_id, request_id,
+            JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Parsing error: %{message}", 4, "message", parse_error.message, "path", parse_error.path);
+        webserver_send_data(nc, response, sdslen(response), EXTRA_HEADERS_JSON_CONTENT);
+        FREE_SDS(response);
+    }
+    else if (sdslen(error) > 0) {
         sds response = jsonrpc_respond_message(sdsempty(), cmd_id, request_id,
             JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, error);
-        MYMPD_LOG_ERROR("Error processing method \"%s\"", cmd);
-        webserver_send_data(nc, response, sdslen(response), "Content-Type: application/json\r\n");
+        MYMPD_LOG_ERROR(NULL, "Error processing method \"%s\"", cmd);
+        webserver_send_data(nc, response, sdslen(response), EXTRA_HEADERS_JSON_CONTENT);
         FREE_SDS(response);
     }
     else {
@@ -97,7 +107,7 @@ void radiobrowser_api(struct mg_connection *nc, struct mg_connection *backend_nc
         if (rc == false) {
             sds response = jsonrpc_respond_message(sdsempty(), cmd_id, request_id,
                 JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Error connecting to radio-browser.info");
-            webserver_send_data(nc, response, sdslen(response), "Content-Type: application/json\r\n");
+            webserver_send_data(nc, response, sdslen(response), EXTRA_HEADERS_JSON_CONTENT);
             FREE_SDS(response);
         }
     }
@@ -108,6 +118,7 @@ void radiobrowser_api(struct mg_connection *nc, struct mg_connection *backend_nc
     FREE_SDS(uuid);
     FREE_SDS(error);
     FREE_SDS(uri);
+    jsonrpc_parse_error_clear(&parse_error);
 }
 
 /**
@@ -152,13 +163,23 @@ static void radiobrowser_handler(struct mg_connection *nc, int ev, void *ev_data
             break;
         }
         case MG_EV_ERROR:
-            MYMPD_LOG_ERROR("HTTP connection \"%lu\" failed", nc->id);
+            MYMPD_LOG_ERROR(NULL, "HTTP connection to \"%s\", connection %lu failed", backend_nc_data->uri, nc->id);
+            if (backend_nc_data->frontend_nc != NULL) {
+                sds response = jsonrpc_respond_message_phrase(sdsempty(), backend_nc_data->cmd_id, 0,
+                        JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Could not connect to %{host}", 2, "host", RADIOBROWSER_HOST);
+                webserver_send_data(backend_nc_data->frontend_nc, response, sdslen(response), EXTRA_HEADERS_JSON_CONTENT);
+                FREE_SDS(response);
+            }
             break;
         case MG_EV_HTTP_MSG: {
             struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-            MYMPD_LOG_DEBUG("Got response from connection \"%lu\": %lu bytes", nc->id, (unsigned long)hm->body.len);
+            //http response code
+            int response_code = mg_str_to_int(&hm->uri);
+            MYMPD_LOG_DEBUG(NULL, "Got response from connection \"%lu\", response code %d: %lu bytes", nc->id, response_code, (unsigned long)hm->body.len);
             sds response = sdsempty();
-            if (hm->body.len > 0) {
+            if (hm->body.len > 0 &&
+                response_code == 200)
+            {
                 response = jsonrpc_respond_start(response, backend_nc_data->cmd_id, 0);
                 response = sdscat(response, "\"data\":");
                 response = sdscatlen(response, hm->body.ptr, hm->body.len);
@@ -166,10 +187,11 @@ static void radiobrowser_handler(struct mg_connection *nc, int ev, void *ev_data
             }
             else {
                 response = jsonrpc_respond_message(response, backend_nc_data->cmd_id, 0,
-                    JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Empty response from radio-browser.info");
+                    JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Invalid response from radio-browser.info");
+                MYMPD_LOG_ERROR(NULL, "Invalid response from connection \"%lu\", response code %d", nc->id, response_code);
             }
             if (backend_nc_data->frontend_nc != NULL) {
-                webserver_send_data(backend_nc_data->frontend_nc, response, sdslen(response), "Content-Type: application/json\r\n");
+                webserver_send_data(backend_nc_data->frontend_nc, response, sdslen(response), EXTRA_HEADERS_JSON_CONTENT);
             }
             FREE_SDS(response);
             break;

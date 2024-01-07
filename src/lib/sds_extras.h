@@ -17,6 +17,8 @@
     SDS_PTR = NULL; \
 } while (0)
 
+sds sds_basename(sds s);
+sds sds_dirname(sds s);
 sds *sds_split_comma_trim(sds s, int *count);
 int sds_toimax(sds s);
 void sds_utf8_tolower(sds s);
@@ -30,6 +32,9 @@ sds sds_urlencode(sds s, const char *p, size_t len);
 sds sds_replacelen(sds s, const char *p, size_t len);
 sds sds_replace(sds s, const char *p);
 sds sds_catbool(sds s, bool v);
-sds sds_hash(const char *p);
+sds sds_hash_sha1(const char *p);
+sds sds_hash_sha1_sds(sds s);
+sds sds_hash_sha256(const char *p);
+sds sds_hash_sha256_sds(sds s);
 
 #endif

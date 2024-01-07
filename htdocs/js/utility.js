@@ -25,6 +25,7 @@ function ignoreKeys(event) {
         case 'Delete':
             // do not ignore some special keys
             return false;
+        // No Default
     }
     if (event.key.length > 1) {
         // ignore all special keys
@@ -39,7 +40,9 @@ function ignoreKeys(event) {
  * @returns {boolean} true if target is clickable else false
  */
 function checkTargetClick(target) {
-    return target === null || target.classList.contains('not-clickable') ? false : true;
+    return target === null || target.classList.contains('not-clickable')
+        ? false
+        : true;
 }
 
 /**
@@ -48,7 +51,7 @@ function checkTargetClick(target) {
  * @returns {void}
  */
 function setUpdateViewId(id) {
-    setUpdateView(document.getElementById(id));
+    setUpdateView(elGetById(id));
 }
 
 /**
@@ -67,7 +70,7 @@ function setUpdateView(el) {
  * @returns {void}
  */
 function unsetUpdateViewId(id) {
-    unsetUpdateView(document.getElementById(id));
+    unsetUpdateView(elGetById(id));
 }
 
 /**
@@ -78,15 +81,6 @@ function unsetUpdateViewId(id) {
 function unsetUpdateView(el) {
     el.classList.remove('opacity05');
     domCache.main.classList.remove('border-progress');
-}
-
-/**
- * Replaces special characters with underscore
- * @param {string} str string to replace
- * @returns {string} result string
- */
-function r(str) {
-    return str.replace(/[^\w-]/g, '_');
 }
 
 /**
@@ -115,12 +109,37 @@ function myEncodeURIComponent(str) {
 }
 
 /**
+ * Concatenates two arrays and checks if second array is defined
+ * @param {Array} c1 first array
+ * @param {Array} c2 second array, can be undefined
+ * @returns {Array} concatenated array
+ */
+function concatArrays(c1, c2) {
+    return c2 === undefined
+        ? c1
+        : c1.concat(c2);
+}
+
+/**
  * Joins an array to a comma separated text
  * @param {Array} a array to join
  * @returns {string} joined array
  */
 function joinArray(a) {
-    return a === undefined ? '' : a.join(', ');
+    return a === undefined
+        ? ''
+        : a.join(', ');
+}
+
+/**
+ * Joins an array to a multi-line string
+ * @param {Array} a array to join
+ * @returns {string} joined array
+ */
+function arrayToLines(a) {
+    return a === undefined
+        ? ''
+        : a.join('\n');
 }
 
 /**
@@ -137,6 +156,7 @@ function escapeMPD(str) {
             case '"':  return '\\"';
             case '\'': return '\\\'';
             case '\\': return '\\\\';
+            // No Default
         }
     });
 }
@@ -155,6 +175,7 @@ function unescapeMPD(str) {
             case '\\"':  return '"';
             case '\\\'': return '\'';
             case '\\\\': return '\\';
+            // No Default
         }
     });
 }
@@ -216,18 +237,18 @@ function filetype(uri) {
     }
     const ext = uri.split('.').pop().toUpperCase();
     switch(ext) {
-        case 'MP3':  return ext + ' - ' + tn('MPEG-1 Audio Layer III');
-        case 'FLAC': return ext + ' - ' + tn('Free Lossless Audio Codec');
-        case 'OGG':  return ext + ' - ' + tn('Ogg Vorbis');
-        case 'OPUS': return ext + ' - ' + tn('Opus Audio');
-        case 'WAV':  return ext + ' - ' + tn('WAVE Audio File');
-        case 'WV':   return ext + ' - ' + tn('WavPack');
-        case 'AAC':  return ext + ' - ' + tn('Advanced Audio Coding');
-        case 'MPC':  return ext + ' - ' + tn('Musepack');
-        case 'MP4':  return ext + ' - ' + tn('MPEG-4');
-        case 'APE':  return ext + ' - ' + tn('Monkey Audio');
-        case 'WMA':  return ext + ' - ' + tn('Windows Media Audio');
-        case 'CUE':  return ext + ' - ' + tn('Cuesheet');
+        case 'MP3':  return ext + smallSpace + nDash + smallSpace + tn('MPEG-1 Audio Layer III');
+        case 'FLAC': return ext + smallSpace + nDash + smallSpace + tn('Free Lossless Audio Codec');
+        case 'OGG':  return ext + smallSpace + nDash + smallSpace + tn('Ogg Vorbis');
+        case 'OPUS': return ext + smallSpace + nDash + smallSpace + tn('Opus Audio');
+        case 'WAV':  return ext + smallSpace + nDash + smallSpace + tn('WAVE Audio File');
+        case 'WV':   return ext + smallSpace + nDash + smallSpace + tn('WavPack');
+        case 'AAC':  return ext + smallSpace + nDash + smallSpace + tn('Advanced Audio Coding');
+        case 'MPC':  return ext + smallSpace + nDash + smallSpace + tn('Musepack');
+        case 'MP4':  return ext + smallSpace + nDash + smallSpace + tn('MPEG-4');
+        case 'APE':  return ext + smallSpace + nDash + smallSpace + tn('Monkey Audio');
+        case 'WMA':  return ext + smallSpace + nDash + smallSpace + tn('Windows Media Audio');
+        case 'CUE':  return ext + smallSpace + nDash + smallSpace + tn('Cuesheet');
         default:     return ext;
     }
 }
@@ -238,49 +259,13 @@ function filetype(uri) {
  */
 //eslint-disable-next-line no-unused-vars
 function focusSearch() {
-    switch(app.id) {
-        case 'QueueCurrent':
-            document.getElementById('searchQueueStr').focus();
-            break;
-        case 'QueueLastPlayed':
-            document.getElementById('searchQueueLastPlayedStr').focus();
-            break;
-        case 'QueueJukebox':
-            document.getElementById('searchQueueJukeboxStr').focus();
-            break;
-        case 'BrowseDatabaseList':
-            document.getElementById('searchDatabaseStr').focus();
-            break;
-        case 'BrowseFilesystem':
-            document.getElementById('searchFilesystemStr').focus();
-            break;
-        case 'BrowsePlaylistList':
-            document.getElementById('searchPlaylistListStr').focus();
-            break;
-        case 'BrowsePlaylistsDetail':
-            document.getElementById('searchPlaylistsDetailStr').focus();
-            break;
-        case 'BrowseRadioWebradiodb':
-            document.getElementById('BrowseRadioWebradiodbSearchStr').focus();
-            break;
-        case 'BrowseRadioRadiobrowser':
-            document.getElementById('BrowseRadioRadiobrowserSearchStr').focus();
-            break;
-        case 'Search':
-            document.getElementById('searchStr').focus();
-            break;
-        default:
-            appGoto('Search');
+    const searchInput = elGetById(app.id + 'SearchStr');
+    if (searchInput !== null) {
+        searchInput.focus();
     }
-}
-
-/**
- * Generates a valid id from string
- * @param {string} str string to generate the id from
- * @returns {string} the generated id
- */
-function genId(str) {
-    return 'id' + str.replace(/[^\w-]/g, '');
+    else {
+        appGoto('Search');
+    }
 }
 
 /**
@@ -297,7 +282,7 @@ function parseCmdFromJSON(event, str) {
 /**
  * Executes a javascript command object
  * @param {Event} event triggering event
- * @param {object} cmd string to parse
+ * @param {object} cmd cmd object
  * @returns {void}
  */
 function parseCmd(event, cmd) {
@@ -308,38 +293,22 @@ function parseCmd(event, cmd) {
     }
     const func = getFunctionByName(cmd.cmd);
     if (typeof func === 'function') {
-        for (let i = 0, j = cmd.options.length; i < j; i++) {
-            if (cmd.options[i] === 'event') {
-                cmd.options[i] = event;
-            }
+        if (cmd.cmd === 'sendAPI') {
+            sendAPI(cmd.options[0].cmd, {}, null, false);
         }
-        switch(cmd.cmd) {
-            case 'sendAPI':
-                sendAPI(cmd.options[0].cmd, {}, null, false);
-                break;
-            case 'createLocalPlaybackEl':
-                // @ts-ignore
-                func(event, ... cmd.options);
-                break;
-            case 'toggleBtn':
-            case 'toggleBtnChk':
-            case 'toggleBtnGroup':
-            case 'toggleBtnGroupCollapse':
-            case 'zoomPicture':
-            case 'setPlaySettings':
-            case 'voteSong':
-            case 'toggleAddToPlaylistFrm':
-            case 'toggleSaveQueueMode':
-                // @ts-ignore
-                func(event.target, ... cmd.options);
-                break;
-            case 'toggleBtnChkCollapse':
-                // @ts-ignore
-                func(event.target, undefined, ... cmd.options);
-                break;
-            default:
-                // @ts-ignore
-                func(... cmd.options);
+        else {
+            // copy - we do not want to modify the original object
+            const options = cmd.options.slice();
+            for (let i = 0, j = options.length; i < j; i++) {
+                if (options[i] === 'event') {
+                    options[i] = event;
+                }
+                else if (options[i] === 'target') {
+                    options[i] = event.target;
+                }
+            }
+            // @ts-ignore
+            func(... options);
         }
     }
     else {
@@ -360,115 +329,6 @@ function parseCmd(event, cmd) {
         return window[context][functionToExecute];
     }
     return window[functionName];
-}
-
-/**
- * Creates the search breadcrumbs from a mpd search expression
- * @param {string} searchStr the search expression
- * @param {HTMLElement} searchEl search input element
- * @param {HTMLElement} crumbEl element to add the crumbs
- * @returns {void}
- */
-function createSearchCrumbs(searchStr, searchEl, crumbEl) {
-    elClear(crumbEl);
-    const elements = searchStr.substring(1, app.current.search.length - 1).split(' AND ');
-    //add all but last element to crumbs
-    for (let i = 0, j = elements.length - 1; i < j; i++) {
-        const fields = elements[i].match(/^\((\w+)\s+(\S+)\s+'(.*)'\)$/);
-        if (fields !== null && fields.length === 4) {
-            crumbEl.appendChild(createSearchCrumb(fields[1], fields[2], unescapeMPD(fields[3])));
-        }
-    }
-    //check if we should add the last element to the crumbs
-    if (searchEl.value === '' &&
-        elements.length >= 1)
-    {
-        const fields = elements[elements.length - 1].match(/^\((\w+)\s+(\S+)\s+'(.*)'\)$/);
-        if (fields !== null && fields.length === 4) {
-            crumbEl.appendChild(createSearchCrumb(fields[1], fields[2], unescapeMPD(fields[3])));
-        }
-    }
-    crumbEl.childElementCount > 0 ? elShow(crumbEl) : elHide(crumbEl);
-}
-
-/**
- * Creates a search crumb element
- * @param {string} filter the tag
- * @param {string} op search operator
- * @param {string} value filter value
- * @returns {HTMLElement} search crumb element
- */
-function createSearchCrumb(filter, op, value) {
-    const btn = elCreateNodes('button', {"class": ["btn", "btn-dark", "me-2"]}, [
-        document.createTextNode(tn(filter) + ' ' + tn(op) + ' \'' + value + '\''),
-        elCreateText('span', {"class": ["ml-2", "badge", "bg-secondary"]}, '×')
-    ]);
-    setData(btn, 'filter-tag', filter);
-    setData(btn, 'filter-op', op);
-    setData(btn, 'filter-value', value);
-    return btn;
-}
-
-/**
- * Creates a MPD search expression
- * @param {string} tag tag to search
- * @param {string} op search operator
- * @param {string} value value to search
- * @returns {string} the search expression in parenthesis
- */
-function _createSearchExpression(tag, op, value) {
-    if (op === 'starts_with' &&
-        app.id !== 'BrowseDatabaseList' &&
-        features.featStartsWith === false)
-    {
-        //mpd does not support starts_with, convert it to regex
-        if (features.featPcre === true) {
-            //regex is supported
-            op = '=~';
-            value = '^' + value;
-        }
-        else {
-            //best option without starts_with and regex is contains
-            op = 'contains';
-        }
-    }
-    return '(' + tag + ' ' + op + ' ' +
-        (op === '>=' ? value : '\'' + escapeMPD(value) + '\'') +
-        ')';
-}
-
-/**
- * Creates the MPD search expression from crumbs and parameters
- * @param {HTMLElement} crumbsEl crumbs container element
- * @param {string} tag tag to search
- * @param {string} op search operator
- * @param {string} value value to search
- * @returns {string} the search expression in parenthesis
- */
-function createSearchExpression(crumbsEl, tag, op, value) {
-    let expression = '(';
-    const crumbs = crumbsEl.children;
-    for (let i = 0, j = crumbs.length; i < j; i++) {
-        if (i > 0) {
-            expression += ' AND ';
-        }
-        expression += _createSearchExpression(
-            getData(crumbs[i], 'filter-tag'),
-            getData(crumbs[i], 'filter-op'),
-            getData(crumbs[i], 'filter-value')
-        );
-    }
-    if (value !== '') {
-        if (expression.length > 1) {
-            expression += ' AND ';
-        }
-        expression += _createSearchExpression(tag, op, value);
-    }
-    expression += ')';
-    if (expression.length <= 2) {
-        expression = '';
-    }
-    return expression;
 }
 
 /**
@@ -493,23 +353,12 @@ function checkMediaSessionSupport() {
 }
 
 /**
- * Converts a string to a boolean
- * @param {string} str string to parse
- * @returns {boolean} the boolean value
+ * Uppercases the first letter of a word
+ * @param {string} word word to uppercase first letter
+ * @returns {string} changed word
  */
-function strToBool(str) {
-    return str === 'true';
-}
-
-/**
- * Removes the search timer
- * @returns {void}
- */
-function clearSearchTimer() {
-    if (searchTimer !== null) {
-        clearTimeout(searchTimer);
-        searchTimer = null;
-    }
+function ucFirst(word) {
+    return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 /**
@@ -581,33 +430,136 @@ function setMobileView() {
 }
 
 /**
- * Generic http get request
+ * Generic http get request (async function)
  * @param {string} uri uri for the request
  * @param {Function} callback callback function
  * @param {boolean} json true = parses the response as json, else pass the plain text response
+ * @returns {Promise<void>}
+ */
+async function httpGet(uri, callback, json) {
+    let response = null;
+    try {
+        response = await fetch(uri, {
+            method: 'GET',
+            mode: 'same-origin',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            redirect: 'follow'
+        });
+    }
+    catch(error) {
+        showNotification(tn('API error') + ':\n' + tn('Error accessing %{uri}', {"uri": uri}), 'general', 'error');
+        logError('Error posting to ' + uri);
+        logError(error);
+        callback(null);
+        return;
+    }
+
+    if (response.redirected === true) {
+        logError('Request was redirect, reloading application');
+        window.location.reload();
+        return;
+    }
+    if (response.ok === false) {
+        showNotification(tn('API error') + '\n' +
+            tn('Error accessing %{uri}', {"uri": uri}) + ',\n' +
+            tn('Response code: %{code}', {"code": response.status + ' - ' + response.statusText}),
+            'general', 'error');
+        logError('Error accessing ' + uri + ', code ' + response.status + ' - ' + response.statusText);
+        callback(null);
+        return;
+    }
+
+    try {
+        const data = json === true
+            ? await response.json()
+            : await response.text();
+        callback(data);
+    }
+    catch(error) {
+        showNotification(tn('API error') + '\n' + tn('Can not parse response from %{uri}', {"uri": uri}), 'general', 'error');
+        logError('Can not parse response from ' + uri);
+        logError(error);
+        callback(null);
+    }
+}
+
+/**
+ * Returns the myMPD uri calculated from the window location
+ * @param {string} [proto] protocol to return, allowed: http or ws
+ * @returns {string} myMPD uri
+ */
+function getMyMPDuri(proto) {
+    const protocol = proto === 'ws'
+        ? window.location.protocol === 'https:'
+            ? 'wss:'
+            : 'ws:'
+        : window.location.protocol;
+    return protocol + '//' + window.location.hostname +
+        (window.location.port !== '' ? ':' + window.location.port : '') +
+        subdir;
+}
+
+/**
+ * Parses a string to seconds
+ * @param {string} value [hh:]mm:ss value to parse
+ * @returns {number} value in seconds
+ */
+function parseToSeconds(value) {
+    let match = value.match(/(\d+):(\d+):(\d+)/);
+    if (match) {
+        return Number(match[1]) * 60 * 60 +
+            Number(match[1]) * 60 +
+            Number(match[2]);
+    }
+    match = value.match(/(\d+):(\d+)/);
+    if (match) {
+        return Number(match[1]) * 60 +
+            Number(match[2]);
+    }
+    return Number(value);
+}
+
+/**
+ * Initializes elements with data-href attribute
+ * @param {Node} root root of the elements to initialize
  * @returns {void}
  */
-function httpGet(uri, callback, json) {
-    const ajaxRequest = new XMLHttpRequest();
-    ajaxRequest.open('GET', uri, true);
-    ajaxRequest.onreadystatechange = function() {
-        if (ajaxRequest.readyState === 4) {
-            if (json === true) {
-                let obj = {};
-                try {
-                    obj = JSON.parse(ajaxRequest.responseText);
-                }
-                catch(error) {
-                    showNotification(tn('Can not parse response from %{uri} to json object', {"uri": uri}), '', 'general', 'error');
-                    logError('Can not parse response from ' + uri + ' to json object.');
-                    logError(error);
-                }
-                callback(obj);
-            }
-            else {
-                callback(ajaxRequest.responseText);
-            }
+function initLinks(root) {
+    const hrefs = root.querySelectorAll('[data-href]');
+    for (const href of hrefs) {
+        if (href.nodeName !== 'A' &&
+            href.nodeName !== 'BUTTON' &&
+            href.classList.contains('not-clickable') === false)
+        {
+            href.classList.add('clickable');
         }
-    };
-    ajaxRequest.send();
+        if (href.parentNode.classList.contains('noInitChilds') ||
+            href.parentNode.parentNode.classList.contains('noInitChilds'))
+        {
+            //handler on parentnode
+            continue;
+        }
+        href.addEventListener('click', function(event) {
+            parseCmdFromJSON(event, getData(this, 'href'));
+        }, false);
+    }
+}
+
+/**
+ * Tries to convert a strint to number or bool
+ * @param {string} str string to convert
+ * @returns {string|number|boolean} parsed string
+ */
+function convertType(str) {
+    if (str === 'true') {
+        return true;
+    }
+    if (str === 'false') {
+        return false;
+    }
+    if (str.match(/^(-)?[\d.]+$/)) {
+        return Number(str);
+    }
+    return str;
 }

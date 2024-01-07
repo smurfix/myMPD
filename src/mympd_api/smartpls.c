@@ -81,23 +81,26 @@ sds mympd_api_smartpls_get(sds workdir, sds buffer, long request_id, const char 
         if (rc == true) {
             FREE_SDS(sds_buf1);
             if (json_get_string(content, "$.sort", 0, 100, &sds_buf1, vcb_ismpdsort, NULL) == true) {
-                buffer = tojson_sds(buffer, "sort", sds_buf1, false);
+                buffer = tojson_sds(buffer, "sort", sds_buf1, true);
             }
             else {
-                buffer = tojson_char_len(buffer, "sort", "", 0, false);
+                buffer = tojson_char_len(buffer, "sort", "", 0, true);
             }
+            bool bool_buf = false;
+            json_get_bool(content, "$.sortdesc", &bool_buf, NULL);
+            buffer = tojson_bool(buffer, "sortdesc", bool_buf, false);
             buffer = jsonrpc_end(buffer);
         }
         else {
             buffer = jsonrpc_respond_message(buffer, cmd_id, request_id,
                 JSONRPC_FACILITY_PLAYLIST, JSONRPC_SEVERITY_ERROR, "Can not parse smart playlist file");
-            MYMPD_LOG_ERROR("Can't parse smart playlist file: %s", playlist);
+            MYMPD_LOG_ERROR(NULL, "Can't parse smart playlist file: %s", playlist);
         }
     }
     else {
         buffer = jsonrpc_respond_message(buffer, cmd_id, request_id,
             JSONRPC_FACILITY_PLAYLIST, JSONRPC_SEVERITY_ERROR, "Unknown smart playlist type");
-        MYMPD_LOG_ERROR("Unknown type for smart playlist \"%s\"", playlist);
+        MYMPD_LOG_ERROR(NULL, "Unknown type for smart playlist \"%s\"", playlist);
     }
     FREE_SDS(smartpltype);
     FREE_SDS(content);

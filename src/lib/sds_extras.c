@@ -7,10 +7,78 @@
 #include "compile_time.h"
 #include "src/lib/sds_extras.h"
 
-#include "dist/mongoose/mongoose.h"
+#include "dist/sds/sds.h"
 #include "dist/utf8/utf8.h"
 
+#include <ctype.h>
+#include <openssl/evp.h>
+#include <openssl/sha.h>
+#include <string.h>
+
 #define HEXTOI(x) ((x) >= '0' && (x) <= '9' ? (x) - '0' : (x) - 'W')
+
+/**
+ * Replacement for basename function.
+ * Modifies the sds string in place.
+ * @param s sds string to apply basename function
+ * @return new pointer to s
+ */
+sds sds_basename(sds s) {
+    if (!s || !*s) {
+        sdsclear(s);
+        return sdscat(s, ".");
+    }
+
+    size_t idx = sdslen(s) - 1;
+    int end = -1;
+    // remove trailing slash
+    for (; idx && s[idx] == '/'; idx--) {
+        end--;
+    }
+    // get non-slash component
+    for (; idx && s[idx - 1] != '/'; idx--) {
+        // count only
+    }
+    sdsrange(s, (ssize_t)idx, end);
+    return s;
+}
+
+/**
+ * Replacement for dirname function.
+ * Modifies the sds string in place.
+ * @param s sds string to apply dirname function
+ * @return new pointer to s
+ */
+sds sds_dirname(sds s) {
+    if (!s || !*s) {
+        sdsclear(s);
+        return sdscat(s, ".");
+    }
+    size_t idx = sdslen(s) - 1;
+    // remove trailing slash
+    for (; s[idx] == '/'; idx--) {
+        if (!idx) {
+            sdsclear(s);
+            return sdscat(s, "/");
+        }
+    }
+    // remove last non-slash component
+    for (; s[idx] != '/'; idx--) {
+        if (!idx) {
+            sdsclear(s);
+            return sdscat(s, ".");
+        }
+    }
+    // remove trailing slash
+    for (; s[idx] == '/'; idx--) {
+        if (!idx) {
+            sdsclear(s);
+            return sdscat(s, "/");
+        }
+    }
+    sdsrange(s, 0, (ssize_t)idx);
+    return s;
+}
 
 /**
  * Splits a comma separated string and trims whitespaces from single values
@@ -32,17 +100,49 @@ sds *sds_split_comma_trim(sds s, int *count) {
  * @param p string to hash
  * @return the hash as a newly allocated sds string
  */
-sds sds_hash(const char *p) {
-    mg_sha1_ctx ctx;
-    mg_sha1_init(&ctx);
-    mg_sha1_update(&ctx, (unsigned char *)p, strlen(p));
-    unsigned char hash[20];
-    mg_sha1_final(hash, &ctx);
-    sds hex_hash = sdsempty();
-    for (unsigned i = 0; i < 20; i++) {
-        hex_hash = sdscatprintf(hex_hash, "%02x", hash[i]);
+sds sds_hash_sha1(const char *p) {
+    sds hex_hash = sdsnew(p);
+    return sds_hash_sha1_sds(hex_hash);
+}
+
+/**
+ * Hashes a sds string with sha1 inplace
+ * @param s string to hash
+ * @return pointer to s
+ */
+sds sds_hash_sha1_sds(sds s) {
+    unsigned char hash[SHA_DIGEST_LENGTH];
+    SHA1((unsigned char *)s, sdslen(s), hash);
+    sdsclear(s);
+    for (unsigned i = 0; i < SHA_DIGEST_LENGTH; i++) {
+        s = sdscatprintf(s, "%02x", hash[i]);
     }
-    return hex_hash;
+    return s;
+}
+
+/**
+ * Hashes a string with sha256
+ * @param p string to hash
+ * @return the hash as a newly allocated sds string
+ */
+sds sds_hash_sha256(const char *p) {
+    sds hex_hash = sdsnew(p);
+    return sds_hash_sha256_sds(hex_hash);
+}
+
+/**
+ * Hashes a sds string with sha256 inplace
+ * @param s string to hash
+ * @return pointer to s
+ */
+sds sds_hash_sha256_sds(sds s) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((unsigned char *)s, sdslen(s), hash);
+    sdsclear(s);
+    for (unsigned i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        s = sdscatprintf(s, "%02x", hash[i]);
+    }
+    return s;
 }
 
 /**

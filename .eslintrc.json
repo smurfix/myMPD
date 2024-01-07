@@ -23,10 +23,12 @@
     "rules": {
         "block-scoped-var": "error",
         "camelcase": "error",
+        "default-case": "error",
         "default-case-last": "error",
         "eqeqeq": ["error", "always", {
             "null": "ignore"
         }],
+        "semi": [2, "always"],
         "no-alert": "error",
         "no-caller": "error",
         "no-console": "off",

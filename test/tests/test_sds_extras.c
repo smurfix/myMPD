@@ -5,12 +5,65 @@
 */
 
 #include "compile_time.h"
-#include "test/utility.h"
+#include "utility.h"
 
 #include "dist/utest/utest.h"
 #include "src/lib/sds_extras.h"
 
-UTEST(utility, test_sds_split_comma_trim) {
+#include <libgen.h>
+
+const char *test_dirnames[] = {
+    "/dir1/file1",
+    "/dir1/file1/",
+    "/dir1/dir2/file1",
+    "/dir1/dir2//",
+    "file1",
+    "dir1/file1",
+    "dir1/file1/",
+    "/",
+    "",
+    NULL
+};
+
+UTEST(sds_extras, test_sds_dirname) {
+    const char **p = test_dirnames;
+    while (*p != NULL) {
+        printf("Testing: \"%s\"\n", *p);
+
+        sds dir = sdsnew(*p);
+        dir = sds_dirname(dir);
+
+        char *dir_check = strdup(*p);
+        char *dir_check_org = dir_check;
+        dir_check = dirname(dir_check);
+
+        ASSERT_STREQ(dir_check, dir);
+        sdsfree(dir);
+        free(dir_check_org);
+        p++;
+    }
+}
+
+UTEST(sds_extras, test_sds_basename) {
+    const char **p = test_dirnames;
+    while (*p != NULL) {
+        printf("Testing: \"%s\"\n", *p);
+
+        sds dir = sdsnew(*p);
+        dir = sds_basename(dir);
+
+        char *dir_check = strdup(*p);
+        char *dir_check_org = dir_check;
+        dir_check = basename(dir_check);
+
+        ASSERT_STREQ(dir_check, dir);
+        sdsfree(dir);
+        free(dir_check_org);
+        p++;
+    }
+}
+
+UTEST(sds_extras, test_sds_split_comma_trim) {
     sds names = sdsnew("cover, folder");
     int count;
     sds *array = sds_split_comma_trim(names, &count);
@@ -21,9 +74,29 @@ UTEST(utility, test_sds_split_comma_trim) {
     sdsfreesplitres(array, count);
 }
 
-UTEST(sds_extras, test_sds_hash) {
-    sds hash = sds_hash("abc");
+UTEST(sds_extras, test_sds_hash_sha1) {
+    sds hash = sds_hash_sha1("abc");
     ASSERT_STREQ("a9993e364706816aba3e25717850c26c9cd0d89d", hash);
+    sdsfree(hash);
+}
+
+UTEST(sds_extras, test_sds_hash_sha1_sds) {
+    sds hash = sdsnew("abc");
+    hash = sds_hash_sha1_sds(hash);
+    ASSERT_STREQ("a9993e364706816aba3e25717850c26c9cd0d89d", hash);
+    sdsfree(hash);
+}
+
+UTEST(sds_extras, test_sds_hash_sha256) {
+    sds hash = sds_hash_sha256("abc");
+    ASSERT_STREQ("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", hash);
+    sdsfree(hash);
+}
+
+UTEST(sds_extras, test_sds_hash_sha256_sds) {
+    sds hash = sdsnew("abc");
+    hash = sds_hash_sha256_sds(hash);
+    ASSERT_STREQ("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", hash);
     sdsfree(hash);
 }
 
@@ -62,7 +135,7 @@ UTEST(sds_extras, test_sds_catchar) {
     sdsfree(s);
 }
 
-UTEST(sds_etxras, test_sds_catjsonchar) {
+UTEST(sds_extras, test_sds_catjsonchar) {
     sds s = sdsempty();
     s = sds_catjsonchar(s, '\n');
     ASSERT_STREQ("\\n", s);

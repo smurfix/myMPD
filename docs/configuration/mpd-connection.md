@@ -6,11 +6,11 @@ title: MPD connection
 
 myMPD uses libmpdclient to connect to MPD. The fastet and easiest setup is to run myMPD on the same host as MPD, but myMPD can also connect to a remote MPD server.
 
-The mpd connection settings can be configured in the web-ui (Main menu -> Settings -> MPD connection).
+The mpd connection settings can be configured in the web-ui (Main menu -> MPD connection).
 
 | SETTING | DEFAULT |
 | ------- | ------- |
-| MPD host | `localhost` |
+| MPD host | `/run/mpd/socket` |
 | MPD port | 6600 |
 | MPD timeout | 30 |
 {: .table .table-sm}

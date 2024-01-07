@@ -24,8 +24,8 @@ static const char *invalid_name_chars = "\a\b\f\n\r\t\v";
 static const char *invalid_filename_chars = "\a\b\f\n\r\t\v/\\";
 static const char *invalid_filepath_chars = "\a\b\f\n\r\t\v";
 
-static const char *mympd_cols[]={"Pos", "Duration", "Type", "Priority", "LastPlayed", "Filename", "Filetype", "AudioFormat", "LastModified",
-    "Lyrics", "stickerPlayCount", "stickerSkipCount", "stickerLastPlayed", "stickerLastSkipped", "stickerLike", "stickerElapsed",
+static const char *mympd_cols[]={"Pos", "Duration", "Type", "Priority", "LastPlayed", "Filename", "Filetype", "AudioFormat", "Last-Modified",
+    "Lyrics", "playCount", "skipCount", "lastPlayed", "lastSkipped", "like", "elapsed",
     "Country", "Description", "Genre", "Homepage", "Language", "Name", "StreamUri", "Codec", "Bitrate", //Columns for webradiodb
     "clickcount", "country", "homepage", "language", "lastchangetime", "lastcheckok", "tags", "url_resolved", "votes", //Columns for radiobrowser
     "Discs", "SongCount", //Columns for albums
@@ -68,7 +68,7 @@ bool vcb_isalnum(sds data) {
             data[i] != '_' &&
             data[i] != '-')
         {
-            MYMPD_LOG_WARN("Found none alphanumeric character in string");
+            MYMPD_LOG_WARN(NULL, "Found none alphanumeric character in string");
             return false;
         }
     }
@@ -83,7 +83,7 @@ bool vcb_isalnum(sds data) {
 bool vcb_isdigit(sds data) {
     for (size_t i = 0; i < sdslen(data); i++) {
         if (isdigit(data[i]) == 0) {
-            MYMPD_LOG_WARN("Found none numeric character in string");
+            MYMPD_LOG_WARN(NULL, "Found none numeric character in string");
             return false;
         }
     }
@@ -98,7 +98,7 @@ bool vcb_isdigit(sds data) {
 bool vcb_isprint(sds data) {
     for (size_t i = 0; i < sdslen(data); i++) {
         if (isprint(data[i]) == 0) {
-            MYMPD_LOG_WARN("Found none printable character in string");
+            MYMPD_LOG_WARN(NULL, "Found none printable character in string");
             return false;
         }
     }
@@ -116,7 +116,7 @@ bool vcb_ishexcolor(sds data) {
     }
     for (size_t i = 1; i < sdslen(data); i++) {
         if (isxdigit(data[i]) == 0) {
-            MYMPD_LOG_WARN("Found none hex character in string");
+            MYMPD_LOG_WARN(NULL, "Found none hex character in string");
             return false;
         }
     }
@@ -132,7 +132,7 @@ bool vcb_ishexcolor(sds data) {
 bool vcb_isname(sds data) {
     bool rc = check_for_invalid_chars(data, invalid_name_chars);
     if (rc == false) {
-        MYMPD_LOG_WARN("Found illegal name character");
+        MYMPD_LOG_WARN(NULL, "Found illegal name character");
     }
     return rc;
 }
@@ -146,7 +146,7 @@ bool vcb_isname(sds data) {
 bool vcb_istext(sds data) {
     bool rc = check_for_invalid_chars(data, invalid_json_chars);
     if (rc == false) {
-        MYMPD_LOG_WARN("Found illegal text character");
+        MYMPD_LOG_WARN(NULL, "Found illegal text character");
     }
     return rc;
 }
@@ -165,6 +165,22 @@ bool vcb_isuri(sds data) {
         return true;
     }
     return vcb_isfilepath(data);
+}
+
+/**
+ * Checks if string is a valid stream uri
+ * @param data sds string to check
+ * @return true on success else false
+ */
+bool vcb_isstreamuri(sds data) {
+    if (sdslen(data) == 0) {
+        return false;
+    }
+    if (strstr(data, "://") != NULL) {
+        //uri notation
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -188,13 +204,13 @@ bool vcb_isfilename_silent(sds data) {
 bool vcb_isfilename(sds data) {
     bool rc = vcb_isfilename_silent(data);
     if (rc == false) {
-        MYMPD_LOG_WARN("Found illegal filename character");
+        MYMPD_LOG_WARN(NULL, "Found illegal filename character");
     }
     return rc;
 }
 
 /**
- * Checks if string is a valid filepath
+ * Checks if string is a valid filename with path or path only
  * @param data sds string to check
  * @return true on success else false
  */
@@ -203,7 +219,7 @@ bool vcb_isfilepath(sds data) {
         return false;
     }
     if (strstr(data, "://") != NULL) {
-        MYMPD_LOG_WARN("Illegal file path, found URI notation");
+        MYMPD_LOG_WARN(NULL, "Illegal file path, found URI notation");
         return false;
     }
     if (strncmp(data, "../", 3) == 0 ||
@@ -212,14 +228,29 @@ bool vcb_isfilepath(sds data) {
         strstr(data, "/./") != NULL)
     {
         //prevent dir traversal
-        MYMPD_LOG_WARN("Found dir traversal in path \"%s\"", data);
+        MYMPD_LOG_WARN(NULL, "Found dir traversal in path \"%s\"", data);
         return false;
     }
     bool rc = check_for_invalid_chars(data, invalid_filepath_chars);
     if (rc == false) {
-        MYMPD_LOG_WARN("Found illegal character in file path");
+        MYMPD_LOG_WARN(NULL, "Found illegal character in file path");
     }
     return rc;
+}
+
+/**
+ * Checks if string is a valid path + filename
+ * @param data sds string to check
+ * @return true on success else false
+ */
+bool vcb_ispathfilename(sds data) {
+    bool rc = vcb_isfilepath(data);
+    if (rc == true) {
+        return data[sdslen(data) - 1] == '/'
+            ? false
+            : true;
+    }
+    return false;
 }
 
 /**
@@ -233,7 +264,7 @@ bool vcb_iscolumn(sds data) {
     {
         return true;
     }
-    MYMPD_LOG_WARN("Unknown column: %s", data);
+    MYMPD_LOG_WARN(NULL, "Unknown column: %s", data);
     return false;
 }
 
@@ -249,7 +280,7 @@ bool vcb_istaglist(sds data) {
         sdstrim(tokens[i], " ");
         enum mpd_tag_type tag = mpd_tag_name_iparse(tokens[i]);
         if (tag == MPD_TAG_UNKNOWN) {
-            MYMPD_LOG_WARN("Unknown tag %s", tokens[i]);
+            MYMPD_LOG_WARN(NULL, "Unknown tag %s", tokens[i]);
             sdsfreesplitres(tokens, tokens_count);
             return false;
         }
@@ -266,7 +297,7 @@ bool vcb_istaglist(sds data) {
 bool vcb_ismpdtag(sds data) {
     enum mpd_tag_type tag = mpd_tag_name_iparse(data);
     if (tag == MPD_TAG_UNKNOWN) {
-        MYMPD_LOG_WARN("Unknown tag %s", data);
+        MYMPD_LOG_WARN(NULL, "Unknown tag %s", data);
         return false;
     }
     return true;
@@ -296,14 +327,40 @@ bool vcb_ismpdsort(sds data) {
     if (tag == MPD_TAG_UNKNOWN &&
         strcmp(data, "filename") != 0 &&
         strcmp(data, "shuffle") != 0 &&
-        strcmp(data, "LastModified") != 0 &&
+        strcmp(data, "Last-Modified") != 0 &&
         strcmp(data, "Date") != 0 &&
         strcmp(data, "Priority") != 0)
     {
-        MYMPD_LOG_WARN("Unknown tag \"%s\"", data);
+        MYMPD_LOG_WARN(NULL, "Unknown tag \"%s\"", data);
         return false;
     }
     return true;
+}
+
+/**
+ * Checks if string is a valid mpd search expression
+ * @param data sds string to check
+ * @return true on success else false
+ */
+bool vcb_issearchexpression(sds data) {
+    size_t len = sdslen(data);
+    if (len == 0) {
+        return true;
+    }
+    //check if it is valid utf8
+    if (utf8valid(data) != 0) {
+        MYMPD_LOG_ERROR(NULL, "String is not valid utf8");
+        return false;
+    }
+    //only some basic checks
+    if (len < 2 ||
+        data[0] != '(' ||
+        data[len - 1] != ')')
+    {
+        MYMPD_LOG_ERROR(NULL, "String is not a valid search expression");
+        return false;
+    }
+    return check_for_invalid_chars(data, invalid_name_chars);
 }
 
 /**
@@ -327,7 +384,7 @@ static bool check_for_invalid_chars(sds data, const char *invalid_chars) {
         if (i + 1 < len && data[i] == '\\' &&
             (data[i + 1] == 'u' || data[i + 1] == 'U' || data[i + 1] == 'x'))
         {
-            MYMPD_LOG_ERROR("Unicode and hex escapes are forbidden");
+            MYMPD_LOG_ERROR(NULL, "Unicode and hex escapes are forbidden");
             return false;
         }
     }
@@ -345,7 +402,7 @@ static bool validate_json(sds data, char start, char end) {
     size_t len = sdslen(data);
     //check if it is valid utf8
     if (utf8valid(data) != 0) {
-        MYMPD_LOG_ERROR("String is not valid utf8");
+        MYMPD_LOG_ERROR(NULL, "String is not valid utf8");
         return false;
     }
     //only some basic checks
@@ -353,7 +410,7 @@ static bool validate_json(sds data, char start, char end) {
         data[0] != start ||
         data[len - 1] != end)
     {
-        MYMPD_LOG_ERROR("String is not valid json");
+        MYMPD_LOG_ERROR(NULL, "String is not valid json");
         return false;
     }
     return check_for_invalid_chars(data, invalid_json_chars);

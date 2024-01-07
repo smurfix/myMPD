@@ -42,7 +42,6 @@ CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-id-dependent-backward-branch"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-unroll-loops"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-struct-pack-align,-clang-analyzer-optin.performance.Padding"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-easily-swappable-parameters"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-signal-handler,-cert-sig30-c"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-assignment-in-if-condition"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-clang-diagnostic-invalid-command-line-argument"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-concurrency-mt-unsafe"
@@ -53,6 +52,7 @@ CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-identifier-length"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-function-cognitive-complexity,-google-readability-function-size,-readability-function-size"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-magic-numbers"
 CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-non-const-parameter"
+CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-google-readability-todo"
 
 #save script path and change to it
 STARTPATH=$(dirname "$(realpath "$0")")
@@ -112,7 +112,8 @@ setversion() {
 
   for F in contrib/packaging/alpine/APKBUILD contrib/packaging/arch/PKGBUILD \
       contrib/packaging/rpm/mympd.spec contrib/packaging/debian/changelog \
-      contrib/packaging/openwrt/Makefile contrib/man/mympd.1 contrib/man/mympd-script.1
+      contrib/packaging/openwrt/Makefile contrib/man/mympd.1 contrib/man/mympd-script.1 \
+      contrib/packaging/freebsd/multimedia/mympd/Makefile
   do
     echo "$F"
     sed -e "s/__VERSION__/${VERSION}/g" -e "s/__DATE_F1__/$DATE_F1/g" -e "s/__DATE_F2__/$DATE_F2/g" \
@@ -126,8 +127,11 @@ setversion() {
       "contrib/packaging/gentoo/media-sound/mympd/mympd-${VERSION}.ebuild"
   fi
 
-  echo "const myMPDversion = '${VERSION}';" > htdocs/js/version.js
   printf "%s" "${VERSION}" > docs/_includes/version
+
+  BUILD=$(git log --format="%H" -n 1)
+  echo "const myMPDversion = '${VERSION}';" > htdocs/js/version.js
+  echo "const myMPDbuild = '${BUILD}';" >> htdocs/js/version.js
 }
 
 minify() {
@@ -199,8 +203,12 @@ createassets() {
   install -d "$MYMPD_BUILDDIR/htdocs/assets/i18n"
 
   #Create translation phrases file
-  createi18n "$MYMPD_BUILDDIR" 2>/dev/null
+  check_phrases
+  createi18n 2>/dev/null
   minify js "$MYMPD_BUILDDIR/htdocs/js/i18n.js" "$MYMPD_BUILDDIR/htdocs/js/i18n.min.js"
+
+  #Create defines
+  create_js_defines
 
   echo "Minifying javascript"
   JSSRCFILES=""
@@ -298,9 +306,13 @@ createassets() {
 }
 
 buildrelease() {
-  echo "Compiling myMPD v${VERSION}" 
-  cmake -B release -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_BUILD_TYPE=Release .
-  make -C release
+  BUILD_TYPE=$1
+  echo "Compiling myMPD v${VERSION}"
+  cmake -B release \
+    -DCMAKE_INSTALL_PREFIX:PATH=/usr \
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+    .
+  make -j4 -C release
 }
 
 addmympduser() {
@@ -361,8 +373,13 @@ copyassets() {
   cp -v "$STARTPATH/dist/long-press-event/long-press-event.js" "$STARTPATH/htdocs/js/long-press-event.js"
   cp -v "$STARTPATH/dist/material-icons/MaterialIcons-Regular.woff2" "$STARTPATH/htdocs/assets/MaterialIcons-Regular.woff2"
   cp -v "$STARTPATH/dist/material-icons/ligatures.json" "$STARTPATH/htdocs/assets/ligatures.json"
+
+  #Create defines
+  create_js_defines
+
   #translation files
-  createi18n "$MYMPD_BUILDDIR"
+  check_phrases
+  createi18n
   cp -v "$MYMPD_BUILDDIR/htdocs/js/i18n.js" "$STARTPATH/htdocs/js/i18n.js"
   rm -fr "$STARTPATH/htdocs/assets/i18n/"
   install -d "$STARTPATH/htdocs/assets/i18n"
@@ -375,27 +392,41 @@ copyassets() {
 
 builddebug() {
   echo "Compiling myMPD v${VERSION}"
-  if [ "$ACTION" = "memcheck" ]
-  then
-    MYMPD_ENABLE_LIBASAN=ON
-  else
-    MYMPD_ENABLE_LIBASAN=OFF
-  fi
-  cmake -B debug -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_BUILD_TYPE=Debug \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DMYMPD_ENABLE_LIBASAN="$MYMPD_ENABLE_LIBASAN" \
+  CMAKE_SANITIZER_OPTIONS=""
+  case "$ACTION" in
+    asan)  CMAKE_SANITIZER_OPTIONS="-DMYMPD_ENABLE_ASAN=ON" ;;
+    tsan)  CMAKE_SANITIZER_OPTIONS="-DMYMPD_ENABLE_TSAN=ON" ;;
+    ubsan) CMAKE_SANITIZER_OPTIONS="-DMYMPD_ENABLE_UBSAN=ON" ;;
+  esac
+
+  cmake -B debug \
+    -DCMAKE_INSTALL_PREFIX:PATH=/usr \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    $CMAKE_SANITIZER_OPTIONS \
     .
-  make -C debug VERBOSE=1
+  make -j4 -C debug VERBOSE=1
   echo "Linking compilation database"
   sed -e 's/\\t/ /g' -e 's/-Wformat-truncation//g' -e 's/-Wformat-overflow=2//g' -e 's/-fsanitize=bounds-strict//g' \
-    -e 's/-static-libasan//g' -e 's/-Wno-stringop-overread//g' -e 's/-fstack-clash-protection//g' \
+    -e 's/-Wno-stringop-overread//g' -e 's/-fstack-clash-protection//g' \
     debug/compile_commands.json > src/compile_commands.json
 }
 
 buildtest() {
   echo "Compiling and running unit tests"
-  cmake -B test/build -S test -DCMAKE_BUILD_TYPE=Debug
-  make -C test/build VERBOSE=1
-  ./test/build/test
+  cmake -B debug \
+    -DCMAKE_INSTALL_PREFIX:PATH=/usr \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DMYMPD_ENABLE_ASAN=ON \
+    -DMYMPD_BUILD_TESTING=ON \
+    .
+  make -j4 -C debug
+  make -j4 -C debug test
+  echo "Linking compilation database"
+  sed -e 's/\\t/ /g' -e 's/-Wformat-truncation//g' -e 's/-Wformat-overflow=2//g' -e 's/-fsanitize=bounds-strict//g' \
+    -e 's/-Wno-stringop-overread//g' -e 's/-fstack-clash-protection//g' \
+    debug/compile_commands.json > test/compile_commands.json
 }
 
 cleanup() {
@@ -425,6 +456,13 @@ cleanup() {
 
   #compilation database
   rm -f src/compile_commands.json
+
+  #caches
+  rm -fr src/.cache
+  rm -fr .cache
+
+  #node modules
+  rm -fr dist/bootstrap/node_modules
 
   #clang tidy
   rm -f clang-tidy.out
@@ -514,6 +552,7 @@ check_file() {
 }
 
 check() {
+  check_phrases
   if ! check_docs
   then
     return 1
@@ -609,6 +648,7 @@ prepare() {
     [ "$F" = "$STARTPATH/osc" ] && continue
     [ "$F" = "$STARTPATH/builder" ] && continue
     cp -a "$F" .
+    rm -fr src/.cache
   done
 }
 
@@ -868,8 +908,7 @@ updatelibmympdclient() {
   rsync -av "$TMPDIR/libmympdclient/output/version.h" include/mpd/version.h
   rsync -av "$TMPDIR/libmympdclient/output/config.h" include/config.h
 
-  rsync -av "$TMPDIR/libmympdclient/COPYING" COPYING
-  rsync -av "$TMPDIR/libmympdclient/AUTHORS" AUTHORS
+  rsync -av "$TMPDIR/libmympdclient/LICENSE.md" LICENSE.md
 
   rm -rf "$TMPDIR"
 }
@@ -914,6 +953,7 @@ updatebootstrap() {
   then
     cp -v compiled/custom.css "$STARTPATH/htdocs/css/bootstrap.css"
   fi
+  rm -fr  dist/bootstrap/node_modules
 }
 
 #Also deletes stale installations in other locations.
@@ -997,10 +1037,50 @@ purge() {
   fi
 }
 
+check_phrases() {
+  check_cmd jq
+  echo "Validating translation phrases"
+  for F in "src/i18n/json/"*.json
+  do
+    if ! jq "." "$F" > /dev/null
+    then
+      echo "Invalid json: $F"
+      exit 1
+    fi
+  done
+}
+
+# Create an JavaScript object from compile_time.h.in
+# This is used to define global defaults.
+create_js_defines() {
+  printf "const defaults = " > "$STARTPATH/htdocs/js/defines.js"
+  {
+    I=0
+    printf "{"
+    perl -npe 's/\\\n//g; s/^\s+//g' < "$STARTPATH/src/compile_time.h.in" \
+      | perl -ne 's/MPD_TAG_ARTIST/"Artist"/g; s/""//g; 
+      if (not /\$/ and /^#define ((MYMPD|PARTITION)_\w+)\s+(\S+)/) {
+        print "$1|$3\n";
+      }
+    ' | while IFS="|" read -r KEY VALUE
+      do
+        [ "$I" -gt 0 ] && echo ","
+        if JSON_VALUE=$(printf '{"value": %s}' "$VALUE" | jq -r '.value | fromjson' 2>/dev/null)
+        then
+          printf '"%s":%s' "$KEY" "$JSON_VALUE"
+        else
+          printf '"%s":%s' "$KEY" "$VALUE"
+        fi
+        I=$((I+1))
+      done
+      printf "}"
+  } | jq -r "." >> "$STARTPATH/htdocs/js/defines.js"
+  echo ";" >> "$STARTPATH/htdocs/js/defines.js"
+}
+
 createi18n() {
-  MYMPD_BUILD_DIR="$1"
   check_cmd perl
-  install -d "$MYMPD_BUILD_DIR/htdocs/js"
+  install -d "$MYMPD_BUILDDIR/htdocs/js"
   echo "Creating i18n json"
   if ! perl ./src/i18n/translate.pl
   then
@@ -1008,9 +1088,11 @@ createi18n() {
     exit 1
   fi
   #json to js
-  printf "const i18n = " > "$MYMPD_BUILD_DIR/htdocs/js/i18n.js"
-  head -c -1 "src/i18n/json/i18n.json" >> "$MYMPD_BUILD_DIR/htdocs/js/i18n.js"
-  echo ";" >> "$MYMPD_BUILD_DIR/htdocs/js/i18n.js"
+  printf "const i18n = " > "$MYMPD_BUILDDIR/htdocs/js/i18n.js"
+  BYTES=$(wc -c < src/i18n/json/i18n.json)
+  BYTES=$((BYTES-1))
+  head -c "$BYTES" "src/i18n/json/i18n.json" >> "$MYMPD_BUILDDIR/htdocs/js/i18n.js"
+  echo ";" >> "$MYMPD_BUILDDIR/htdocs/js/i18n.js"
   #Update serviceworker
   TO_CACHE=""
   for CODE in $(jq -r "select(.missingPhrases < 100) | keys[]" "$STARTPATH/src/i18n/json/i18n.json" | grep -v "default")
@@ -1276,16 +1358,123 @@ run_doxygen() {
 
 run_jsdoc() {
   if ! check_cmd jsdoc
-  then 
+  then
     return 1
   fi
   echo "Running jsdoc"
   jsdoc htdocs/js/ -c jsdoc.json -d docs/jsdoc/
 }
 
+create_doc() {
+  DOC_DEST=$1
+  if ! check_cmd jekyll
+  then
+    echo "Jekyll not installed, can not create documentation"
+    return 1
+  fi
+  if ! run_doxygen
+  then
+    echo "Skipped generation of c api documentation"
+  fi
+  if ! run_jsdoc
+  then
+    echo "Skipped generation of js api documentation"
+  fi
+  install -d "$DOC_DEST" || return 1
+  jekyll build -s "$STARTPATH/docs" -d "$DOC_DEST"
+}
+
+translation_import() {
+  #shellcheck disable=SC1091
+  . "$STARTPATH/.secrets"
+  if [ -z "${POEDITOR_TOKEN+x}" ]
+  then
+    echo_error "POEDITOR_TOKEN variable not set."
+    exit 1
+  fi
+  LANG_SHORT=$1
+  LANG_CODE=$2
+  if RESPONSE=$(curl -s -f --show-error -X POST https://api.poeditor.com/v2/projects/export \
+    -d api_token="$POEDITOR_TOKEN" \
+    -d id="550213" \
+    -d language="$LANG_SHORT" \
+    -d type="key_value_json" \
+    -d order="terms")
+  then
+    URL=$(echo "$RESPONSE" | jq -r ".result.url")
+    if [ "$URL" != "null" ]
+    then
+      if curl -s -f --show-error "$URL" -o "src/i18n/json/$LANG_CODE.tmp"
+      then
+        mv "src/i18n/json/$LANG_CODE.tmp" "src/i18n/json/$LANG_CODE.json"
+        return 0
+      fi
+    else
+      echo_error "Download failed: $RESPONSE"
+      return 1
+    fi
+  fi
+  return 1
+}
+
+translation_import_all() {
+  #shellcheck disable=SC1091
+  . "$STARTPATH/.secrets"
+  if [ -z "${POEDITOR_TOKEN+x}" ]
+  then
+    echo_error "POEDITOR_TOKEN variable not set."
+    exit 1
+  fi
+  while IFS=":" read -r LANG_SHORT LANG_CODE LANG_DESC
+  do
+    [ "$LANG_CODE" = "en-US" ] && continue
+    echo "$LANG_SHORT: $LANG_DESC"
+    translation_import "$LANG_SHORT" "$LANG_CODE"
+  done < src/i18n/i18n.txt
+}
+
+terms_export() {
+  #shellcheck disable=SC1091
+  . "$STARTPATH/.secrets"
+  if [ -z "${POEDITOR_TOKEN+x}" ]
+  then
+    echo_error "POEDITOR_TOKEN variable not set."
+    exit 1
+  fi
+  curl -s -f --show-error -X POST https://api.poeditor.com/v2/projects/upload \
+    -F api_token="$POEDITOR_TOKEN" \
+    -F id="550213" \
+    -F updating="terms" \
+    -F sync_terms="1" \
+    -F file=@"src/i18n/json/phrases.json"
+  echo ""
+}
+
+translation_export() {
+  #shellcheck disable=SC1091
+  . "$STARTPATH/.secrets"
+  if [ -z "${POEDITOR_TOKEN+x}" ]
+  then
+    echo_error "POEDITOR_TOKEN variable not set."
+    exit 1
+  fi
+  LANG_SHORT=$1
+  UPLOAD_FILE=$2
+  curl -s -f --show-error -X POST https://api.poeditor.com/v2/projects/upload \
+    -F api_token="$POEDITOR_TOKEN" \
+    -F id="550213" \
+    -F updating="translations" \
+    -F language="$LANG_SHORT" \
+    -F file=@"$UPLOAD_FILE"
+  echo ""
+}
+
 case "$ACTION" in
-  release)
-    buildrelease
+  release|MinSizeRel)
+    buildrelease "Release"
+  ;;
+  RelWithDebInfo)
+    buildrelease "RelWithDebInfo"
   ;;
   install)
     installrelease
@@ -1294,10 +1483,7 @@ case "$ACTION" in
     buildrelease
     installrelease
   ;;
-  debug)
-    builddebug
-  ;;
-  memcheck)
+  debug|asan|tsan|ubsan)
     builddebug
   ;;
   test)
@@ -1373,6 +1559,30 @@ case "$ACTION" in
     uninstall
     purge
   ;;
+  terms_export)
+    terms_export
+    ;;
+  trans_export)
+    if [ -z "${2+x}" ] || [ -z "${3+x}" ]
+    then
+      echo "Usage: $0 $1 <code short> <file>"
+      echo "  e.g. $0 $1 de src/i18n/json/de-DE.json"
+      exit 1
+    fi
+    translation_export  "$2" "$3"
+    ;;
+  trans_import)
+    if [ -z "${2+x}" ] || [ -z "${3+x}" ]
+    then
+      echo "Usage: $0 $1 <code short> <lang code full>"
+      echo "  e.g. $0 $1 de de-DE"
+      exit 1
+    fi
+    translation_import "$2" "$3"
+  ;;
+  trans_import_all)
+    translation_import_all
+  ;;
   translate)
     src/i18n/translate.pl verbose
   ;;
@@ -1444,21 +1654,34 @@ case "$ACTION" in
     fi
     cp -v htdocs/js/apidoc.js docs/assets/apidoc.js
   ;;
+  doc)
+    if [ -z "${2+x}" ]
+    then
+      echo "Usage: $0 $1 <destination folder>"
+      exit 1
+    fi
+    create_doc "$2"
+    ;;
+  cloc)
+    cloc --exclude-dir=dist .
+  ;;
   *)
     echo "Usage: $0 <option>"
     echo "Version: ${VERSION}"
     echo ""
     echo "Build options:"
-    echo "  release:          build release files in directory release"
+    echo "  release:          build release files in directory release (stripped)"
+    echo "  RelWithDebInfo:   build release files in directory release (with debug info)"
     echo "  install:          installs release files from directory release"
     echo "                    following environment variables are respected"
     echo "                      - DESTDIR=\"\""
     echo "  releaseinstall:   calls release and install afterwards"
     echo "  debug:            builds debug files in directory debug,"
     echo "                    serves assets from htdocs"
-    echo "  memcheck:         builds debug files in directory debug"
-    echo "                    linked with libasan3 and serves assets from htdocs"
-    echo "  test:             builds and runs the unit tests in test/build"
+    echo "  asan|tsan|ubsan:  builds debug files in directory debug"
+    echo "                    linked with the sanitizer and serves assets from htdocs"
+    echo "  test:             builds and runs the unit tests in directory debug"
+    echo "                    linked with libasan3"
     echo "  installdeps:      installs build and runtime dependencies"
     echo "  createassets:     creates the minfied and compressed dist files"
     echo "                    following environment variables are respected"
@@ -1466,11 +1689,15 @@ case "$ACTION" in
     echo "  copyassets:       copies the assets from dist to the source tree"
     echo "                    for debug builds without embedded assets"
     echo "                    following environment variables are respected"
-    echo "                      - MYMPD_BUILDDIR=\"release\""
+    echo "                      - MYMPD_BUILDDIR=\"debug\""
     echo ""
     echo "Translation options:"
     echo "  translate:        builds the translation file for debug builds"
     echo "  transstatus:      shows the translation status"
+    echo "  trans_import:     Import a translation from poeditor.com"
+    echo "  trans_import_all: Import all translations from poeditor.com"
+    echo "  trans_export:     Exports a translation to poeditor.com"
+    echo "  terms_export:     Exports the terms to poeditor.com"
     echo ""
     echo "Check options:"
     echo "  check:            runs cppcheck, flawfinder and clang-tidy on source files"
@@ -1505,7 +1732,7 @@ case "$ACTION" in
     echo "                    following environment variables are respected"
     echo "                      - SIGN=\"FALSE\""
     echo "                      - GPGKEYID=\"\""
-    echo "  pkgdocker:        creates the docker image (debian based)"
+    echo "  pkgdocker:        creates the docker image (Alpine Linux based)"
     echo "                    following environment variables are respected"
     echo "                      - DOCKERFILE=\"Dockerfile.alpine\""
     echo "  pkgbuildx:        creates a multiarch docker image with buildx"
@@ -1539,6 +1766,8 @@ case "$ACTION" in
     echo "  addmympduser:     adds mympd group and user"
     echo "  luascript_index:  creates the json index of lua scripts"
     echo "  api_doc:          generates the api documentation"
+    echo "  doc:              generates the html documentation"
+    echo "  cloc:             runs cloc (count lines of code)"
     echo ""
     echo "Source update options:"
     echo "  bootstrap:        updates bootstrap"

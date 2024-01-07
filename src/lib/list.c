@@ -7,6 +7,7 @@
 #include "compile_time.h"
 #include "src/lib/list.h"
 
+#include "dist/utf8/utf8.h"
 #include "src/lib/filehandler.h"
 #include "src/lib/log.h"
 #include "src/lib/mem.h"
@@ -379,8 +380,31 @@ bool list_insert(struct t_list *l, const char *key, long long value_i,
 bool list_replace(struct t_list *l, long idx, const char *key, long long value_i,
         const char *value_p, void *user_data)
 {
-    return list_replace_user_data(l, idx, key, value_i, value_p,
-        user_data, list_free_cb_ignore_user_data);
+    size_t value_len = value_p == NULL
+        ? 0
+        : strlen(value_p);
+    return list_replace_len_user_data(l, idx, key, strlen(key), value_i,
+        value_p, value_len, user_data, list_free_cb_ignore_user_data);
+}
+
+/**
+ * Replaces a list nodes values at pos.
+ * Ignores the old user_data pointer.
+ * @param l list
+ * @param idx index of node to change
+ * @param key new key value
+ * @param key_len new key value length
+ * @param value_i new long long value
+ * @param value_p new sds value
+ * @param value_len new sds value len
+ * @param user_data new user_data pointer
+ * @return true on success, else false
+ */
+bool list_replace_len(struct t_list *l, long idx, const char *key, size_t key_len, long long value_i,
+        const char *value_p, size_t value_len, void *user_data)
+{
+    return list_replace_len_user_data(l, idx, key, key_len, value_i,
+        value_p, value_len, user_data, list_free_cb_ignore_user_data);
 }
 
 /**
@@ -398,15 +422,36 @@ bool list_replace(struct t_list *l, long idx, const char *key, long long value_i
 bool list_replace_user_data(struct t_list *l, long idx, const char *key, long long value_i,
         const char *value_p, void *user_data, user_data_callback free_cb)
 {
+    return list_replace_len_user_data(l, idx, key, strlen(key), value_i,
+        value_p, strlen(value_p), user_data, free_cb);
+}
+
+/**
+ * Replaces a list nodes values at pos.
+ * Frees the old user_data pointer.
+ * @param l list
+ * @param idx index of node to change
+ * @param key new key value
+ * @param key_len new key value length
+ * @param value_i new long long value
+ * @param value_p new sds value
+ * @param value_len new sds value len
+ * @param user_data new user_data pointer
+ * @param free_cb callback function to free old user_data pointer
+ * @return true on success, else false
+ */
+bool list_replace_len_user_data(struct t_list *l, long idx, const char *key, size_t key_len, long long value_i,
+        const char *value_p, size_t value_len, void *user_data, user_data_callback free_cb)
+{
     if (idx >= l->length) {
         return false;
     }
     struct t_list_node *current = list_node_at(l, idx);
 
-    current->key = sds_replace(current->key, key);
+    current->key = sds_replacelen(current->key, key, key_len);
     current->value_i = value_i;
     if (value_p != NULL) {
-        current->value_p = sds_replace(current->value_p, value_p);
+        current->value_p = sds_replacelen(current->value_p, value_p, value_len);
     }
     else if (current->value_p != NULL) {
         FREE_SDS(current->value_p);
@@ -553,7 +598,7 @@ bool list_write_to_disk(sds filepath, struct t_list *l, list_node_to_line_callba
     while (current != NULL) {
         buffer = node_to_line_cb(buffer, current);
         if (fputs(buffer, fp) == EOF) {
-            MYMPD_LOG_ERROR("Could not write data to file");
+            MYMPD_LOG_ERROR(NULL, "Could not write data to file");
             write_rc = false;
             break;
         }
@@ -564,4 +609,116 @@ bool list_write_to_disk(sds filepath, struct t_list *l, list_node_to_line_callba
     bool rc = rename_tmp_file(fp, tmp_file, write_rc);
     FREE_SDS(tmp_file);
     return rc;
+}
+
+/**
+ * Internal compare function to sort by value_i
+ * @param current current list node
+ * @param next next list node
+ * @param direction sort direction
+ * @return true if current is greater than next
+ */
+static bool list_sort_cmp_value_i(struct t_list_node *current, struct t_list_node *next, enum list_sort_direction direction) {
+    if ((direction == LIST_SORT_ASC && current->value_i > next->value_i) ||
+        (direction == LIST_SORT_DESC && current->value_i < next->value_i))
+    {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Internal compare function to sort by value_p
+ * @param current current list node
+ * @param next next list node
+ * @param direction sort direction
+ * @return true if current is greater than next
+ */
+static bool list_sort_cmp_value_p(struct t_list_node *current, struct t_list_node *next, enum list_sort_direction direction) {
+    int result = utf8casecmp(current->value_p, next->value_p);
+    if ((direction == LIST_SORT_ASC && result > 0) ||
+        (direction == LIST_SORT_DESC && result < 0))
+    {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Internal compare function to sort by key
+ * @param current current list node
+ * @param next next list node
+ * @param direction sort direction
+ * @return true if current is greater than next
+ */
+static bool list_sort_cmp_key(struct t_list_node *current, struct t_list_node *next, enum list_sort_direction direction) {
+    int result = utf8casecmp(current->key, next->key);
+    if ((direction == LIST_SORT_ASC && result > 0) ||
+        (direction == LIST_SORT_DESC && result < 0))
+    {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * The list sorting function.
+ * Note that the sort is not very efficient, use it only for short lists.
+ * @param l pointer to list to sort
+ * @param direction sort direction
+ * @param sort_cb compare function
+ * @return true on success, else false
+ */
+bool list_sort_by_callback(struct t_list *l, enum list_sort_direction direction, list_sort_callback sort_cb) {
+    int swapped;
+    struct t_list_node *ptr1;
+    struct t_list_node *lptr = NULL;
+
+    if (l->head == NULL) {
+        return false;
+    }
+
+    do {
+        swapped = 0;
+        ptr1 = l->head;
+        while (ptr1->next != lptr) {
+            if (sort_cb(ptr1, ptr1->next, direction) == true) {
+                list_swap_item(ptr1, ptr1->next);
+                swapped = 1;
+            }
+            ptr1 = ptr1->next;
+        }
+        lptr = ptr1;
+    } while (swapped);
+    return true;
+}
+
+/**
+ * Sorts the list by value_i
+ * @param l pointer to list to sort
+ * @param direction sort direction
+ * @return true on success, else false
+ */
+bool list_sort_by_value_i(struct t_list *l, enum list_sort_direction direction) {
+    return list_sort_by_callback(l, direction, list_sort_cmp_value_i);
+}
+
+/**
+ * Sorts the list by value_p
+ * @param l pointer to list to sort
+ * @param direction sort direction
+ * @return true on success, else false
+ */
+bool list_sort_by_value_p(struct t_list *l, enum list_sort_direction direction) {
+    return list_sort_by_callback(l, direction, list_sort_cmp_value_p);
+}
+
+/**
+ * Sorts the list by key
+ * @param l pointer to list to sort
+ * @param direction sort direction
+ * @return true on success, else false
+ */
+bool list_sort_by_key(struct t_list *l, enum list_sort_direction direction) {
+    return list_sort_by_callback(l, direction, list_sort_cmp_key);
 }

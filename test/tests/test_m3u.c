@@ -5,17 +5,18 @@
 */
 
 #include "compile_time.h"
-#include "test/utility.h"
+#include "utility.h"
 
 #include "dist/utest/utest.h"
 #include "dist/sds/sds.h"
+#include "src/lib/list.h"
 #include "src/lib/jsonrpc.h"
 #include "src/lib/m3u.h"
 #include "src/mympd_api/webradios.h"
 
 #include <sys/stat.h>
 
-UTEST(mympd_api_webradios, test_mympd_api_webradio_save) {
+static bool webradio_save(void) {
     sds name = sdsnew("Yumi Co. Radio");
     sds uri = sdsnew("http://yumicoradio.net:8000/stream");
     sds uri_old = sdsnew("");
@@ -28,7 +29,6 @@ UTEST(mympd_api_webradios, test_mympd_api_webradio_save) {
     sds description = sdsnew("24/7 webradio that plays Future Funk, City Pop, Anime Groove, Nu Disco, Electronica, a little bit of Vaporwave and some of the sub-genres derived.");
     int bitrate = 256;
     bool rc = mympd_api_webradio_save(workdir, name, uri, uri_old, genre, picture, homepage, country, language, codec, bitrate, description);
-    ASSERT_TRUE(rc);
     sdsfree(name);
     sdsfree(uri);
     sdsfree(uri_old);
@@ -39,16 +39,34 @@ UTEST(mympd_api_webradios, test_mympd_api_webradio_save) {
     sdsfree(language);
     sdsfree(codec);
     sdsfree(description);
+    return rc;
+}
+
+UTEST(m3u, test_m3u_webradio_save) {
+    init_testenv();
+
+    bool rc = webradio_save();
+    ASSERT_TRUE(rc);
+
+    clean_testenv();
 }
 
 UTEST(m3u, test_m3u_get_field) {
+    init_testenv();
+    webradio_save();
+
     sds s = sdsempty();
     s = m3u_get_field(s, "#EXTIMG", "/tmp/mympd-test/webradios/http___yumicoradio_net_8000_stream.m3u");
     ASSERT_STREQ("http___yumicoradio_net_8000_stream.webp", s);
     sdsfree(s);
+
+    clean_testenv();
 }
 
 UTEST(m3u, test_m3u_to_json) {
+    init_testenv();
+    webradio_save();
+
     sds s = sdsempty();
     sds m3ufields = sdsempty();
     s = m3u_to_json(s, "/tmp/mympd-test/webradios/http___yumicoradio_net_8000_stream.m3u", &m3ufields);
@@ -56,30 +74,50 @@ UTEST(m3u, test_m3u_to_json) {
     ASSERT_STREQ(e, m3ufields);
     sdsfree(s);
     sdsfree(m3ufields);
+
+    clean_testenv();
 }
 
-UTEST(mympd_api_webradios, test_get_webradio_from_uri) {
+UTEST(m3u, test_get_webradio_from_uri) {
+    init_testenv();
+    webradio_save();
+
     sds m3u = get_webradio_from_uri(workdir, "http://yumicoradio.net:8000/stream");
     ASSERT_GT(sdslen(m3u), (size_t)0);
     sdsfree(m3u);
+
+    clean_testenv();
 }
 
-UTEST(mympd_api_webradios, test_mympd_api_webradio_list) {
+UTEST(m3u, test_mympd_api_webradio_list) {
+    init_testenv();
+    webradio_save();
+
     sds searchstr = sdsempty();
     sds buffer = mympd_api_webradio_list(workdir, sdsempty(), 0, searchstr, 0, 10);
-    sds error = sdsempty();
+    struct t_jsonrpc_parse_error parse_error;
+    jsonrpc_parse_error_init(&parse_error);
     int result;
-    bool rc = json_get_int_max(buffer, "$.result.totalEntities", &result, &error);
+    bool rc = json_get_int_max(buffer, "$.result.totalEntities", &result, &parse_error);
     ASSERT_TRUE(rc);
     ASSERT_EQ(result, 1);
-    sdsfree(error);
+    jsonrpc_parse_error_clear(&parse_error);
     sdsfree(searchstr);
     sdsfree(buffer);
+
+    clean_testenv();
 }
 
-UTEST(mympd_api_webradios, test_mympd_api_webradio_delete) {
-    sds filename = sdsnew("http___yumicoradio_net_8000_stream.m3u");
-    bool rc = mympd_api_webradio_delete(workdir, filename);
-    sdsfree(filename);
+UTEST(m3u, test_mympd_api_webradio_delete) {
+    init_testenv();
+    webradio_save();
+
+    struct t_list filenames;
+    list_init(&filenames);
+    list_push(&filenames, "http___yumicoradio_net_8000_stream.m3u", 0, NULL, NULL);
+    bool rc = mympd_api_webradio_delete(workdir, &filenames);
+    list_clear(&filenames);
     ASSERT_TRUE(rc);
+
+    clean_testenv();
 }

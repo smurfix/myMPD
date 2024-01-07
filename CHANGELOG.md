@@ -4,6 +4,418 @@ https://github.com/jcorporation/myMPD/
 
 ***
 
+## myMPD v13.0.6 (2023-12-20)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Fix: detection of Safari browsers #1185
+- Upd: translations
+- Upd: utf8 and utest dependencies
+
+***
+
+## myMPD v13.0.5 (2023-11-19)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Fix: Switch grid mode by Strg+Click #1169
+- Fix: Remove "parent dir" entry in filesystem view #1168
+- Fix: Add random songs to queue
+- Fix: Parse uniq jukebox mode from state file
+- Fix: Detection of folder for tag pictures #1172
+- Fix: set TFD_NONBLOCK | TFD_CLOEXEC for timerfds
+
+***
+
+## myMPD v13.0.4 (2023-11-11)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Upd: Translations are now managed through poeditor.com api
+- Upd: Translations
+- Fix: Delete mpd playlist before creating the smart playlist
+- Fix: Remove unit tests execution order dependencies #1161
+- Fix: Update favorite from webradiodb
+- Fix: Show album from song details modal #1167
+
+***
+
+## myMPD v13.0.3 (2023-11-05)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Fix: Read certificates after creation #1160
+
+***
+
+## myMPD v13.0.2 (2023-11-03)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Fix: Compilation on FreeBSD
+- Fix: Search based smart playlists in shuffle mode
+- Fix: Round the volume for local playback to integer #1149
+- Fix: Do not modify dom properties in parseCmd
+- Fix: SEGVAULT creating album search expression #1151
+- Fix: Album details cover zoom #1153
+
+***
+
+## myMPD v13.0.1 (2023-11-01)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Fix: Display selected jukebox uniq tag #1142
+- Fix: Jukebox internal queue randomness #1142
+
+***
+
+## myMPD v13.0.0 (2023-10-29)
+
+The album cache was reworked substantially. It uses now Album + AlbumArtist + Date tag to group albums as fallback for the MusicBrainz AlbumId, in earlier versions the fallback was Album + AlbumArtist.
+
+There is now also a simple album cache that can be created much faster than the traditional album cache. Enable the simple album mode is only reasonable, if you have a very big music collection. The simple album cache contains only the AlbumArtist, Album and Date tags.
+
+The sticker database was removed in this release. myMPD fetches now all stickers on demand from MPD. myMPD creates a separate MPD connection for the stickers. You can set this connection to another MPD instance to maintain central song statistics.
+
+## Notes
+
+- LastModified was renamed to Last-Modified. Home icons, column settings and links with references to the old name must be manually updated.
+- For packagers: cmake options are slightly changed and the new MYMPD_DOC options is enabled as default
+
+## Changelog
+
+- Feat: Add config option to disable sticker support
+- Feat: Replace sticker cache with central sticker database #1111
+- Feat: Use the MessagePack format to store caches on disc #1104
+- Feat: Improve album cache creation #1113
+- Feat: Add a simple album cache (fewer features, but much better performance) #113
+- Feat: Refresh status, if webui progress timer is greater than song length #1115
+- Feat: Add actions to the database tag view
+- Feat: Add option to display seek buttons in the footer #1110
+- Feat: Add advanced playback controls popover to footer #1110
+- Feat: Add exclude and include filter expression for jukebox mode #1098
+- Feat: Add min. duration option for jukebox mode #1098
+- Feat: Add Last-Modified option to playlist sorting
+- Feat: Respect search order for searches added to queue or playlist #1078
+- Feat: Add support for descending sort for smart playlists and playlists
+- Feat: Improve jukebox album mode
+- Feat: FreeBSD support #117
+- Upd: Use more standard cmake build types #1119
+- Upd: Rework timer implementation
+- Upd: Some websocket connection improvements
+- Upd: Mongoose 7.12 #1132
+
+***
+
+## myMPD v12.1.1 (2023-10-19)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Smart playlist option disappears after it is turned off in settings #1133
+- Fix: Fill jukebox queue respects function should respect current length
+- Fix: sanitize only / and special escape values for tagart #1136
+
+***
+
+## myMPD v12.1.0 (2023-10-14)
+
+This version ships a few improvements and bug fixes.
+
+### Changelog
+
+- Feat: Add all from filesystem respects path and search, fixes #1123
+- Feat: Song search support for special tag 'base'
+- Feat: Disable click count submition to radiobrowser.info #1124
+- Fix: Restore maximum binary size to 5 MB #1125
+- Upd: remove default smart playlist generation tag #1131
+- Fix: Zoom coverimages
+- Fix: double free if trigger was not found
+- Fix: Increase LINE_LENGTH_MAX to 8192 #1129
+- Fix: Do not update album cache every time if stickers are disabled
+- Fix: handle tag values with special characters for tagart #1130
+
+***
+
+## myMPD v12.0.4 (2023-10-05)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: SEGV detecting IPv6 support #1121
+
+***
+
+## myMPD v12.0.3 (2023-10-04)
+
+This is a small bug fix release.
+
+## Changelog
+
+- Fix: check OS IPv6 support before enabling IPv6 listening socket #1118
+- Fix: correct calculation of myMPD uri
+- Fix: always replace cards of albumlist
+
+***
+
+## myMPD v12.0.2 (2023-09-22)
+
+This is a small bug fix release.
+
+## Changelog
+
+- Upd: Bootstrap 5.3.2
+- Fix: listing of outputs to move to current partition #1106
+
+***
+
+## myMPD v12.0.1 (2023-09-15)
+
+This release fixes only a small packaging bug for alpine linux.
+
+## Changelog
+
+- Fix: Use perl to create defines.js
+
+## myMPD v12.0.0 (2023-09-15)
+
+This release improves hopefully the user experience by providing descriptive help texts, error messages and improved dialogs. Further the advanced search feature is now available for all reasonable views.
+
+As in most recent releases, the source code has been cleaned up further. The most changes are made in the frontend code.
+
+### Notes
+
+- Some of the UI related settings are reset to default
+- Old home icon links to some views are invalid
+
+### API changes
+
+This release changes some API methods.
+
+- merge MYMPD_API_QUEUE_SEARCH_ADV and MYMPD_API_QUEUE_LIST into MYMPD_API_QUEUE_SEARCH
+- rename MYMPD_API_PRESET_LOAD to MYMPD_API_PRESET_APPLY
+- MYMPD_API_PLAYLIST_RM_ALL: parameters changed
+- MYMPD_API_PLAYER_OUTPUT_GET: new
+- MYMPD_API_PLAYER_OUTPUT_LIST: respond with fewer details
+
+### Changelog
+
+- Feat: move song fingerprint calculation in worker thread #1046
+- Feat: display album tags in jukebox album list #1069
+- Feat: add option for compact grids #1074
+- Feat: add advanced search to more views #1048
+- Feat: add more inline help text's #1072
+- Feat: improve validation of form fields #1083
+- Feat: add spinners to buttons
+- Feat: display the number of channels #1085
+- Feat: show source objects in action modals
+- Feat: add enforce disc tag option #1086
+- Feat: add bulgarian translation
+- Upd: support multiple languages for webradioDB #1097
+- Upd: some code enhancements #1045
+- Upd: Bootstrap 5.3.1
+- Upd: rework settings
+- Upd: split JavaScript in separate files for views and modals
+- Upd: dependencies sds, utest, utf8
+- Fix: calculate correct position for jukebox list
+- Fix: calculate correct position for playlist content list
+- Fix: enable connection settings if myMPD can not connect to MPD #1102
+
+***
+
+## myMPD v11.0.5 (2023-08-31)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: use highlight color for radio buttons #1095
+- Fix: do not overflow modal #1095
+- Fix: select default sort order in 'Add smart playlist' modal #1088
+- Fix: populate disc tag for album cache #1086
+- Fix: stream not filled in "add to playlist" pop up #1095
+- Fix: click on current song toggles playmode #1096
+
+***
+
+## myMPD v11.0.4 (2023-08-19)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: add playlist to queue from playlist view #1087
+- Fix: unselect all selected rows
+- Fix: set song priority
+- Fix: SEGFAULT on partition deletion
+
+***
+
+## myMPD v11.0.3 (2023-08-15)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Upd: enable more tags by default
+- Upd: es-AR translation
+- Fix: set initial disc count to 1 #1086
+
+***
+
+## myMPD v11.0.2 (2023-07-30)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Upd: translations
+- Fix: set translated title for navbar icons
+- Fix: jukebox list context menu actions
+- Fix: calculate correct myMPDuri for IPv6 [::]
+- Fix: display all values in playback card #1076
+
+***
+
+## myMPD v11.0.1 (2023-07-23)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Upd: translations
+- Fix: memory leak after script execution
+- Fix: always enable connection save button
+- Fix: add missing jukebox list remove action
+- Fix: IPv4-mapped address broken #1066
+
+***
+
+## myMPD v11.0.0 (2023-07-18)
+
+This release improves the queue and playlist management in many ways. You can now select multiple songs or playlists and take actions on this selection. There are new methods to copy, merge, validate and deduplicate playlists. Further the mpd error handling and the mpd communication was improved by using command lists.
+
+### Notes
+
+- This is the first release that enforces the OpenSSL dependency.
+- Some home icons are invalid, you must re-add the icons, sorry for that.
+
+### API changes
+
+This release changes definitions of many API methods.
+
+- MYMPD_API_JUKEBOX_RM: parameters changed
+- MYMPD_API_QUEUE_RM_SONG -> MYMPD_API_QUEUE_RM_IDS: parameters changed
+- MYMPD_API_QUEUE_MOVE_SONG -> MYMPD_API_QUEUE_MOVE_POSITION: parameters changed
+- MYMPD_API_QUEUE_MOVE_RELATIVE: new
+- MYMPD_API_QUEUE_APPEND_URI -> MYMPD_API_QUEUE_APPEND_URIS: parameters changed
+- MYMPD_API_QUEUE_INSERT_URI -> MYMPD_API_QUEUE_INSERT_URIS: parameters changed
+- MYMPD_API_QUEUE_REPLACE_URI -> MYMPD_API_QUEUE_REPLACE_URIS: parameters changed
+- MYMPD_API_QUEUE_APPEND_PLAYLIST -> MYMPD_API_QUEUE_APPEND_PLAYLISTS: parameters changed
+- MYMPD_API_QUEUE_INSERT_PLAYLIST -> MYMPD_API_QUEUE_INSERT_PLAYLISTS: parameters changed
+- MYMPD_API_QUEUE_REPLACE_PLAYLIST -> MYMPD_API_QUEUE_REPLACE_PLAYLISTS: parameters changed
+- MYMPD_API_QUEUE_PRIO_SET: parameters changed
+- MYMPD_API_QUEUE_PRIO_SET_HIGHEST: parameters changed
+- MYMPD_API_QUEUE_APPEND_ALBUMS: new
+- MYMPD_API_QUEUE_INSERT_ALBUMS: new
+- MYMPD_API_QUEUE_REPLACE_ALBUMS: new
+- MYMPD_API_QUEUE_APPEND_ALBUM_DISC: new
+- MYMPD_API_QUEUE_INSERT_ALBUM_DISC: new
+- MYMPD_API_QUEUE_REPLACE_ALBUM_DISC: new
+- MYMPD_API_PLAYLIST_CONTENT_RM_SONG -> MYMPD_API_PLAYLIST_CONTENT_RM_POSITIONS: parameters changed
+- MYMPD_API_PLAYLIST_CONTENT_MOVE_SONG -> MYMPD_API_PLAYLIST_CONTENT_MOVE_POSITION: parameters changed
+- MYMPD_API_PLAYLIST_CONTENT_APPEND_URI -> MYMPD_API_PLAYLIST_CONTENT_APPEND_URIS: parameters changed
+- MYMPD_API_PLAYLIST_CONTENT_INSERT_URI -> MYMPD_API_PLAYLIST_CONTENT_INSERT_URIS: parameters changed
+- MYMPD_API_PLAYLIST_CONTENT_REPLACE_URI -> MYMPD_API_PLAYLIST_CONTENT_REPLACE_URIS: parameters changed
+- MYMPD_API_PLAYLIST_CONTENT_MOVE_TO_PLAYLIST: new
+- MYMPD_API_PLAYLIST_RM: parameters changed
+- MYMPD_API_PLAYLIST_COPY: new
+- MYMPD_API_PLAYLIST_CONTENT_VALIDATE: new
+- MYMPD_API_PLAYLIST_CONTENT_DEDUP: new
+- MYMPD_API_PLAYLIST_CONTENT_VALIDATE_DEDUP: new
+- MYMPD_API_PLAYLIST_CONTENT_VALIDATE_ALL: new
+- MYMPD_API_PLAYLIST_CONTENT_DEDUP_ALL: new
+- MYMPD_API_PLAYLIST_CONTENT_VALIDATE_DEDUP_ALL: new
+- MYMPD_API_PLAYLIST_CONTENT_APPEND_ALBUMS: new
+- MYMPD_API_PLAYLIST_CONTENT_INSERT_ALBUMS: new
+- MYMPD_API_PLAYLIST_CONTENT_REPLACE_ALBUMS: new
+- MYMPD_API_PLAYLIST_CONTENT_APPEND_ALBUM_DISC: new
+- MYMPD_API_PLAYLIST_CONTENT_INSERT_ALBUM_DISC: new
+- MYMPD_API_PLAYLIST_CONTENT_REPLACE_ALBUM_DISC: new
+- MYMPD_API_WEBRADIO_FAVORITE_RM: parameters changed
+- MYMPD_API_SCRIPT_VALIDATE: new
+
+### Changelog
+
+- Feat: add multiple selections and actions #1001
+- Feat: improve queue and playlist management #1001
+- Feat: copy, merge, validate and deduplicate playlists #1038
+- Feat: migrate to JavaScript fetch() API #1006
+- Feat: add test target to cmake #1023
+- Feat: improve mpd error handling #1028
+- Feat: improve mpd communication
+- Feat: add quick remove and quick play buttons to more views
+- Feat: support MUSICBRAINZ_RELEASEGROUPID tag (MPD 0.24)
+- Feat: handle preflighted requests in CORS
+- Feat: add consume one shot to queue context menu
+- Upd: Mongoose 7.11 #1060
+- Upd: Bootstrap 5.3.0 final
+- Upd: libmympdclient 1.0.21
+- Upd: OpenSSL is now required #1033
+- Upd: Replace tinymt with OpenSSL prng #1034
+- Upd: use OpenSSL hash functions
+- Upd: documentation improvements
+- Upd: improve error handling in build system
+- Upd: show stream name in title tag
+- Fix: various small css and javascript fixes
+- Fix: improve Mongoose logging #1032
+- Fix: set correct song start time sticker #1044
+- Fix: Fall back from AlbumArtist to Artist tag for MusicBrainz tags #1056
+- Fix: correct position in last played list #1063
+
+***
+
+## myMPD v10.3.3 (2023-06-02)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Upd: wrap footer text in cards #1030
+- Fix: improve javascript error logging
+- Fix: drag&drop on same element #1026
+- Fix: js error on disabled MUSICBRAINZ_ALBUMID tag #1025
+- Fix: Add Pos column to playlist detail view #1027
+
+***
+
+## myMPD v10.3.2 (2023-05-08)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Upd: ko-KR, es-AR translation
+- Upd: use update_jukebox events
+- Fix: Jukebox actions
+
+***
+
 ## myMPD v10.3.1 (2023-04-24)
 
 This is a small bugfix release. It fixes a memory corruption error, if myMPD was compiled with NDEBUG defined.
@@ -1573,7 +1985,7 @@ This is a small maintenance release.
 
 myMPD 6.2.0 adds more functionality to smart playlists and playlists generally. The publishing feature of myMPD was completely reworked and supports now webdav to manage pics, mpd music_directory and playlists. This feature is in the default config disabled and must be enabled in mympd.conf. Also the notification system was reworked and supports now the brand new HTML5 MediaSession API.
 
-Please give the new tool mympd-config a chance. This tool parses your mpd.conf and generates a suitable mympd.conf. For details look at https://github.com/jcorporation/myMPD/wiki/mympd-config.
+Please give the new tool mympd-config a chance. This tool parses your mpd.conf and generates a suitable mympd.conf.
 
 ### Changelog
 
@@ -1768,7 +2180,7 @@ This minor release supports now table and popup menu navigation through the keyb
 
 ### Changelog
 
-- Feat: table navigation mode, see https://github.com/jcorporation/myMPD/wiki/Keyboard-Shortcuts for details
+- Feat: table navigation mode
 - Feat: support mpd fingerprint command #146
 - Feat: display current song title in header bar
 - Feat: new "update_lastplayed" event

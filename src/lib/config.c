@@ -7,14 +7,18 @@
 #include "compile_time.h"
 #include "src/lib/config.h"
 
+#include "src/lib/album_cache.h"
 #include "src/lib/env.h"
+#include "src/lib/filehandler.h"
 #include "src/lib/log.h"
 #include "src/lib/mem.h"
 #include "src/lib/sds_extras.h"
 #include "src/lib/state_files.h"
+#include "src/lib/utility.h"
 #include "src/lib/validate.h"
 
 #include <inttypes.h>
+#include <stdbool.h>
 #include <string.h>
 #include <time.h>
 
@@ -87,37 +91,37 @@ void mympd_config_defaults_initial(struct t_config *config) {
  */
 void mympd_config_defaults(struct t_config *config) {
     if (config->first_startup == true) {
-        MYMPD_LOG_INFO("Reading environment variables");
+        MYMPD_LOG_INFO(NULL, "Reading environment variables");
     }
     //configurable with environment variables at first startup
     config->http = startup_getenv_bool("MYMPD_HTTP", CFG_MYMPD_HTTP, config->first_startup);
-    config->http_host = startup_getenv_string("MYMPD_HTTP_HOST", CFG_MYMPD_HTTP_HOST, vcb_isname, config->first_startup);
-    config->http_port = startup_getenv_int("MYMPD_HTTP_PORT", CFG_MYMPD_HTTP_PORT, 0, MPD_PORT_MAX, config->first_startup);
-    #ifdef MYMPD_ENABLE_SSL
-        config->ssl = startup_getenv_bool("MYMPD_SSL", CFG_MYMPD_SSL, config->first_startup);
-        config->ssl_port = startup_getenv_int("MYMPD_SSL_PORT", CFG_MYMPD_SSL_PORT, 0, MPD_PORT_MAX, config->first_startup);
-        config->ssl_san = startup_getenv_string("MYMPD_SSL_SAN", CFG_MYMPD_SSL_SAN, vcb_isname, config->first_startup);
-        config->custom_cert = startup_getenv_bool("MYMPD_CUSTOM_CERT", CFG_MYMPD_CUSTOM_CERT, config->first_startup);
-        sds default_cert = sdscatfmt(sdsempty(), "%S/ssl/server.pem", config->workdir);
-        sds default_key = sdscatfmt(sdsempty(), "%S/ssl/server.key", config->workdir);
-        if (config->custom_cert == true) {
-            config->ssl_cert = startup_getenv_string("MYMPD_SSL_CERT", default_cert, vcb_isfilepath, config->first_startup);
-            config->ssl_key = startup_getenv_string("MYMPD_SSL_KEY", default_key, vcb_isfilepath, config->first_startup);
-            FREE_SDS(default_cert);
-            FREE_SDS(default_key);
+    #ifdef MYMPD_ENABLE_IPV6
+        if (get_ipv6_support() == true) {
+            config->http_host = startup_getenv_string("MYMPD_HTTP_HOST", CFG_MYMPD_HTTP_HOST_IPV6, vcb_isname, config->first_startup);
         }
         else {
-            config->ssl_cert = default_cert;
-            config->ssl_key = default_key;
+            config->http_host = startup_getenv_string("MYMPD_HTTP_HOST", CFG_MYMPD_HTTP_HOST_IPV4, vcb_isname, config->first_startup);
         }
     #else
-        config->ssl = false;
-        config->ssl_port = 0;
-        config->ssl_san = sdsempty();
-        config->custom_cert = sdsempty();
-        config->ssl_cert = sdsempty();
-        config->ssl_key = sdsempty();
+        config->http_host = startup_getenv_string("MYMPD_HTTP_HOST", CFG_MYMPD_HTTP_HOST_IPV4, vcb_isname, config->first_startup);
     #endif
+    config->http_port = startup_getenv_int("MYMPD_HTTP_PORT", CFG_MYMPD_HTTP_PORT, 0, MPD_PORT_MAX, config->first_startup);
+    config->ssl = startup_getenv_bool("MYMPD_SSL", CFG_MYMPD_SSL, config->first_startup);
+    config->ssl_port = startup_getenv_int("MYMPD_SSL_PORT", CFG_MYMPD_SSL_PORT, 0, MPD_PORT_MAX, config->first_startup);
+    config->ssl_san = startup_getenv_string("MYMPD_SSL_SAN", CFG_MYMPD_SSL_SAN, vcb_isname, config->first_startup);
+    config->custom_cert = startup_getenv_bool("MYMPD_CUSTOM_CERT", CFG_MYMPD_CUSTOM_CERT, config->first_startup);
+    sds default_cert = sdscatfmt(sdsempty(), "%S/%s/server.pem", config->workdir, DIR_WORK_SSL);
+    sds default_key = sdscatfmt(sdsempty(), "%S/%s/server.key", config->workdir, DIR_WORK_SSL);
+    if (config->custom_cert == true) {
+        config->ssl_cert = startup_getenv_string("MYMPD_SSL_CERT", default_cert, vcb_isfilepath, config->first_startup);
+        config->ssl_key = startup_getenv_string("MYMPD_SSL_KEY", default_key, vcb_isfilepath, config->first_startup);
+        FREE_SDS(default_cert);
+        FREE_SDS(default_key);
+    }
+    else {
+        config->ssl_cert = default_cert;
+        config->ssl_key = default_key;
+    }
     config->acl = startup_getenv_string("MYMPD_ACL", CFG_MYMPD_ACL, vcb_isname, config->first_startup);
     config->scriptacl = startup_getenv_string("MYMPD_SCRIPTACL", CFG_MYMPD_SCRIPTACL, vcb_isname, config->first_startup);
     #ifdef MYMPD_ENABLE_LUA
@@ -130,6 +134,15 @@ void mympd_config_defaults(struct t_config *config) {
     config->covercache_keep_days = startup_getenv_int("MYMPD_COVERCACHE_KEEP_DAYS", CFG_MYMPD_COVERCACHE_KEEP_DAYS, COVERCACHE_AGE_MIN, COVERCACHE_AGE_MAX, config->first_startup);
     config->save_caches = startup_getenv_bool("MYMPD_SAVE_CACHES", CFG_MYMPD_SAVE_CACHES, config->first_startup);
     config->mympd_uri = startup_getenv_string("MYMPD_URI", CFG_MYMPD_URI, vcb_isname, config->first_startup);
+    config->stickers = startup_getenv_bool("MYMPD_STICKERS", CFG_MYMPD_STICKERS, config->first_startup);
+
+    sds album_mode_str = startup_getenv_string("MYMPD_ALBUM_MODE", CFG_MYMPD_ALBUM_MODE, vcb_isname, config->first_startup);
+    config->albums.mode = parse_album_mode(album_mode_str);
+    FREE_SDS(album_mode_str);
+
+    sds album_group_tag_str = startup_getenv_string("MYMPD_ALBUM_GROUP_TAG", CFG_MYMPD_ALBUM_GROUP_TAG, vcb_isname, config->first_startup);
+    config->albums.group_tag = mpd_tag_name_iparse(album_group_tag_str);
+    FREE_SDS(album_group_tag_str);
 }
 
 /**
@@ -147,33 +160,70 @@ bool mympd_config_rw(struct t_config *config, bool write) {
         config->http = false;
     }
 
-    #ifdef MYMPD_ENABLE_SSL
-        config->ssl = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "ssl", config->ssl, write);
-        config->ssl_port = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "ssl_port", config->ssl_port, 0, MPD_PORT_MAX, write);
-        config->ssl_san = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "ssl_san", config->ssl_san, vcb_isname, write);
-        config->custom_cert = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "custom_cert", config->custom_cert, write);
-        if (config->custom_cert == true) {
-            config->ssl_cert = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "ssl_cert", config->ssl_cert, vcb_isname, write);
-            config->ssl_key = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "ssl_key", config->ssl_key, vcb_isname, write);
-        }
-        config->pin_hash = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "pin_hash", config->pin_hash, vcb_isname, write);
-    #else
-        MYMPD_LOG_NOTICE("OpenSSL is disabled, ignoring ssl and pin settings");
-    #endif
+    config->ssl = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "ssl", config->ssl, write);
+    config->ssl_port = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "ssl_port", config->ssl_port, 0, MPD_PORT_MAX, write);
+    config->ssl_san = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "ssl_san", config->ssl_san, vcb_isname, write);
+    config->custom_cert = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "custom_cert", config->custom_cert, write);
+    if (config->custom_cert == true) {
+        config->ssl_cert = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "ssl_cert", config->ssl_cert, vcb_isname, write);
+        config->ssl_key = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "ssl_key", config->ssl_key, vcb_isname, write);
+    }
+    config->pin_hash = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "pin_hash", config->pin_hash, vcb_isname, write);
     config->acl = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "acl", config->acl, vcb_isname, write);
     config->scriptacl = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "scriptacl", config->scriptacl, vcb_isname, write);
     #ifdef MYMPD_ENABLE_LUA
         config->lualibs = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "lualibs", config->lualibs, vcb_isname, write);
     #else
-        MYMPD_LOG_NOTICE("Lua is disabled, ignoring lua settings");
+        MYMPD_LOG_NOTICE(NULL, "Lua is disabled, ignoring lua settings");
     #endif
     config->covercache_keep_days = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "covercache_keep_days", config->covercache_keep_days, COVERCACHE_AGE_MIN, COVERCACHE_AGE_MAX, write);
     config->loglevel = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "loglevel", config->loglevel, LOGLEVEL_MIN, LOGLEVEL_MAX, write);
     config->save_caches = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "save_caches", config->save_caches, write);
     config->mympd_uri = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "mympd_uri", config->mympd_uri, vcb_isname, write);
+    config->stickers = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "stickers", config->stickers, write);
+
+    sds album_mode_str = state_file_rw_string(config->workdir, DIR_WORK_CONFIG, "album_mode", lookup_album_mode(config->albums.mode), vcb_isname, write);
+    config->albums.mode = parse_album_mode(album_mode_str);
+    FREE_SDS(album_mode_str);
+
+    sds album_group_tag_str = state_file_rw_string(config->workdir, DIR_WORK_CONFIG, "album_group_tag", mpd_tag_name(config->albums.group_tag), vcb_isname, write);
+    config->albums.group_tag = mpd_tag_name_iparse(album_group_tag_str);
+    FREE_SDS(album_group_tag_str);
+
     //overwrite configured loglevel
     config->loglevel = getenv_int("MYMPD_LOGLEVEL", config->loglevel, LOGLEVEL_MIN, LOGLEVEL_MAX);
     return true;
+}
+
+/**
+ * Writes the current version to the version file
+ * @param workdir working directory
+ * @return true if file was written, else false
+ */
+bool mympd_version_set(sds workdir) {
+    sds version = sdsnew(MYMPD_VERSION);
+    sds filepath = sdscatfmt(sdsempty(), "%S/%s/version", workdir, DIR_WORK_CONFIG);
+    bool rc = write_data_to_file(filepath, version, sdslen(version));
+    FREE_SDS(version);
+    FREE_SDS(filepath);
+    return rc;
+}
+
+/**
+ * Checks the version of the configuration against current version
+ * @param workdir working directory
+ * @return true if version has not changed, else false
+ */
+bool mympd_version_check(sds workdir) {
+    sds version = sdsempty();
+    sds filepath = sdscatfmt(sdsempty(), "%S/%s/version", workdir, DIR_WORK_CONFIG);
+    sds_getfile(&version, filepath, 10, true, false);
+    bool rc = strcmp(version, MYMPD_VERSION) == 0
+        ? true
+        : false;
+    FREE_SDS(version);
+    FREE_SDS(filepath);
+    return rc;
 }
 
 /**

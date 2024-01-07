@@ -5,9 +5,10 @@
 */
 
 #include "compile_time.h"
+#include "src/lib/config_def.h"
+#include "utility.h"
 
 #include "dist/utest/utest.h"
-
 #include "dist/libmympdclient/src/isong.h"
 #include "src/lib/album_cache.h"
 #include "src/mpd_client/search_local.h"
@@ -56,13 +57,21 @@ struct mpd_song *new_song(void) {
 }
 
 UTEST(album_cache, test_album_cache_get_key) {
+    struct t_albums_config album_config = {
+        .group_tag = MPD_TAG_DATE,
+        .mode = ALBUM_MODE_ADV
+    };
     struct mpd_song *song = new_song();
-    sds key = sdsempty();
-    key = album_cache_get_key(song, key);
-    ASSERT_STREQ("tabula rasa::einstürzende neubauten", key);
+    sds key = album_cache_get_key(sdsempty(), song, &album_config);
+    ASSERT_STREQ("3efe3b6f830dbcf2a14cd563be79ce37605ef493", key);
     sdsfree(key);
-    mpd_song_free(song);
 
+    mympd_mpd_song_add_tag_dedup(song, MPD_TAG_MUSICBRAINZ_ALBUMID, "0c50c04e-994b-4e63-b969-ea82e6b36d3b");
+    key = album_cache_get_key(sdsempty(), song, &album_config);
+    ASSERT_STREQ("0c50c04e-994b-4e63-b969-ea82e6b36d3b", key);
+    sdsfree(key);
+
+    mpd_song_free(song);
 }
 
 UTEST(album_cache, test_album_cache_copy_tags) {
@@ -164,7 +173,7 @@ UTEST(mpd_client_tags, test_is_multivalue_tag) {
 UTEST(mpd_client_tags, test_get_sort_tag) {
     struct t_tags tags;
     reset_t_tags(&tags);
-    tags.len = 4;
+    tags.tags_len = 4;
     tags.tags[0] = MPD_TAG_ALBUM;
     tags.tags[1] = MPD_TAG_ALBUM_SORT;
     tags.tags[2] = MPD_TAG_PERFORMER;
@@ -193,10 +202,10 @@ UTEST(mpd_client_tags, test_mpd_client_get_tag_values) {
     ASSERT_STREQ("\"Tabula Rasa\"", s);
     sdsclear(s);
     s = mpd_client_get_tag_values(song, MPD_TAG_PERFORMER, s);
-    ASSERT_STREQ("[\"-\"]", s);
+    ASSERT_STREQ("[]", s);
     sdsclear(s);
     s = mpd_client_get_tag_values(song, MPD_TAG_DATE, s);
-    ASSERT_STREQ("\"-\"", s);
+    ASSERT_STREQ("\"\"", s);
     sdsfree(s);
     mpd_song_free(song);
 }
@@ -207,12 +216,12 @@ UTEST(mpd_client_tags, test_check_tags) {
     reset_t_tags(&tags);
     struct t_tags allowed;
     reset_t_tags(&allowed);
-    allowed.len++;
+    allowed.tags_len++;
     allowed.tags[0] = MPD_TAG_ALBUM;
-    allowed.len++;
+    allowed.tags_len++;
     allowed.tags[1] = MPD_TAG_TITLE;
     check_tags(s, "taglist", &tags, &allowed);
-    ASSERT_EQ(2, (int)tags.len);
+    ASSERT_EQ(2, (int)tags.tags_len);
     ASSERT_EQ(MPD_TAG_ALBUM, tags.tags[0]);
     ASSERT_EQ(MPD_TAG_TITLE, tags.tags[1]);
     sdsfree(s);
@@ -221,9 +230,9 @@ UTEST(mpd_client_tags, test_check_tags) {
 UTEST(mpd_client_tags, test_mpd_client_tag_exists) {
     struct t_tags tags;
     reset_t_tags(&tags);
-    tags.len++;
+    tags.tags_len++;
     tags.tags[0] = MPD_TAG_ALBUM;
-    tags.len++;
+    tags.tags_len++;
     tags.tags[1] = MPD_TAG_ARTIST;
     ASSERT_TRUE(mpd_client_tag_exists(&tags, MPD_TAG_ALBUM));
     ASSERT_FALSE(mpd_client_tag_exists(&tags, MPD_TAG_ALBUM_ARTIST));
@@ -233,7 +242,7 @@ UTEST(mpd_client_search_local, test_search_mpd_song) {
     struct mpd_song *song = new_song();
     struct t_tags tags;
     reset_t_tags(&tags);
-    tags.len++;
+    tags.tags_len++;
     tags.tags[0] = MPD_TAG_ALBUM;
     sds s = sdsnew("tabula");
     ASSERT_TRUE(search_mpd_song(song, s, &tags));
@@ -250,9 +259,9 @@ bool search_by_expression(const char *expr_string) {
     //browse tag types
     struct t_tags tags;
     reset_t_tags(&tags);
-    tags.len++;
+    tags.tags_len++;
     tags.tags[0] = MPD_TAG_ALBUM;
-    tags.len++;
+    tags.tags_len++;
     tags.tags[1] = MPD_TAG_ARTIST;
 
     sds expression = sdsnew(expr_string);

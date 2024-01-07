@@ -51,18 +51,23 @@ const APIparams = {
     },
     "expression": {
         "type": APItypes.string,
-        "example": "((any contains 'piraten'))",
+        "example": "((any contains 'ende'))",
         "desc": "MPD search expression"
     },
     "searchstr": {
         "type": APItypes.string,
-        "example": "tabula",
+        "example": "ende",
         "desc": "String to search"
     },
     "uri": {
         "type": APItypes.string,
-        "example": "Testfiles/Piratenlied.flac",
+        "example": "Alben/Einstürzende_Neubauten/Ende_Neu/01.Was_ist_ist.mp3",
         "desc": "Relativ song uri"
+    },
+    "uris": {
+        "type": APItypes.array,
+        "example": "[\"Alben/Einstürzende_Neubauten/Ende_Neu/01.Was_ist_ist.mp3\"]",
+        "desc": "Relativ song uris"
     },
     "filter": {
         "type": APItypes.string,
@@ -89,6 +94,11 @@ const APIparams = {
         "example": "test_plist",
         "desc": "MPD playlist name"
     },
+    "plists": {
+        "type": APItypes.array,
+        "example": "[\"test_plist\"]",
+        "desc": "MPD playlist names"
+    },
     "sortShuffle": {
         "type": APItypes.string,
         "example": "shuffle",
@@ -98,6 +108,11 @@ const APIparams = {
         "type": APItypes.uint,
         "example": 1,
         "desc": "MPD queue song id"
+    },
+    "songIds": {
+        "type": APItypes.array,
+        "example": "[1,2]",
+        "desc": "Array of MPD queue song ids"
     },
     "timerid": {
         "type": APItypes.uint,
@@ -129,6 +144,11 @@ const APIparams = {
         "example": 2,
         "desc": "Position"
     },
+    "positions": {
+        "type": APItypes.array,
+        "example": "[5,2]",
+        "desc": "Positions, must be ordered descending"
+    },
     "play": {
         "type": APItypes.bool,
         "example": true,
@@ -143,6 +163,21 @@ const APIparams = {
         "type": APItypes.string,
         "example": "default",
         "desc": "Name of the preset"
+    },
+    "albumids": {
+        "type": APItypes.array,
+        "example": "[\"17515028-bd97-47f5-ba1c-38504141af82\"]",
+        "desc": "myMPD album ids"
+    },
+    "albumid": {
+        "type": APItypes.string,
+        "example": "17515028-bd97-47f5-ba1c-38504141af82",
+        "desc": "myMPD album id"
+    },
+    "disc": {
+        "type": APItypes.string,
+        "example": "1",
+        "desc": "album disc"
     }
 };
 
@@ -177,7 +212,7 @@ const APImethods = {
         "params": {
             "uri": {
                 "type": APItypes.string,
-                "example": "Albums",
+                "example": "Testfiles",
                 "desc": "Root directory for update"
             }
         }
@@ -187,7 +222,7 @@ const APImethods = {
         "params": {
             "uri": {
                 "type": APItypes.string,
-                "example": "Alben",
+                "example": "Testfiles",
                 "desc": "Root directory for rescan"
             }
         }
@@ -214,16 +249,7 @@ const APImethods = {
     "MYMPD_API_DATABASE_ALBUM_DETAIL": {
         "desc": "Displays songs of an album.",
         "params": {
-            "album": {
-                "type": APItypes.string,
-                "example": "Tabula Rasa",
-                "desc": "Album to display"
-            },
-            "albumartist": {
-                "type": APItypes.array,
-                "example": "[\"Einstürzende Neubauten\"]",
-                "desc": "Albumartist"
-            },
+            "albumid": APIparams.albumid,
             "cols": APIparams.cols
         }
     },
@@ -321,25 +347,7 @@ const APImethods = {
             }
         }
     },
-    "MYMPD_API_QUEUE_LIST": {
-        "desc": "List the songs from the queue.",
-        "params": {
-            "offset": APIparams.offset,
-            "limit": APIparams.limit,
-            "cols": APIparams.cols
-        }
-    },
     "MYMPD_API_QUEUE_SEARCH": {
-        "desc": "Searches the queue.",
-        "params": {
-            "filter": APIparams.filter,
-            "searchstr": APIparams.searchstr,
-            "offset": APIparams.offset,
-            "limit": APIparams.limit,
-            "cols": APIparams.cols
-        }
-    },
-    "MYMPD_API_QUEUE_SEARCH_ADV": {
         "desc": "Searches the queue.",
         "params": {
             "expression": APIparams.expression,
@@ -350,10 +358,10 @@ const APImethods = {
             "cols": APIparams.cols
         }
     },
-    "MYMPD_API_QUEUE_RM_SONG": {
-        "desc": "Removes the song from the queue.",
+    "MYMPD_API_QUEUE_RM_IDS": {
+        "desc": "Removes defined entries from the queue.",
         "params": {
-            "songId": APIparams.songId
+            "songIds": APIparams.songIds
         }
     },
     "MYMPD_API_QUEUE_RM_RANGE": {
@@ -371,51 +379,80 @@ const APImethods = {
             }
         }
     },
-    "MYMPD_API_QUEUE_MOVE_SONG": {
-        "desc": "Moves a song in the queue.",
+    "MYMPD_API_QUEUE_MOVE_POSITION": {
+        "desc": "Moves entries in the queue.",
         "params": {
             "from": APIparams.from,
             "to": APIparams.to
         }
     },
-    "MYMPD_API_QUEUE_INSERT_PLAYLIST": {
-        "desc": "Adds the playlist to distinct position in queue.",
+    "MYMPD_API_QUEUE_MOVE_RELATIVE": {
+        "desc": "Moves entries in the queue.",
         "params": {
-            "plist": APIparams.plist,
+            "songIds": APIparams.songIds,
+            "to": APIparams.to,
+            "whence": APIparams.whence
+        }
+    },
+    "MYMPD_API_QUEUE_INSERT_PLAYLISTS": {
+        "desc": "Adds the playlist to distinct position in the queue.",
+        "params": {
+            "plists": APIparams.plists,
             "to": APIparams.to,
             "whence": APIparams.whence,
             "play": APIparams.play
         }
     },
-    "MYMPD_API_QUEUE_INSERT_URI": {
-        "desc": "Adds songs or directory to distinct position in queue.",
+    "MYMPD_API_QUEUE_INSERT_URIS": {
+        "desc": "Adds uris to distinct position in the queue.",
         "params": {
-            "uri": APIparams.uri,
+            "uris": APIparams.uris,
             "to": APIparams.to,
             "whence": APIparams.whence,
             "play": APIparams.play
         }
     },
     "MYMPD_API_QUEUE_INSERT_SEARCH": {
-        "desc": "Adds the search result to distinct position in queue.",
+        "desc": "Adds the search result to distinct position in the queue.",
         "params": {
             "expression": APIparams.expression,
+            "to": APIparams.to,
+            "whence": APIparams.whence,
+            "sort": APIparams.sort,
+            "sortdesc": APIparams.sortdesc,
+            "play": APIparams.play
+        }
+    },
+    "MYMPD_API_QUEUE_INSERT_ALBUMS": {
+        "desc": "Adds the albums to distinct position in the queue.",
+        "params": {
+            "albumids": APIparams.albumids,
             "to": APIparams.to,
             "whence": APIparams.whence,
             "play": APIparams.play
         }
     },
-    "MYMPD_API_QUEUE_APPEND_PLAYLIST": {
-        "desc": "Appends the playlist to the queue.",
+    "MYMPD_API_QUEUE_INSERT_ALBUM_DISC": {
+        "desc": "Adds one discs from an album to distinct position in the queue.",
         "params": {
-            "plist": APIparams.plist,
+            "albumid": APIparams.albumid,
+            "disc": APIparams.disc,
+            "to": APIparams.to,
+            "whence": APIparams.whence,
             "play": APIparams.play
         }
     },
-    "MYMPD_API_QUEUE_APPEND_URI": {
-        "desc": "Appends song(s) to the queue.",
+    "MYMPD_API_QUEUE_APPEND_PLAYLISTS": {
+        "desc": "Appends the playlists to the queue.",
         "params": {
-            "uri": APIparams.uri,
+            "plists": APIparams.plists,
+            "play": APIparams.play
+        }
+    },
+    "MYMPD_API_QUEUE_APPEND_URIS": {
+        "desc": "Appends uris to the queue.",
+        "params": {
+            "uris": APIparams.uris,
             "play": APIparams.play
         }
     },
@@ -423,20 +460,37 @@ const APImethods = {
         "desc": "Appends the search result to the queue.",
         "params": {
             "expression": APIparams.expression,
+            "sort": APIparams.sort,
+            "sortdesc": APIparams.sortdesc,
             "play": APIparams.play
         }
     },
-    "MYMPD_API_QUEUE_REPLACE_PLAYLIST": {
-        "desc": "Replaces the queue with the playlist.",
+    "MYMPD_API_QUEUE_APPEND_ALBUMS": {
+        "desc": "Appends the albums to the queue.",
         "params": {
-            "plist": APIparams.plist,
+            "albumids": APIparams.albumids,
             "play": APIparams.play
         }
     },
-    "MYMPD_API_QUEUE_REPLACE_URI": {
-        "desc": "Replaces the queue with song(s).",
+    "MYMPD_API_QUEUE_APPEND_ALBUM_DISC": {
+        "desc": "Appends on disc from an album to the queue.",
         "params": {
-            "uri": APIparams.uri,
+            "albumid": APIparams.albumid,
+            "disc": APIparams.disc,
+            "play": APIparams.play
+        }
+    },
+    "MYMPD_API_QUEUE_REPLACE_PLAYLISTS": {
+        "desc": "Replaces the queue with the playlists.",
+        "params": {
+            "plists": APIparams.plists,
+            "play": APIparams.play
+        }
+    },
+    "MYMPD_API_QUEUE_REPLACE_URIS": {
+        "desc": "Replaces the queue with uris.",
+        "params": {
+            "uris": APIparams.uris,
             "play": APIparams.play
         }
     },
@@ -444,6 +498,23 @@ const APImethods = {
         "desc": "Replaces the queue with search result.",
         "params": {
             "expression": APIparams.expression,
+            "sort": APIparams.sort,
+            "sortdesc": APIparams.sortdesc,
+            "play": APIparams.play
+        }
+    },
+    "MYMPD_API_QUEUE_REPLACE_ALBUMS": {
+        "desc": "Replaces the queue with albums.",
+        "params": {
+            "albumids": APIparams.albumids,
+            "play": APIparams.play
+        }
+    },
+    "MYMPD_API_QUEUE_REPLACE_ALBUM_DISC": {
+        "desc": "Replaces the queue with one disc from an album.",
+        "params": {
+            "albumid": APIparams.albumid,
+            "disc": APIparams.disc,
             "play": APIparams.play
         }
     },
@@ -452,9 +523,9 @@ const APImethods = {
         "params": {}
     },
     "MYMPD_API_QUEUE_PRIO_SET": {
-        "desc": "Set highest prio for specified song in queue.",
+        "desc": "Set highest prio for specified song ids in the queue.",
         "params": {
-            "songId": APIparams.songId,
+            "songIds": APIparams.songIds,
             "priority": {
                 "type": APItypes.uint,
                 "example": 10,
@@ -463,9 +534,9 @@ const APImethods = {
         }
     },
     "MYMPD_API_QUEUE_PRIO_SET_HIGHEST": {
-        "desc": "Set highest priority for specified song in queue.",
+        "desc": "Set highest priority for specified song ids in the queue.",
         "params": {
-            "songId": APIparams.songId
+            "songIds": APIparams.songIds
         }
     },
     "MYMPD_API_LAST_PLAYED_LIST": {
@@ -474,18 +545,13 @@ const APImethods = {
             "offset": APIparams.offset,
             "limit": APIparams.limit,
             "cols": APIparams.cols,
-            "searchstr": APIparams.searchstr
+            "expression": APIparams.expression
         }
     },
     "MYMPD_API_PLAYLIST_RM": {
-        "desc": "Removes the MPD playlist.",
+        "desc": "Removes the MPD playlists.",
         "params": {
-            "plist": APIparams.plist,
-            "smartplsOnly": {
-                "type": APItypes.bool,
-                "example": false,
-                "desc": "false = delete mpd playlist and smartpls definition, true = deletes only smartpls definition"
-            }
+            "plists": APIparams.plists
         }
     },
     "MYMPD_API_PLAYLIST_CONTENT_CLEAR": {
@@ -509,7 +575,48 @@ const APImethods = {
             }
         }
     },
-    "MYMPD_API_PLAYLIST_CONTENT_MOVE_SONG": {
+    "MYMPD_API_PLAYLIST_COPY": {
+        "desc": "Copies or moves source playlists to a destination playlist.",
+        "params": {
+            "srcPlists": {
+                "type": APItypes.array,
+                "example": "[\"test_plist\"]",
+                "desc": "Source MPD playlists to copy"
+            },
+            "dstPlist": {
+                "type": APItypes.string,
+                "example": "test_plist_to_copy",
+                "desc": "Destination MPD playlist name"
+            },
+            "mode": {
+                "type": APItypes.uint,
+                "example": 0,
+                "desc": "0=copy-append, 1=copy-insert, 2=copy-replace, 3=move-append, 4=move-insert"
+            }
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_MOVE_TO_PLAYLIST": {
+        "desc": "Moves entries from one playlist to another.",
+        "params": {
+            "srcPlist": {
+                "type": APItypes.string,
+                "example": "test_plist",
+                "desc": "Source MPD playlists to copy songs positions from"
+            },
+            "dstPlist": {
+                "type": APItypes.string,
+                "example": "test_plist_to_move",
+                "desc": "Destination MPD playlist name"
+            },
+            "positions": APIparams.positions,
+            "mode": {
+                "type": APItypes.uint,
+                "example": 0,
+                "desc": "0=append, 1=insert"
+            }
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_MOVE_POSITION": {
         "desc": "Moves a song in the playlist.",
         "params": {
             "plist": APIparams.plist,
@@ -517,19 +624,73 @@ const APImethods = {
             "to": APIparams.to
         }
     },
-    "MYMPD_API_PLAYLIST_CONTENT_APPEND_URI": {
-        "desc": "Appends an uri to the playlist.",
+    "MYMPD_API_PLAYLIST_CONTENT_APPEND_URIS": {
+        "desc": "Appends uris to the playlist.",
         "params": {
             "plist": APIparams.plist,
-            "uri": APIparams.uri
+            "uris": APIparams.uris
         }
     },
-    "MYMPD_API_PLAYLIST_CONTENT_INSERT_URI": {
-        "desc": "Inserts an uri to the playlist.",
+    "MYMPD_API_PLAYLIST_CONTENT_APPEND_ALBUMS": {
+        "desc": "Appends albums to the playlist.",
         "params": {
             "plist": APIparams.plist,
-            "uri": APIparams.uri,
+            "albumids": APIparams.albumids
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_APPEND_ALBUM_DISC": {
+        "desc": "Appends one disc from an album to the playlist.",
+        "params": {
+            "plist": APIparams.plist,
+            "albumid": APIparams.albumid,
+            "disc": APIparams.disc
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_INSERT_URIS": {
+        "desc": "Inserts uris to the playlist.",
+        "params": {
+            "plist": APIparams.plist,
+            "uris": APIparams.uris,
             "to": APIparams.to
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_INSERT_ALBUMS": {
+        "desc": "Insert albums to the playlist.",
+        "params": {
+            "plist": APIparams.plist,
+            "albumids": APIparams.albumids,
+            "to": APIparams.to
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_INSERT_ALBUM_DISC": {
+        "desc": "Inserts one disc from an album to the playlist.",
+        "params": {
+            "plist": APIparams.plist,
+            "albumid": APIparams.albumid,
+            "disc": APIparams.disc,
+            "to": APIparams.to
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_REPLACE_URIS": {
+        "desc": "Replaces the playlist content with uris.",
+        "params": {
+            "plist": APIparams.plist,
+            "uris": APIparams.uris
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_REPLACE_ALBUMS": {
+        "desc": "Replaces the playlist content with albums.",
+        "params": {
+            "plist": APIparams.plist,
+            "albumids": APIparams.albumids
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_REPLACE_ALBUM_DISC": {
+        "desc": "Replaces the playlist content with one disc from an album.",
+        "params": {
+            "plist": APIparams.plist,
+            "albumid": APIparams.albumid,
+            "disc": APIparams.disc
         }
     },
     "MYMPD_API_PLAYLIST_CONTENT_INSERT_SEARCH": {
@@ -537,35 +698,34 @@ const APImethods = {
         "params": {
             "plist": APIparams.plist,
             "expression": APIparams.expression,
-            "to": APIparams.to
-        }
-    },
-    "MYMPD_API_PLAYLIST_CONTENT_REPLACE_URI": {
-        "desc": "Replaces the playlist content with uri.",
-        "params": {
-            "plist": APIparams.plist,
-            "uri": APIparams.uri
+            "to": APIparams.to,
+            "sort": APIparams.sort,
+            "sortdesc": APIparams.sortdesc
         }
     },
     "MYMPD_API_PLAYLIST_CONTENT_APPEND_SEARCH": {
         "desc": "Appends the search result to the playlist.",
         "params": {
             "plist": APIparams.plist,
-            "expression": APIparams.expression
+            "expression": APIparams.expression,
+            "sort": APIparams.sort,
+            "sortdesc": APIparams.sortdesc
         }
     },
     "MYMPD_API_PLAYLIST_CONTENT_REPLACE_SEARCH": {
         "desc": "Replaces the playlist content with the search result",
         "params": {
             "plist": APIparams.plist,
-            "expression": APIparams.expression
+            "expression": APIparams.expression,
+            "sort": APIparams.sort,
+            "sortdesc": APIparams.sortdesc
         }
     },
-    "MYMPD_API_PLAYLIST_CONTENT_RM_SONG": {
-        "desc": "Removes a song from the playlist.",
+    "MYMPD_API_PLAYLIST_CONTENT_RM_POSITIONS": {
+        "desc": "Removes entries from the playlist. Positions must be sorted descending.",
         "params": {
             "plist": APIparams.plist,
-            "pos": APIparams.pos
+            "positions": APIparams.positions
         }
     },
     "MYMPD_API_PLAYLIST_CONTENT_RM_RANGE": {
@@ -588,7 +748,7 @@ const APImethods = {
         "desc": "Batch removes playlists.",
         "protected": true,
         "params": {
-            "type": {
+            "plistType": {
                 "type": APItypes.string,
                 "example": "deleteEmptyPlaylists",
                 "desc": "valid values are: \"deleteEmptyPlaylists\", \"deleteSmartPlaylists\", \"deleteAllPlaylists\""
@@ -614,7 +774,7 @@ const APImethods = {
             "plist": APIparams.plist,
             "offset": APIparams.offset,
             "limit": APIparams.limit,
-            "searchstr": APIparams.searchstr,
+            "expression": APIparams.expression,
             "cols": APIparams.cols
         }
     },
@@ -632,6 +792,70 @@ const APImethods = {
                 "type": APItypes.string,
                 "example": "Artist",
                 "desc": "Tag to sort"
+            },
+            "sortdesc": APIparams.sortdesc
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_DEDUP": {
+        "desc": "Deduplicates the playlist.",
+        "params": {
+            "plist": APIparams.plist,
+            "remove": {
+                "type": APItypes.bool,
+                "example": true,
+                "desc": "true = remove duplicate entries, false = count number of duplicate entries"
+            }
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_DEDUP_ALL": {
+        "desc": "Deduplicates all playlists.",
+        "params": {
+            "remove": {
+                "type": APItypes.bool,
+                "example": true,
+                "desc": "true = remove duplicate entries, false = count number of duplicate entries"
+            }
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_VALIDATE": {
+        "desc": "Validates the playlist and removes invalid entries.",
+        "params": {
+            "plist": APIparams.plist,
+            "remove": {
+                "type": APItypes.bool,
+                "example": true,
+                "desc": "true = remove invalid entries, false = count number of invalid entries"
+            }
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_VALIDATE_ALL": {
+        "desc": "Validates all playlist and removes invalid entries.",
+        "params": {
+            "remove": {
+                "type": APItypes.bool,
+                "example": true,
+                "desc": "true = remove invalid entries, false = count number of invalid entries"
+            }
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_VALIDATE_DEDUP": {
+        "desc": "Validates and deduplicates the playlist and removes invalid entries.",
+        "params": {
+            "plist": APIparams.plist,
+            "remove": {
+                "type": APItypes.bool,
+                "example": true,
+                "desc": "true = remove invalid entries, false = count number of invalid entries"
+            }
+        }
+    },
+    "MYMPD_API_PLAYLIST_CONTENT_VALIDATE_DEDUP_ALL": {
+        "desc": "Validates and deduplicates all playlists and removes invalid entries.",
+        "params": {
+            "remove": {
+                "type": APItypes.bool,
+                "example": true,
+                "desc": "true = remove invalid entries, false = count number of invalid entries"
             }
         }
     },
@@ -662,7 +886,8 @@ const APImethods = {
                 "example": 604800,
                 "desc": "timerange in seconds"
             },
-            "sort": APIparams.sortShuffle
+            "sort": APIparams.sortShuffle,
+            "sortdesc": APIparams.sortdesc
         }
     },
     "MYMPD_API_SMARTPLS_STICKER_SAVE": {
@@ -684,7 +909,8 @@ const APImethods = {
                 "example": 2,
                 "desc": "minimum integer value"
             },
-            "sort": APIparams.sortShuffle
+            "sort": APIparams.sortShuffle,
+            "sortdesc": APIparams.sortdesc
         }
     },
     "MYMPD_API_SMARTPLS_SEARCH_SAVE": {
@@ -692,7 +918,8 @@ const APImethods = {
         "params": {
             "plist": APIparams.plist,
             "expression": APIparams.expression,
-            "sort": APIparams.sortShuffle
+            "sort": APIparams.sortShuffle,
+            "sortdesc": APIparams.sortdesc
         }
     },
     "MYMPD_API_SMARTPLS_GET": {
@@ -769,6 +996,16 @@ const APImethods = {
     "MYMPD_API_PLAYER_PREV": {
         "desc": "Goto previous song in queue.",
         "params": {}
+    },
+    "MYMPD_API_PLAYER_OUTPUT_GET": {
+        "desc": "Get the details of a MPD output.",
+        "params": {
+            "outputName": {
+                "type": APItypes.string,
+                "example": "http",
+                "desc": "MPD output name"
+            }
+        }
     },
     "MYMPD_API_PLAYER_OUTPUT_LIST": {
         "desc": "Lists the MPD outputs.",
@@ -865,6 +1102,21 @@ const APImethods = {
                 "example": 6600,
                 "desc": "MPD port to use"
             },
+            "mpdPass": {
+                "type": APItypes.string,
+                "example": "dontsetpassword",
+                "desc": "MPD password to use, set it to 'dontsetpassword' to not change the password"
+            },
+            "mpdTimeout": {
+                "type": APItypes.uint,
+                "example": 120000,
+                "desc": "MPD timeout in ms"
+            },
+            "mpdKeepalive": {
+                "type": APItypes.bool,
+                "example": true,
+                "desc": "Enables tcp keepalives"
+            },
             "musicDirectory": {
                 "type": APItypes.string,
                 "example": "auto",
@@ -886,10 +1138,30 @@ const APImethods = {
                 "example": 8192,
                 "desc": "chunk size in bytes for binary data"
             },
-            "mpdTimeout": {
+            "stickerdbMpdHost": {
+                "type": APItypes.string,
+                "example": "/run/mpd/socket",
+                "desc": "MPD host or socket (sticker database)"
+            },
+            "stickerdbMpdPort": {
+                "type": APItypes.uint,
+                "example": 6600,
+                "desc": "MPD port to use (sticker database)"
+            },
+            "stickerdbMpdPass": {
+                "type": APItypes.string,
+                "example": "dontsetpassword",
+                "desc": "MPD password to use, set it to 'dontsetpassword' to not change the password (sticker database)"
+            },
+            "stickerdbMpdTimeout": {
                 "type": APItypes.uint,
                 "example": 120000,
-                "desc": "MPD timeout in ms"
+                "desc": "MPD timeout in ms (sticker database)"
+            },
+            "stickerdbMpdKeepalive": {
+                "type": APItypes.bool,
+                "example": true,
+                "desc": "Enables tcp keepalives (sticker database)"
             }
         }
     },
@@ -904,12 +1176,12 @@ const APImethods = {
             "coverimageNames": {
                 "type": APItypes.string,
                 "example": "folder,cover",
-                "desc": "Comma separated list of coverimages, basenames or full names"
+                "desc": "Comma separated list of coverimages, basenames or full names."
             },
             "thumbnailNames": {
                 "type": APItypes.string,
                 "example": "folder-sm,cover-sm",
-                "desc": "Comma separated list of coverimage thumbnails, basenames or full names"
+                "desc": "Comma separated list of coverimage thumbnails, basenames or full names."
             },
             "lastPlayedCount": {
                 "type": APItypes.uint,
@@ -934,7 +1206,7 @@ const APImethods = {
             "smartplsSort": {
                 "type": APItypes.string,
                 "example": "",
-                "desc": "Sort settings for generated smart playlists, blank = no sort, \"shuffle\" or tag name"
+                "desc": "Sort settings for generated smart playlists, blank = no sort, \"shuffle\" or tag name."
             },
             "smartplsGenerateTagList": {
                 "type": APItypes.string,
@@ -1083,45 +1355,60 @@ const APImethods = {
                         "example": true,
                         "desc": "Enable media session support"
                     },
-                    "uiFooterQueueSettings": {
-                        "type": APItypes.bool,
-                        "example": true,
-                        "desc": "Shows playback settings button in footer."
-                    },
-                    "uiFooterPlaybackControls": {
+                    "footerPlaybackControls": {
                         "type": APItypes.string,
                         "example": "both",
                         "desc": "\"pause\", \"stop\" or \"both\" for pause and stop"
                     },
-                    "uiFooterVolumeLevel": {
+                    "footerSettingsPlayback": {
                         "type": APItypes.bool,
                         "example": true,
-                        "desc": "Displays the volume level in the footer"
+                        "desc": "Shows playback settings button in footer."
                     },
-                    "uiFooterNotifications": {
+                    "footerVolumeLevel": {
                         "type": APItypes.bool,
                         "example": true,
-                        "desc": "Displays a notification icon in the footer"
+                        "desc": "Displays the volume level in the footer."
                     },
-                    "uiMaxElementsPerPage": {
+                    "footerNotifications": {
+                        "type": APItypes.bool,
+                        "example": true,
+                        "desc": "Displays a notification icon in the footer."
+                    },
+                    "showHelp": {
+                        "type": APItypes.bool,
+                        "example": true,
+                        "desc": "Displays help texts."
+                    },
+                    "maxElementsPerPage": {
                         "type": APItypes.uint,
                         "example": 50,
-                        "desc": "max. elements for lists: 25, 50, 100, 200 or 0 for unlimited"
+                        "desc": "Max. elements for lists: 25, 50, 100, 200 or 0 for unlimited"
                     },
-                    "uiSmallWidthTagRows": {
+                    "smallWidthTagRows": {
                         "type": APItypes.bool,
                         "example": true,
-                        "desc": "Display tags in rows for small displays"
+                        "desc": "Display tags in rows for small displays."
                     },
-                    "uiQuickPlayButton": {
+                    "quickPlayButton": {
                         "type": APItypes.bool,
                         "example": false,
-                        "title": "Show quick play button"
+                        "desc": "Show quick play button"
                     },
-                    "uiQuickRemoveButton": {
+                    "quickRemoveButton": {
                         "type": APItypes.bool,
                         "example": false,
-                        "title": "Show quick remove button"
+                        "desc": "Show quick remove button"
+                    },
+                    "compactGrids": {
+                        "type": APItypes.bool,
+                        "example": true,
+                        "desc": "Disables line-breaks in descriptions."
+                    },
+                    "showBackButton": {
+                        "type": APItypes.bool,
+                        "example": true,
+                        "desc": "Shows a history back button in the navigation bar."
                     },
                     "enableHome": {
                         "type": APItypes.bool,
@@ -1151,7 +1438,7 @@ const APImethods = {
                     "enableLocalPlayback": {
                         "type": APItypes.bool,
                         "example": false,
-                        "desc": "Enables local playback of mpd http stream"
+                        "desc": "Enables local playback of mpd http stream."
                     },
                     "enablePartitions": {
                         "type": APItypes.bool,
@@ -1163,45 +1450,50 @@ const APImethods = {
                         "example": true,
                         "desc": "Enable Lyrics"
                     },
-                    "uiTheme": {
+                    "theme": {
                         "type": APItypes.string,
                         "example": "dark",
                         "desc": "\"dark\", \"light\" or \"auto\""
                     },
-                    "uiThumbnailSize": {
+                    "thumbnailSize": {
                         "type": APItypes.int,
                         "example": 175,
                         "desc": "Size for thumbnails"
                     },
-                    "uiBgColor": {
+                    "bgCover": {
+                        "type": APItypes.bool,
+                        "example": true,
+                        "desc": "Display the coverimage as background."
+                    },
+                    "bgCssFilter": {
+                        "type": APItypes.string,
+                        "example": "grayscale(100%) opacity(10%)",
+                        "desc": "CSS filter for background coverimage."
+                    },
+                    "bgColor": {
                         "type": APItypes.string,
                         "example": "#000000",
                         "desc": "Background color"
                     },
-                    "uiBgImage": {
+                    "bgImage": {
                         "type": APItypes.string,
                         "example": "",
                         "desc": "Uri for background image"
                     },
-                    "uiBgCover": {
-                        "type": APItypes.bool,
-                        "example": true,
-                        "desc": "Display the coverimage as background"
-                    },
-                    "uiBgCssFilter": {
-                        "type": APItypes.string,
-                        "example": "grayscale(100%) opacity(10%)",
-                        "desc": "CSS filter for background coverimage"
-                    },
-                    "uiLocale": {
+                    "locale": {
                         "type": APItypes.string,
                         "example": "de-DE",
                         "desc": "Language code or \"auto\" for browser default."
                     },
-                    "uiStartupView": {
+                    "startupView": {
                         "type": APItypes.string,
                         "example": "Home",
                         "desc": "Startup view"
+                    },
+                    "musicbrainzLinks": {
+                        "type": APItypes.bool,
+                        "example": true,
+                        "desc": "Shows links to MusicBrainz website in the playback and album views."
                     }
                 }
             }
@@ -1214,7 +1506,7 @@ const APImethods = {
             "consume": {
                 "type": APItypes.string,
                 "example": "1",
-                "desc": "MPD consume mode: 0, 1, oneshot"
+                "desc": "MPD consume mode: \"0\", \"1\", \"oneshot\""
             },
             "random": {
                 "type": APItypes.bool,
@@ -1224,7 +1516,7 @@ const APImethods = {
             "single": {
                 "type": APItypes.string,
                 "example": "1",
-                "desc": "MPD single mode: 0, 1, oneshot"
+                "desc": "MPD single mode: \"0\", \"1\", \"oneshot\""
             },
             "repeat": {
                 "type": APItypes.bool,
@@ -1254,7 +1546,7 @@ const APImethods = {
             "jukeboxMode": {
                 "type": APItypes.string,
                 "example": "off",
-                "desc": "Jukebox modes: off, song, album"
+                "desc": "Jukebox modes: \"off\", \"song\", \"album\""
             },
             "jukeboxPlaylist": {
                 "type": APItypes.string,
@@ -1274,17 +1566,24 @@ const APImethods = {
             "jukeboxUniqueTag": {
                 "type": APItypes.string,
                 "example": "Album",
-                "desc": "Tag to maintain unique values in internal jukebox queue."
+                "desc": "Tag for which unique values are enforced in the queue."
             },
             "jukeboxIgnoreHated": {
                 "type": APItypes.bool,
                 "example": true,
                 "desc": "Ignores hated songs."
             },
+            "jukeboxFilterInclude": APIparams.expression,
+            "jukeboxFilterExclude": APIparams.expression,
+            "jukeboxMinSongDuration": {
+                "type": APItypes.uint,
+                "example": 60,
+                "desc": "Only songs with this minimum length will be considered."
+            },
             "autoPlay": {
                 "type": APItypes.bool,
                 "example": false,
-                "desc": "Start playing if a song is adder to queue."
+                "desc": "Start playing if a song is added to the queue."
             }
         }
     },
@@ -1294,8 +1593,8 @@ const APImethods = {
             "name": APIparams.preset
         }
     },
-    "MYMPD_API_PRESET_LOAD": {
-        "desc": "Loads a preset.",
+    "MYMPD_API_PRESET_APPLY": {
+        "desc": "Applies a preset.",
         "params": {
             "name": APIparams.preset
         }
@@ -1305,8 +1604,8 @@ const APImethods = {
         "params": {
             "table": {
                 "type": APItypes.string,
-                "example": "colsQueueJukebox",
-                "desc": "Valid values: colsQueueCurrent, colsQueueLastPlayed, colsSearch, colsBrowseDatabaseAlbumDetail, colsBrowseDatabaseAlbumList, colsBrowsePlaylistsDetail, colsBrowseFilesystem, colsPlayback, colsQueueJukebox"
+                "example": "colsQueueCurrent",
+                "desc": "Valid values: colsQueueCurrent, colsQueueLastPlayed, colsSearch, colsBrowseDatabaseAlbumDetail, colsBrowseDatabaseAlbumList, colsBrowsePlaylistDetail, colsBrowseFilesystem, colsPlayback, colsQueueJukeboxAlbum, colsQueueJukeboxSong, colsBrowseRadioWebradiodb, colsBrowseRadioRadiobrowser"
             },
             "cols": APIparams.cols
         }
@@ -1416,6 +1715,17 @@ const APImethods = {
             }
         }
     },
+    "MYMPD_API_SCRIPT_VALIDATE": {
+        "desc": "Validates (precompiles) a script",
+        "params": {
+            "script": APIparams.script,
+            "content": {
+                "type": APItypes.string,
+                "example": "return \"test\"",
+                "desc": "The lua script itself"
+            }
+        }
+    },
     "MYMPD_API_SCRIPT_SAVE": {
         "desc": "Saves a script",
         "protected": true,
@@ -1498,7 +1808,7 @@ const APImethods = {
                 "example": 8000,
                 "desc": "Port of MPD http stream for local playback"
             },
-            "streamuri": {
+            "streamUri": {
                 "type": APItypes.string,
                 "example": "http://custom/stream/uri",
                 "desc": "Custom stream uri, overrides automatic stream uri calculation (MPD host + mpdStreamPort)"
@@ -1658,7 +1968,7 @@ const APImethods = {
                 "example": "[\"plist\",\"nas/Webradios/swr1.m3u\",\"swr1.m3u\"]",
                 "desc": "Array of cmd options" +
                         "for replaceQueue: [\"plist\",\"nas/Webradios/swr1.m3u\",\"swr1.m3u\"], " +
-                        "for appGoto: [\"Browse\",\"Database\",\"List\",\"0\",\"AlbumArtist\",\"-LastModified\",\"Album\",\"\"], "+
+                        "for appGoto: [\"Browse\",\"Database\",\"List\",\"0\",\"AlbumArtist\",\"-Last-Modified\",\"Album\",\"\"], "+
                         "for execScriptFromOptions: [\"Scriptname\",\"scriptarg1\"]"
             }
         }
@@ -1679,13 +1989,13 @@ const APImethods = {
             "offset": APIparams.offset,
             "limit": APIparams.limit,
             "cols": APIparams.cols,
-            "searchstr": APIparams.searchstr
+            "expression": APIparams.expression
         }
     },
     "MYMPD_API_JUKEBOX_RM": {
         "desc": "Removes a song or album from the jukebox queue.",
         "params": {
-            "pos": APIparams.pos
+            "positions": APIparams.positions
         }
     },
     "MYMPD_API_JUKEBOX_CLEAR": {
@@ -1816,12 +2126,12 @@ const APImethods = {
         }
     },
     "MYMPD_API_WEBRADIO_FAVORITE_RM": {
-        "desc": "Deletes a webradio favorite.",
+        "desc": "Deletes webradio favorites.",
         "params": {
-            "filename": {
-                "type": APItypes.string,
-                "example": "https___liveradio_swr_de_sw282p3_swr1bw_play_mp3.m3u",
-                "desc": "Name of the webradio favorite to delete."
+            "filenames": {
+                "type": APItypes.array,
+                "example": "[\"https___liveradio_swr_de_sw282p3_swr1bw_play_mp3.m3u\"]",
+                "desc": "Filenames of the webradio favorites to delete."
             }
         }
     },

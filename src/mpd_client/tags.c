@@ -8,13 +8,16 @@
 #include "src/mpd_client/tags.h"
 
 #include "dist/libmympdclient/src/isong.h"
+#include "src/lib/album_cache.h"
 #include "src/lib/jsonrpc.h"
 #include "src/lib/log.h"
 #include "src/lib/mem.h"
 #include "src/lib/sds_extras.h"
 #include "src/lib/utility.h"
 #include "src/mpd_client/errorhandler.h"
+#include "src/mpd_client/shortcuts.h"
 
+#include <inttypes.h>
 #include <string.h>
 
 /**
@@ -36,13 +39,16 @@ static sds get_tag_values(const struct mpd_song *song, enum mpd_tag_type tag,
  * @return last modification time
  */
 time_t mpd_client_get_db_mtime(struct t_partition_state *partition_state) {
+    time_t mtime = 0;
     struct mpd_stats *stats = mpd_run_stats(partition_state->conn);
-    if (stats == NULL) {
-        mympd_check_error_and_recover(partition_state);
-        return 0;
+    if (stats != NULL) {
+        mtime = (time_t)mpd_stats_get_db_update_time(stats);
+        mpd_stats_free(stats);
     }
-    time_t mtime = (time_t)mpd_stats_get_db_update_time(stats);
-    mpd_stats_free(stats);
+    mpd_response_finish(partition_state->conn);
+    if (mympd_check_error_and_recover(partition_state, NULL, "mpd_run_stats") == false) {
+        mtime = 0;
+    }
     return mtime;
 }
 
@@ -126,7 +132,7 @@ bool is_multivalue_tag(enum mpd_tag_type tag) {
 }
 
 /**
- * Maps a tag to its sort tag pedant and checks if the sort tag is enabled.
+ * Maps a tag to its sort tag pendant and checks if the sort tag is enabled.
  * @param tag mpd tag type
  * @param available_tags pointer to enabled tags
  * @return sort tag if exists, else the original tag
@@ -160,9 +166,9 @@ enum mpd_tag_type get_sort_tag(enum mpd_tag_type tag, const struct t_tags *avail
  * @param partition_state pointer to partition specific states
  */
 bool disable_all_mpd_tags(struct t_partition_state *partition_state) {
-    MYMPD_LOG_DEBUG("\"%s\": Disabling all mpd tag types", partition_state->name);
-    bool rc = mpd_run_clear_tag_types(partition_state->conn);
-    return mympd_check_rc_error_and_recover(partition_state, rc, "mpd_run_clear_tag_types");
+    MYMPD_LOG_DEBUG(partition_state->name, "Disabling all mpd tag types");
+    mpd_run_clear_tag_types(partition_state->conn);
+    return mympd_check_error_and_recover(partition_state, NULL, "mpd_run_clear_tag_types");
 }
 
 /**
@@ -170,9 +176,9 @@ bool disable_all_mpd_tags(struct t_partition_state *partition_state) {
  * @param partition_state pointer to partition specific states
  */
 bool enable_all_mpd_tags(struct t_partition_state *partition_state) {
-    MYMPD_LOG_DEBUG("\"%s\": Enabling all mpd tag types", partition_state->name);
-    bool rc = mpd_run_all_tag_types(partition_state->conn);
-    return mympd_check_rc_error_and_recover(partition_state, rc, "mpd_run_all_tag_types");
+    MYMPD_LOG_DEBUG(partition_state->name, "Enabling all mpd tag types");
+    mpd_run_all_tag_types(partition_state->conn);
+    return mympd_check_error_and_recover(partition_state, NULL, "mpd_run_all_tag_types");
 }
 
 /**
@@ -182,9 +188,9 @@ bool enable_all_mpd_tags(struct t_partition_state *partition_state) {
  * @param tags tags to print
  * @return pointer to buffer
  */
-sds print_tags_array(sds buffer, const char *tagsname, struct t_tags *tags) {
+sds print_tags_array(sds buffer, const char *tagsname, const struct t_tags *tags) {
     buffer = sdscatfmt(buffer, "\"%s\": [", tagsname);
-    for (unsigned i = 0; i < tags->len; i++) {
+    for (unsigned i = 0; i < tags->tags_len; i++) {
         if (i > 0) {
             buffer = sdscatlen(buffer, ",", 1);
         }
@@ -204,26 +210,62 @@ bool enable_mpd_tags(struct t_partition_state *partition_state, const struct t_t
     if (partition_state->mpd_state->feat_tags == false) {
         return true;
     }
-    MYMPD_LOG_INFO("\"%s\": Setting interesting mpd tag types", partition_state->name);
+    MYMPD_LOG_INFO(partition_state->name, "Setting interesting mpd tag types");
     if (mpd_command_list_begin(partition_state->conn, false)) {
-        bool rc = mpd_send_clear_tag_types(partition_state->conn);
-        if (rc == false) {
-            MYMPD_LOG_ERROR("\"%s\": Error adding command to command list mpd_send_clear_tag_types", partition_state->name);
+        if (mpd_send_clear_tag_types(partition_state->conn) == false) {
+            mympd_set_mpd_failure(partition_state, "Error adding command to command list mpd_send_clear_tag_types");
         }
-        if (enable_tags->len > 0) {
-            rc = mpd_send_enable_tag_types(partition_state->conn, enable_tags->tags, (unsigned)enable_tags->len);
-            if (rc == false) {
-                MYMPD_LOG_ERROR("\"%s\": Error adding command to command list mpd_send_enable_tag_types", partition_state->name);
+        if (enable_tags->tags_len > 0) {
+            if (mpd_send_enable_tag_types(partition_state->conn, enable_tags->tags, (unsigned)enable_tags->tags_len) == false) {
+                mympd_set_mpd_failure(partition_state, "Error adding command to command list mpd_send_enable_tag_types");
             }
         }
         else {
-            MYMPD_LOG_WARN("\"%s\": No mpd tags are enabled", partition_state->name);
+            MYMPD_LOG_WARN(partition_state->name, "No mpd tags are enabled");
         }
-        if (mpd_command_list_end(partition_state->conn)) {
-            mpd_response_finish(partition_state->conn);
+        mpd_client_command_list_end_check(partition_state);
+    }
+    mpd_response_finish(partition_state->conn);
+    return mympd_check_error_and_recover(partition_state, NULL, "mpd_send_enable_tag_types");
+}
+
+/**
+ * Get's a tag value from mpd song and converts it to int
+ * @param song mpd song struct
+ * @param tag mdp tag type
+ * @return parsed tag value
+ */
+int mpd_client_get_tag_value_int(const struct mpd_song *song, enum mpd_tag_type tag) {
+    const char *value = mpd_song_get_tag(song, tag, 0);
+    return value != NULL
+        ? (int)strtoimax(value, NULL, 10)
+        : 0;
+}
+
+/**
+ * Get's a tag value from mpd song and pads it
+ * @param song mpd song struct
+ * @param tag mpd tag type
+ * @param pad padding char
+ * @param len length to pad
+ * @param tag_values already allocated sds string to append
+ * @return sds new sds pointer to tag_values
+ */
+sds mpd_client_get_tag_value_padded(const struct mpd_song *song, enum mpd_tag_type tag, const char pad, size_t len, sds tag_values) {
+    const char *value = mpd_song_get_tag(song, tag, 0);
+    size_t value_len = value == NULL
+        ? 0
+        : strlen(value);
+    if (value_len < len) {
+        len = len - value_len;
+        for (size_t i = 0; i < len; i++) {
+            tag_values = sdscatfmt(tag_values, "%c", pad);
         }
     }
-    return mympd_check_error_and_recover(partition_state);
+    if (value != NULL) {
+        tag_values = sdscatlen(tag_values, value, value_len);
+    }
+    return tag_values;
 }
 
 /**
@@ -275,34 +317,38 @@ sds mpd_client_get_tag_values(const struct mpd_song *song, enum mpd_tag_type tag
             }
         }
         else {
-            //replace empty tag value(s) with dash
-            if (multi == true) {
-                tag_values = sdscatlen(tag_values, "[\"-\"]", 5);
-            }
-            else {
-                tag_values = sdscatlen(tag_values, "\"-\"", 3);
-            }
+            //set empty tag value(s)
+            tag_values = multi == true
+                ? sdscatlen(tag_values, "[]", 2)
+                : sdscatlen(tag_values, "\"\"", 2);
         }
     }
     return tag_values;
 }
 
 /**
- * Gets the tag values for a mpd song as json string
+ * Prints the tag values for a mpd song as json string
  * @param buffer already allocated sds string to append the values
  * @param tags_enabled true=mpd tags are enabled, else false
  * @param tagcols pointer to t_tags struct (tags to retrieve)
  * @param song pointer to a mpd_song struct to retrieve tags from
+ * @param album_config album config
  * @return new sds pointer to buffer
  */
-sds get_song_tags(sds buffer, bool tags_enabled, const struct t_tags *tagcols,
-        const struct mpd_song *song)
+sds print_song_tags(sds buffer, bool tags_enabled, const struct t_tags *tagcols,
+        const struct mpd_song *song, const struct t_albums_config *album_config)
 {
+    const char *uri = mpd_song_get_uri(song);
     if (tags_enabled == true) {
-        for (unsigned tagnr = 0; tagnr < tagcols->len; ++tagnr) {
+        for (unsigned tagnr = 0; tagnr < tagcols->tags_len; ++tagnr) {
             buffer = sdscatfmt(buffer, "\"%s\":", mpd_tag_name(tagcols->tags[tagnr]));
             buffer = mpd_client_get_tag_values(song, tagcols->tags[tagnr], buffer);
             buffer = sdscatlen(buffer, ",", 1);
+        }
+        if (is_streamuri(uri) == false) {
+            sds albumid = album_cache_get_key(sdsempty(), song, album_config);
+            buffer = tojson_sds(buffer, "AlbumId", albumid, true);
+            FREE_SDS(albumid);
         }
     }
     else {
@@ -310,10 +356,27 @@ sds get_song_tags(sds buffer, bool tags_enabled, const struct t_tags *tagcols,
         buffer = mpd_client_get_tag_values(song, MPD_TAG_TITLE, buffer);
         buffer = sdscatlen(buffer, ",", 1);
     }
-
     buffer = tojson_uint(buffer, "Duration", mpd_song_get_duration(song), true);
-    buffer = tojson_time(buffer, "LastModified", mpd_song_get_last_modified(song), true);
-    buffer = tojson_char(buffer, "uri", mpd_song_get_uri(song), false);
+    buffer = tojson_time(buffer, "Last-Modified", mpd_song_get_last_modified(song), true);
+    buffer = tojson_char(buffer, "uri", uri, false);
+    return buffer;
+}
+
+/**
+ * Prints the tag values for an album as json string
+ * @param buffer already allocated sds string to append the values
+ * @param tagcols pointer to t_tags struct (tags to retrieve)
+ * @param album pointer to a mpd_song struct representing the album
+ * @param album_config album config
+ * @return new sds pointer to buffer
+ */
+sds print_album_tags(sds buffer, const struct t_tags *tagcols,
+        const struct mpd_song *album, const struct t_albums_config *album_config)
+{
+    buffer = print_song_tags(buffer, true, tagcols, album, album_config);
+    buffer = sdscatlen(buffer, ",", 1);
+    buffer = tojson_uint(buffer, "Discs", album_get_discs(album), true);
+    buffer = tojson_uint(buffer, "SongCount", album_get_song_count(album), false);
     return buffer;
 }
 
@@ -349,20 +412,20 @@ void check_tags(sds taglist, const char *taglistname, struct t_tags *tagtypes,
         sdstrim(tokens[i], " ");
         enum mpd_tag_type tag = mpd_tag_name_iparse(tokens[i]);
         if (tag == MPD_TAG_UNKNOWN) {
-            MYMPD_LOG_WARN("Unknown tag %s", tokens[i]);
+            MYMPD_LOG_WARN(NULL, "Unknown tag %s", tokens[i]);
         }
         else {
             if (mpd_client_tag_exists(allowed_tag_types, tag) == true) {
                 logline = sdscatfmt(logline, "%s ", mpd_tag_name(tag));
-                tagtypes->tags[tagtypes->len++] = tag;
+                tagtypes->tags[tagtypes->tags_len++] = tag;
             }
             else {
-                MYMPD_LOG_DEBUG("Disabling tag %s", mpd_tag_name(tag));
+                MYMPD_LOG_DEBUG(NULL, "Disabling tag %s", mpd_tag_name(tag));
             }
         }
     }
     sdsfreesplitres(tokens, tokens_count);
-    MYMPD_LOG_NOTICE("%s", logline);
+    MYMPD_LOG_NOTICE(NULL, "%s", logline);
     FREE_SDS(logline);
 }
 
@@ -373,7 +436,7 @@ void check_tags(sds taglist, const char *taglistname, struct t_tags *tagtypes,
  * @return true if tag is in tagtypes else false
  */
 bool mpd_client_tag_exists(const struct t_tags *tagtypes, enum mpd_tag_type tag) {
-    for (size_t i = 0; i < tagtypes->len; i++) {
+    for (size_t i = 0; i < tagtypes->tags_len; i++) {
         if (tagtypes->tags[i] == tag) {
             return true;
         }
@@ -410,7 +473,8 @@ static sds get_tag_value_string(const struct mpd_song *song, enum mpd_tag_type t
 }
 
 /**
- * Appends a json string or array to tag_values
+ * Appends a json string or array to tag_values.
+ * Nothing is append if value is empty.
  * @param song pointer to mpd song struct
  * @param tag mpd tag type to get values for
  * @param tag_values already allocated sds string to append the values

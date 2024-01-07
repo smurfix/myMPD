@@ -15,17 +15,15 @@ target_sources(mympd-script
     mympd-script.c
     ../log.c
     ../../src/lib/filehandler.c
-    ../../src/lib/sds_extras.c
     ../../src/lib/http_client.c
+    ../../src/lib/sds_extras.c
+    ../../src/lib/passwd.c
 )
 
 target_link_libraries(mympd-script
   sds
   mongoose
+  ${OPENSSL_LIBRARIES}
 )
-
-if(OPENSSL_FOUND)
-  target_link_libraries(mympd-script ${OPENSSL_LIBRARIES})
-endif()
 
 install(TARGETS mympd-script DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})

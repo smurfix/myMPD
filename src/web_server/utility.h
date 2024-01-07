@@ -9,6 +9,7 @@
 
 #include "dist/mongoose/mongoose.h"
 #include "dist/sds/sds.h"
+#include "src/lib/config_def.h"
 #include "src/lib/list.h"
 
 #include <stdbool.h>
@@ -34,6 +35,11 @@ struct t_mg_user_data {
     sds custom_mympd_image;      //!< name of custom mympd image
     sds custom_na_image;         //!< name of custom not available image
     sds custom_stream_image;     //!< name of custom stream image
+    bool mympd_api_started;      //!< true if the mympd_api thread is ready, else false
+    sds cert_content;            //!< the server certificate
+    sds key_content;             //!< the server key
+    struct mg_str cert;          //!< pointer to ssl cert_content
+    struct mg_str key;           //!< pointer to ssl key_content
 };
 
 /**
@@ -41,12 +47,16 @@ struct t_mg_user_data {
  */
 struct t_frontend_nc_data {
     struct mg_connection *backend_nc;  //!< pointer to backend connection
-    sds partition;                     //!< partition (for websocket connections only)
+    //for websocket connections only
+    sds partition;                     //!< partition
+    long id;                           //!< jsonrpc id (client id)
 };
 
 #ifdef MYMPD_EMBEDDED_ASSETS
 bool webserver_serve_embedded_files(struct mg_connection *nc, sds uri);
 #endif
+int mg_str_to_int(struct mg_str *str);
+long mg_str_to_long(struct mg_str *str);
 sds print_ip(sds s, struct mg_addr *addr);
 bool get_partition_from_uri(struct mg_connection *nc, struct mg_http_message *hm, struct t_frontend_nc_data *frontend_nc_data);
 bool check_covercache(struct mg_connection *nc, struct mg_http_message *hm,
@@ -60,6 +70,7 @@ void webserver_serve_booklet_image(struct mg_connection *nc);
 void webserver_send_header_ok(struct mg_connection *nc, size_t len, const char *headers);
 void webserver_send_header_redirect(struct mg_connection *nc, const char *location);
 void webserver_send_header_found(struct mg_connection *nc, const char *location);
+void webserver_send_cors_reply(struct mg_connection *nc);
 void webserver_send_data(struct mg_connection *nc, const char *data, size_t len, const char *headers);
 void webserver_handle_connection_close(struct mg_connection *nc);
 void *mg_user_data_free(struct t_mg_user_data *mg_user_data);

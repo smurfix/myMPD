@@ -5,7 +5,7 @@
 */
 
 #include "compile_time.h"
-#include "test/utility.h"
+#include "utility.h"
 
 #include "dist/sds/sds.h"
 #include "dist/utest/utest.h"
@@ -15,6 +15,8 @@
 #include <unistd.h>
 
 UTEST(cert, test_certificates_check) {
+    init_testenv();
+
     sds ssl_san = sdsempty();
     certificates_check(workdir, ssl_san);
     sdsfree(ssl_san);
@@ -26,4 +28,6 @@ UTEST(cert, test_certificates_check) {
     ASSERT_EQ(0, rc);
     rc = unlink("/tmp/mympd-test/ssl/server.pem");
     ASSERT_EQ(0, rc);
+
+    clean_testenv();
 }

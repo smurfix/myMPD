@@ -7,21 +7,42 @@
 #include "compile_time.h"
 #include "src/lib/random.h"
 
-#include <limits.h>
+#include "src/lib/log.h"
 
-tinymt32_t tinymt;
+#include <assert.h>
+#include <limits.h>
+#include <openssl/rand.h>
 
 /**
- * Generates random number in range (inclusive lower and upper bounds)
- * This functions uses Mersenne Twister to generate random numbers
+ * Generates a long type positive random number in range (inclusive lower and upper bounds)
  * @param lower lower boundary
  * @param upper upper boundary
  * @return random number
  */
+#ifdef MYMPD_64BIT
 long randrange(long lower, long upper) {
-    uint32_t lower_u = (uint32_t)lower;
-    uint32_t upper_u = (uint32_t)upper;
-    uint32_t r = tinymt32_generate_uint32(&tinymt);
-    uint32_t rand = lower_u + r / (UINT32_MAX / (upper_u - lower_u + 1) + 1);
-    return (long)rand;
+    uint64_t buf;
+    uint64_t u_lower = (uint64_t)lower;
+    uint64_t u_upper = (uint64_t)upper;
+    if (RAND_bytes((unsigned char *)&buf, sizeof(buf)) == 1) {
+        return (long)(u_lower + buf / (UINT64_MAX / (u_upper - u_lower + 1) + 1));
+    }
+
+    MYMPD_LOG_ERROR(NULL, "Error generating random number in range");
+    assert(NULL);
+    return 0;
 }
+#else
+long randrange(long lower, long upper) {
+    uint32_t buf;
+    uint32_t u_lower = (uint32_t)lower;
+    uint32_t u_upper = (uint32_t)upper;
+    if (RAND_bytes((unsigned char *)&buf, sizeof(buf)) == 1) {
+        return (long)(u_lower + buf / (UINT32_MAX / (u_upper - u_lower + 1) + 1));
+    }
+
+    MYMPD_LOG_ERROR(NULL, "Error generating random number in range");
+    assert(NULL);
+    return 0;
+}
+#endif

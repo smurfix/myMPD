@@ -62,6 +62,9 @@ function elCreateText(tagName, attributes, text) {
             tag.appendChild(document.createTextNode(lines[i]));
         }
     }
+    else {
+        tag.textContent = text;
+    }
     return tag;
 }
 
@@ -125,7 +128,7 @@ function elCreateEmpty(tagName, attributes) {
  * @returns {void}
  */
 function elReplaceChildId(id, child) {
-    elReplaceChild(document.getElementById(id), child);
+    elReplaceChild(elGetById(id), child);
 }
 
 /**
@@ -140,12 +143,21 @@ function elReplaceChild(el, child) {
 }
 
 /**
+ * Shortcut for elGetById
+ * @param {string} id element id
+ * @returns {HTMLElement} found element
+ */
+function elGetById(id) {
+    return document.getElementById(id);
+}
+
+/**
  * Hides the element with the given id
  * @param {string} id element id
  * @returns {void}
  */
 function elHideId(id) {
-    document.getElementById(id).classList.add('d-none');
+    elGetById(id).classList.add('d-none');
 }
 
 /**
@@ -154,7 +166,7 @@ function elHideId(id) {
  * @returns {void}
  */
 function elShowId(id) {
-    document.getElementById(id).classList.remove('d-none');
+    elGetById(id).classList.remove('d-none');
 }
 
 /**
@@ -163,7 +175,7 @@ function elShowId(id) {
  * @returns {void}
  */
 function elClearId(id) {
-    document.getElementById(id).textContent = '';
+    elGetById(id).textContent = '';
 }
 
 /**
@@ -199,7 +211,7 @@ function elClear(el) {
  * @returns {void}
  */
 function elDisableId(id) {
-    document.getElementById(id).setAttribute('disabled', 'disabled');
+    elDisable(elGetById(id));
 }
 
 /**
@@ -209,8 +221,6 @@ function elDisableId(id) {
  */
 function elDisable(el) {
     el.setAttribute('disabled', 'disabled');
-    //manually disabled, remove disabled class
-    el.classList.remove('disabled');
     el.classList.replace('clickable', 'not-clickable');
 }
 
@@ -220,7 +230,7 @@ function elDisable(el) {
  * @returns {void}
  */
 function elEnableId(id) {
-    document.getElementById(id).removeAttribute('disabled');
+    elEnable(elGetById(id));
 }
 
 /**
@@ -243,16 +253,16 @@ function elReflow(el) {
 }
 
 /**
- * Sets the focus on the element with given id
+ * Sets the focus on the element with given id for desktop view.
  * @param {string} id element id
  * @returns {void}
  */
  function setFocusId(id) {
-    setFocus(document.getElementById(id));
+    setFocus(elGetById(id));
 }
 
 /**
- * Set the focus on the given element.
+ * Set the focus on the given element for desktop view.
  * @param {HTMLElement} el element to focus
  * @returns {void}
  */
@@ -270,12 +280,12 @@ function setFocus(el) {
  * @returns {void}
  */
 function setDataId(id, attribute, value) {
-    document.getElementById(id)['myMPD-' + attribute] = value;
+    elGetById(id)['myMPD-' + attribute] = value;
 }
 
 /**
  * Sets an attribute on the given element.
- * @param {Element | Node} el element
+ * @param {Element | Node | EventTarget} el element
  * @param {string} attribute attribute name
  * @param {object} value could be any type
  * @returns {void}
@@ -285,20 +295,42 @@ function setData(el, attribute, value) {
 }
 
 /**
+ * Removes an attribute on the element given by id.
+ * @param {string} id element id
+ * @param {string} attribute attribute name
+ * @returns {void}
+ */
+//eslint-disable-next-line no-unused-vars
+function rmDataId(id, attribute) {
+    elGetById(id)['myMPD-' + attribute] = undefined;
+}
+
+/**
+ * Removes an attribute on the given element.
+ * @param {Element | Node} el element
+ * @param {string} attribute attribute name
+ * @returns {void}
+ */
+//eslint-disable-next-line no-unused-vars
+function rmData(el, attribute) {
+    el['myMPD-' + attribute] = undefined;
+}
+
+/**
  * Gets the attributes value from the element given by id.
  * @param {string} id element id
  * @param {string} attribute attribute name
  * @returns {object} attribute value
  */
 function getDataId(id, attribute) {
-    return getData(document.getElementById(id), attribute);
+    return getData(elGetById(id), attribute);
 }
 
 /**
  * Gets the attributes value from the element
  * @param {Element | EventTarget} el element
  * @param {string} attribute attribute name
- * @returns {object} attribute value
+ * @returns {object} attribute value or undefined
  */
 function getData(el, attribute) {
     let value = el['myMPD-' + attribute];
@@ -320,11 +352,12 @@ function getData(el, attribute) {
  * @returns {string} selected option value
  */
 function getSelectValueId(id) {
-    return getSelectValue(document.getElementById(id));
+    return getSelectValue(elGetById(id));
 }
 
 /**
  * Gets the value of the selected option of a select element
+ * or undefined if no option is selected
  * @param {Element | EventTarget} el element
  * @returns {string} selected option value
  */
@@ -342,7 +375,7 @@ function getSelectValue(el) {
  * @returns {object} selected option data value
  */
 function getSelectedOptionDataId(id, attribute) {
-    return getSelectedOptionData(document.getElementById(id), attribute)
+    return getSelectedOptionData(elGetById(id), attribute);
 }
 
 /**
@@ -364,7 +397,7 @@ function getSelectedOptionData(el, attribute) {
  * @returns {string} radio box value
  */
 function getRadioBoxValueId(id) {
-    return getRadioBoxValue(document.getElementById(id));
+    return getRadioBoxValue(elGetById(id));
 }
 
 /**
@@ -411,23 +444,12 @@ function getYpos(el) {
 }
 
 /**
- * Returns the nearest parent of type nodeName
- * @param {HTMLElement | EventTarget} el start element for search
- * @param {string} nodeName nodeName to search
- * @returns {HTMLElement} the nearest parent node with the given nodeName
+ * Gets the index of the element in the parent html collection
+ * @param {HTMLElement} el element to get the index
+ * @returns {number} the index
  */
- function getParent(el, nodeName) {
-    let target = el;
-    let i = 0;
-    while (target.nodeName !== nodeName) {
-        i++;
-        if (i > 10) {
-            return null;
-        }
-        target = target.parentNode;
-    }
-    // @ts-ignore
-    return target;
+function elGetIndex(el) {
+    return [...el.parentNode.children].indexOf(el);
 }
 
 /**
@@ -437,12 +459,12 @@ function getYpos(el) {
  * @returns {void}
  */
  function btnWaitingId(id, waiting) {
-    btnWaiting(document.getElementById(id), waiting);
+    btnWaiting(elGetById(id), waiting);
 }
 
 /**
  * Adds a waiting animation to a button
- * @param {HTMLElement} btn id of the button
+ * @param {Node} btn id of the button
  * @param {boolean} waiting true = add animation, false = remove animation
  * @returns {void}
  */
@@ -475,7 +497,7 @@ function btnWaiting(btn, waiting) {
  * @returns {HTMLElement} selected button
  */
 function toggleBtnGroupValueId(id, value) {
-    return toggleBtnGroupValue(document.getElementById(id), value)
+    return toggleBtnGroupValue(elGetById(id), value);
 }
 
 /**
@@ -513,10 +535,10 @@ function toggleBtnGroupValue(btngrp, value) {
 function toggleBtnGroupValueCollapse(btngrp, collapseId, value) {
     const activeBtn = toggleBtnGroupValue(btngrp, value);
     if (activeBtn.getAttribute('data-collapse') === 'show') {
-        document.getElementById(collapseId).classList.add('show');
+        elGetById(collapseId).classList.add('show');
     }
     else {
-        document.getElementById(collapseId).classList.remove('show');
+        elGetById(collapseId).classList.remove('show');
     }
 }
 
@@ -527,7 +549,7 @@ function toggleBtnGroupValueCollapse(btngrp, collapseId, value) {
  */
 //eslint-disable-next-line no-unused-vars
 function toggleBtnGroupId(id) {
-    return toggleBtnGroup(document.getElementById(id));
+    return toggleBtnGroup(elGetById(id));
 }
 
 /**
@@ -558,7 +580,7 @@ function toggleBtnGroup(btn) {
 function toggleBtnGroupCollapse(el, collapseId) {
     const activeBtn = toggleBtnGroup(el);
     if (activeBtn.getAttribute('data-collapse') === 'show') {
-        if (document.getElementById(collapseId).classList.contains('show') === false) {
+        if (elGetById(collapseId).classList.contains('show') === false) {
             uiElements[collapseId].show();
         }
     }
@@ -584,18 +606,18 @@ function getBtnGroupValueId(id) {
 /**
  * Toggles the active state of a button
  * @param {string} id id of button to toggle
- * @param {boolean | number} state true, 1 = active, false, 0 = inactive
+ * @param {boolean | number} state true, 1 = active; false, 0 = inactive
  * @returns {void}
  */
 //eslint-disable-next-line no-unused-vars
 function toggleBtnId(id, state) {
-    toggleBtn(document.getElementById(id), state);
+    toggleBtn(elGetById(id), state);
 }
 
 /**
  * Toggles the active state of a button
  * @param {HTMLElement | EventTarget} btn button to toggle
- * @param {boolean | number} state true, 1 = active, false, 0 = inactive
+ * @param {boolean | number} state true, 1 = active; false, 0 = inactive
  * @returns {void}
  */
 function toggleBtn(btn, state) {
@@ -604,9 +626,7 @@ function toggleBtn(btn, state) {
         state = btn.classList.contains('active') ? false : true;
     }
 
-    if (state === true ||
-        state === 1)
-    {
+    if (state === true) {
         btn.classList.add('active');
     }
     else {
@@ -621,7 +641,7 @@ function toggleBtn(btn, state) {
  * @returns {void}
  */
 function mirrorBtnId(id, mirror) {
-    mirrorBtn(document.getElementById(id), mirror);
+    mirrorBtn(elGetById(id), mirror);
 }
 
 /**
@@ -644,8 +664,9 @@ function mirrorBtn(btn, mirror) {
  * @param {string} id check button id
  * @returns {boolean} enabled = true, disabled = false
  */
+//eslint-disable-next-line no-unused-vars
 function getBtnChkValueId(id) {
-    return getBtnChkValue(document.getElementById(id));
+    return getBtnChkValue(elGetById(id));
 }
 
 /**
@@ -654,23 +675,23 @@ function getBtnChkValueId(id) {
  * @returns {boolean} enabled = true, disabled = false
  */
 function getBtnChkValue(btn) {
-    return btn.classList.contains('active') ? true : false
+    return btn.classList.contains('active');
 }
 
 /**
  * Toggles a check button
  * @param {string} id id of the button to toggle
- * @param {boolean} state true = active, false = inactive
+ * @param {boolean} state true, 1 = active; false, 0 = inactive
  * @returns {void}
  */
 function toggleBtnChkId(id, state) {
-    toggleBtnChk(document.getElementById(id), state);
+    toggleBtnChk(elGetById(id), state);
 }
 
 /**
  * Toggles a check button
  * @param {HTMLElement | EventTarget} btn the button to toggle
- * @param {boolean | number} state true = active, false = inactive 
+ * @param {boolean | number} state true, 1 = active; false, 0 = inactive
  * @returns {boolean} true if button is checked, else false
  */
 function toggleBtnChk(btn, state) {
@@ -679,9 +700,7 @@ function toggleBtnChk(btn, state) {
         state = btn.classList.contains('active') ? false : true;
     }
 
-    if (state === true ||
-        state === 1)
-    {
+    if (state === true) {
         btn.classList.add('active');
         btn.textContent = 'check';
         return true;
@@ -701,7 +720,7 @@ function toggleBtnChk(btn, state) {
  * @returns {void}
  */
 function toggleBtnChkCollapseId(id, collapseId, state) {
-    toggleBtnChkCollapse(document.getElementById(id), collapseId, state);
+    toggleBtnChkCollapse(elGetById(id), collapseId, state);
 }
 
 /**
@@ -714,30 +733,38 @@ function toggleBtnChkCollapseId(id, collapseId, state) {
 function toggleBtnChkCollapse(btn, collapseId, state) {
     const checked = toggleBtnChk(btn, state);
     if (checked === true) {
-        document.getElementById(collapseId).classList.add('show');
+        elGetById(collapseId).classList.add('show');
     }
     else {
-        document.getElementById(collapseId).classList.remove('show');
+        elGetById(collapseId).classList.remove('show');
     }
 }
 
 /**
  * Gets the y-scrolling position
+ * @param {HTMLElement | Element} [el] element
  * @returns {number} the vertical scrolling position
  */
- function getScrollPosY() {
+function getScrollPosY(el) {
+    // element in scrolling modal
+    if (el) {
+        const modal = el.closest('.modal');
+        if (modal) {
+            let scrollPos = window.scrollY;
+            scrollPos += modal.scrollTop;
+            return scrollPos;
+        }
+    }
     if (userAgentData.isMobile === true) {
+        // scrolling body
         return document.body.scrollTop ? document.body.scrollTop : document.documentElement.scrollTop;
     }
-    else {
-        const container = document.getElementById(app.id + 'List');
-        if (container) {
-            return container.parentNode.scrollTop;
-        }
-        else {
-            return 0;
-        }
+    // scrolling container
+    const container = elGetById(app.id + 'List');
+    if (container) {
+        return container.parentNode.scrollTop;
     }
+    return 0;
 }
 
 /**

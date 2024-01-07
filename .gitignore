@@ -4,6 +4,7 @@
 /callgrind.out.*
 /clang-tidy.out
 /src/compile_commands.json
+/test/compile_commands.json
 /valgrind.out
 
 #build dirs
@@ -15,14 +16,15 @@
 /osc/
 /package/
 /release/
-/test/build/
 
 #debug build files
 /htdocs/assets/ligatures.json
 /htdocs/assets/MaterialIcons-Regular.woff2
 /htdocs/assets/i18n/
 /htdocs/css/bootstrap.css
+/htdocs/js/defines.js
 /htdocs/js/bootstrap-native.js
+/htdocs/js/defines.js
 /htdocs/js/i18n.js
 /htdocs/js/long-press-event.js
 /htdocs/sw.js
@@ -37,3 +39,6 @@
 /docs/scripting/scripts/index.json
 /docs/.jekyll-cache/
 /docs/_site/
+
+#private files
+.secrets

@@ -64,7 +64,7 @@ bool search_mpd_song(const struct mpd_song *song, sds searchstr, const struct t_
         return true;
     }
     bool rc = false;
-    if (tagcols->len == 0) {
+    if (tagcols->tags_len == 0) {
         //fallback to filename if no tags are enabled
         sds filename = sdsnew(mpd_song_get_uri(song));
         basename_uri(filename);
@@ -74,7 +74,7 @@ bool search_mpd_song(const struct mpd_song *song, sds searchstr, const struct t_
         FREE_SDS(filename);
         return rc;
     }
-    for (unsigned i = 0; i < tagcols->len; i++) {
+    for (unsigned i = 0; i < tagcols->tags_len; i++) {
         const char *value;
         unsigned idx = 0;
         while ((value = mpd_song_get_tag(song, tagcols->tags[i], idx)) != NULL) {
@@ -117,7 +117,7 @@ struct t_list *parse_search_expression_to_list(sds expression) {
             p++;
         }
         if (p + 1 >= end) {
-            MYMPD_LOG_ERROR("Can not parse search expression");
+            MYMPD_LOG_ERROR(NULL, "Can not parse search expression");
             free_search_expression(expr);
             break;
         }
@@ -138,7 +138,7 @@ struct t_list *parse_search_expression_to_list(sds expression) {
             p++;
         }
         if (p + 2 >= end) {
-            MYMPD_LOG_ERROR("Can not parse search expression");
+            MYMPD_LOG_ERROR(NULL, "Can not parse search expression");
             free_search_expression(expr);
             break;
         }
@@ -149,7 +149,7 @@ struct t_list *parse_search_expression_to_list(sds expression) {
         else if (strcmp(op, "=~") == 0) { expr->op = SEARCH_OP_REGEX; }
         else if (strcmp(op, "!~") == 0) { expr->op = SEARCH_OP_NOT_REGEX; }
         else {
-            MYMPD_LOG_ERROR("Unknown search operator: \"%s\"", op);
+            MYMPD_LOG_ERROR(NULL, "Unknown search operator: \"%s\"", op);
             free_search_expression(expr);
             break;
         }
@@ -176,7 +176,7 @@ struct t_list *parse_search_expression_to_list(sds expression) {
             expr->re_compiled = compile_regex(expr->value);
         }
         list_push(expr_list, "", 0, NULL, expr);
-        MYMPD_LOG_DEBUG("Parsed expression tag: \"%s\", op: \"%s\", value:\"%s\"", tag, op, expr->value);
+        MYMPD_LOG_DEBUG(NULL, "Parsed expression tag: \"%s\", op: \"%s\", value:\"%s\"", tag, op, expr->value);
     }
     FREE_SDS(tag);
     FREE_SDS(op);
@@ -189,6 +189,9 @@ struct t_list *parse_search_expression_to_list(sds expression) {
  * @param expr_list pointer to the list
  */
 void *free_search_expression_list(struct t_list *expr_list) {
+    if (expr_list == NULL) {
+        return NULL;
+    }
     return list_free_user_data(expr_list, free_search_expression_node);
 }
 
@@ -196,27 +199,22 @@ void *free_search_expression_list(struct t_list *expr_list) {
  * Searches for a string in mpd tag values
  * @param song pointer to mpd song struct
  * @param expr_list expression list returned by parse_search_expression
- * @param browse_tag_types tags for special "any" tag in expression
+ * @param tag_types tags for special "any" tag in expression
  * @return expression result
  */
-bool search_song_expression(struct mpd_song *song, struct t_list *expr_list, struct t_tags *browse_tag_types) {
+bool search_song_expression(const struct mpd_song *song, const struct t_list *expr_list, const struct t_tags *tag_types) {
     struct t_tags one_tag;
-    one_tag.len = 1;
+    one_tag.tags_len = 1;
     struct t_list_node *current = expr_list->head;
     while (current != NULL) {
         struct t_search_expression *expr = (struct t_search_expression *)current->user_data;
-        struct t_tags *tags = NULL;
-        if (expr->tag == -2) {
-            //any - use all browse tags
-            tags = browse_tag_types;
-        }
-        else {
-            //use selected tag only
-            tags = &one_tag;
-            tags->tags[0] = (enum mpd_tag_type)expr->tag;
-        }
+        one_tag.tags[0] = (enum mpd_tag_type)expr->tag;
+        const struct t_tags *tags = expr->tag == -2
+            ? tag_types  //any - use all browse tags
+            : &one_tag;  //use only selected tag
+
         bool rc = false;
-        for (size_t i = 0; i < tags->len; i++) {
+        for (size_t i = 0; i < tags->tags_len; i++) {
             rc = true;
             unsigned j = 0;
             const char *value = NULL;
@@ -250,7 +248,9 @@ bool search_song_expression(struct mpd_song *song, struct t_list *expr_list, str
             }
             if (j == 0) {
                 //no tag value found
-                rc = false;
+                rc = expr->op == SEARCH_OP_NOT_EQUAL || expr->op == SEARCH_OP_NOT_REGEX
+                    ? true
+                    : false;
             }
             if (rc == true) {
                 //exit on first tag value match
@@ -258,7 +258,7 @@ bool search_song_expression(struct mpd_song *song, struct t_list *expr_list, str
             }
         }
         if (rc == false) {
-            //exit on first expression missmatch
+            //exit on first expression mismatch
             return false;
         }
         current = current->next;
@@ -297,7 +297,7 @@ static void free_search_expression_node(struct t_list_node *current) {
  * @return regex code
  */
 static pcre2_code *compile_regex(char *regex_str) {
-    MYMPD_LOG_DEBUG("Compiling regex: \"%s\"", regex_str);
+    MYMPD_LOG_DEBUG(NULL, "Compiling regex: \"%s\"", regex_str);
     utf8lwr(regex_str);
     PCRE2_SIZE erroroffset;
     int rc;
@@ -305,7 +305,7 @@ static pcre2_code *compile_regex(char *regex_str) {
         (PCRE2_SPTR)regex_str, /* the pattern */
         PCRE2_ZERO_TERMINATED, /* indicates pattern is zero-terminated */
         0,                     /* default options */
-        &rc,		       /* for error number */
+        &rc,		           /* for error number */
         &erroroffset,          /* for error offset */
         NULL                   /* use default compile context */
     );
@@ -313,7 +313,7 @@ static pcre2_code *compile_regex(char *regex_str) {
         //Compilation failed
         PCRE2_UCHAR buffer[256];
         pcre2_get_error_message(rc, buffer, sizeof(buffer));
-        MYMPD_LOG_ERROR("PCRE2 compilation failed at offset %d: \"%s\"", (int)erroroffset, buffer);
+        MYMPD_LOG_ERROR(NULL, "PCRE2 compilation failed at offset %d: \"%s\"", (int)erroroffset, buffer);
         return NULL;
     }
     return re_compiled;
@@ -353,7 +353,7 @@ static bool cmp_regex(pcre2_code *re_compiled, const char *value) {
         default: {
             PCRE2_UCHAR buffer[256];
             pcre2_get_error_message(rc, buffer, sizeof(buffer));
-            MYMPD_LOG_ERROR("PCRE2 matching error %d: \"%s\"", rc, buffer);
+            MYMPD_LOG_ERROR(NULL, "PCRE2 matching error %d: \"%s\"", rc, buffer);
         }
     }
     return false;
