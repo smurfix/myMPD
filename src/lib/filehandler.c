@@ -247,6 +247,7 @@ bool testfile_read(const char *filename) {
  * @return enum testdir_status
  */
 int testdir(const char *desc, const char *dir_name, bool create, bool silent) {
+    errno = 0;
     DIR* dir = opendir(dir_name);
     if (dir != NULL) {
         closedir(dir);
@@ -255,6 +256,12 @@ int testdir(const char *desc, const char *dir_name, bool create, bool silent) {
         }
         //directory exists
         return DIR_EXISTS;
+    }
+    if (errno != ENOENT) {
+        MYMPD_LOG_ERROR(NULL, "%s: opening \"%s\" failed", desc, dir_name);
+        MYMPD_LOG_ERRNO(NULL, errno);
+        //directory is inaccessible
+        return DIR_CREATE_FAILED;
     }
 
     if (create == true) {
