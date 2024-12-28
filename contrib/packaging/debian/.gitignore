@@ -1,2 +1,6 @@
 /files
 /tmp/
+/.debhelper/
+/compat
+/*.substvars
+/mympd/
