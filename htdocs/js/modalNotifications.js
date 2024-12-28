@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalNotifications_js */
@@ -20,7 +20,7 @@ function initModalNotifications() {
  * @returns {void}
  */
 function showMessages() {
-    const overview = elGetById('modalNotificationsList');
+    const overview = elGetById('modalNotificationsList').querySelector('tbody');
     elClear(overview);
     for (const message of messages) {
         overview.insertBefore(
@@ -38,7 +38,7 @@ function showMessages() {
         overview.firstElementChild);
     }
     if (overview.querySelector('tr') === null) {
-        overview.appendChild(emptyRow(4));
+        overview.appendChild(emptyMsgEl(4, 'table'));
     }
 }
 
@@ -50,9 +50,9 @@ function showMessages() {
 //eslint-disable-next-line no-unused-vars
 function clearMessages(target) {
     btnWaiting(target, true);
-    const overview = elGetById('modalNotificationsList');
+    const overview = elGetById('modalNotificationsList').querySelector('tbody');
     elClear(overview);
-    overview.appendChild(emptyRow(4));
+    overview.appendChild(emptyMsgEl(4, 'table'));
     messages.length = 0;
     btnWaiting(target, false);
 }

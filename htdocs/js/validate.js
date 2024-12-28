@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module validate_js */
@@ -198,20 +198,6 @@ function validateStreamEl(el) {
     }
     setIsInvalid(el);
     return false;
-}
-
-/**
- * Checks if the value of the input element contains only printable characters
- * @param {Element} el input element
- * @returns {boolean} true = only printable characters, else false
- */
-function validatePrintableEl(el) {
-    const value = el.value.replace(/[\w-]+/g, '');
-    if (value !== '') {
-        setIsInvalid(el);
-        return false;
-    }
-    return true;
 }
 
 /**

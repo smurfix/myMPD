@@ -1,8 +1,12 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief Linked list implementation
+ */
 
 #include "compile_time.h"
 #include "src/lib/list.h"
@@ -24,6 +28,39 @@ struct t_list *list_new(void) {
     struct t_list *l = malloc_assert(sizeof(struct t_list));
     list_init(l);
     return l;
+}
+
+/**
+ * Duplicates a list.
+ * Leaves user_data pointer in place.
+ * @param l list to duplicate
+ * @return duplicated list or NULL on error
+ */
+struct t_list *list_dup(struct t_list *l) {
+    struct t_list *new = list_new();
+    if (list_append(new, l) == false) {
+        list_free(new);
+        return NULL;
+    }
+    return new;
+}
+
+/**
+ * Appends a list to another list
+ * Leaves user_data pointer in place.
+ * @param dst list to that was append
+ * @param src list that was append
+ * @return duplicated list or NULL on error
+ */
+bool list_append(struct t_list *dst, struct t_list *src) {
+    struct t_list_node *current = src->head;
+    while (current != NULL) {
+        if (list_push(dst, current->key, current->value_i, current->value_p, current->user_data) == false) {
+            return false;
+        }
+        current = current->next;
+    }
+    return true;
 }
 
 /**
@@ -50,6 +87,9 @@ void list_clear(struct t_list *l) {
  * @return NULL
  */
 void *list_free(struct t_list *l) {
+    if (l == NULL) {
+        return NULL;
+    }
     list_clear_user_data(l, list_free_cb_ignore_user_data);
     FREE_PTR(l);
     return NULL;
@@ -76,7 +116,8 @@ void list_clear_user_data(struct t_list *l, user_data_callback free_cb) {
  * Clears the list and frees all nodes and there values, calls a function to free user_data,
  * set free_cb to NULL, to free a generic pointer.
  * @param l pointer to list
- * @param free_cb
+ * @param free_cb Callback to free the user data
+ * @return NULL
  */
 void *list_free_user_data(struct t_list *l, user_data_callback free_cb) {
     list_clear_user_data(l, free_cb);
@@ -113,11 +154,11 @@ void list_free_cb_ptr_user_data(struct t_list_node *current) {
  * Gets a list node index by key.
  * @param l list
  * @param key key to get
- * @return int index of the key, -1 if not found
+ * @return int index of the key, UINT_MAX if not found
  */
-int list_get_node_idx(const struct t_list *l, const char *key) {
+unsigned list_get_node_idx(const struct t_list *l, const char *key) {
     struct t_list_node *current = l->head;
-    int i = 0;
+    unsigned i = 0;
     while (current != NULL) {
         if (strcmp(current->key, key) == 0) {
             return i;
@@ -125,7 +166,7 @@ int list_get_node_idx(const struct t_list *l, const char *key) {
         current = current->next;
         i++;
     }
-    return -1;
+    return UINT_MAX;
 }
 
 /**
@@ -152,7 +193,7 @@ struct t_list_node *list_get_node(const struct t_list *l, const char *key) {
  * @param previous pointer to previous node
  * @return pointer to list node
  */
-struct t_list_node *list_node_prev_at(const struct t_list *l, long idx, struct t_list_node **previous) {
+struct t_list_node *list_node_prev_at(const struct t_list *l, unsigned idx, struct t_list_node **previous) {
     //if there's no data in the list, fail
     if (l->head == NULL) {
         return NULL;
@@ -175,7 +216,7 @@ struct t_list_node *list_node_prev_at(const struct t_list *l, long idx, struct t
  * @param idx node index to get
  * @return pointer to list node
  */
-struct t_list_node *list_node_at(const struct t_list *l, long idx) {
+struct t_list_node *list_node_at(const struct t_list *l, unsigned idx) {
     struct t_list_node *previous = NULL;
     return list_node_prev_at(l, idx, &previous);
 }
@@ -187,11 +228,9 @@ struct t_list_node *list_node_at(const struct t_list *l, long idx) {
  * @param to to pos
  * @return true on success, else false
  */
-bool list_move_item_pos(struct t_list *l, long from, long to) {
+bool list_move_item_pos(struct t_list *l, unsigned from, unsigned to) {
     if (from >= l->length ||
-        to >= l->length ||
-        from < 0 ||
-        to < 0)
+        to >= l->length)
     {
         return false;
     }
@@ -199,7 +238,9 @@ bool list_move_item_pos(struct t_list *l, long from, long to) {
         return true;
     }
 
-    bool after = from < to ? true : false;
+    bool after = from < to
+        ? true
+        : false;
 
     //get new position
     struct t_list_node *previous = NULL;
@@ -248,7 +289,7 @@ bool list_swap_item(struct t_list_node *n1, struct t_list_node *n2) {
     }
 
     sds key = n2->key;
-    long long value_i = n2->value_i;
+    int64_t value_i = n2->value_i;
     sds value_p = n2->value_p;
     void *user_data = n2->user_data;
 
@@ -276,7 +317,7 @@ bool list_shuffle(struct t_list *l) {
     }
     struct t_list_node *current = l->head;
     while (current != NULL) {
-        long pos = randrange(0, l->length - 1);
+        unsigned pos = randrange(0, l->length);
         list_swap_item(current, list_node_at(l, pos));
         current = current->next;
     }
@@ -287,12 +328,12 @@ bool list_shuffle(struct t_list *l) {
  * Creates and appends a node to the end of the list.
  * @param l list
  * @param key key value
- * @param value_i long long value
+ * @param value_i int64_t value
  * @param value_p sds value
  * @param user_data pointer to user_data
  * @return true on success, else false
  */
-bool list_push(struct t_list *l, const char *key, long long value_i,
+bool list_push(struct t_list *l, const char *key, int64_t value_i,
         const char *value_p, void *user_data)
 {
     size_t value_len = value_p == NULL ? 0 : strlen(value_p);
@@ -305,13 +346,13 @@ bool list_push(struct t_list *l, const char *key, long long value_i,
  * @param l list
  * @param key key value
  * @param key_len key length
- * @param value_i long long value
+ * @param value_i int64_t value
  * @param value_p sds value
  * @param value_len value_p length
  * @param user_data pointer to user_data
  * @return true on success, else false
  */
-bool list_push_len(struct t_list *l, const char *key, size_t key_len, long long value_i,
+bool list_push_len(struct t_list *l, const char *key, size_t key_len, int64_t value_i,
         const char *value_p, size_t value_len, void *user_data)
 {
     //create new node
@@ -340,12 +381,12 @@ bool list_push_len(struct t_list *l, const char *key, size_t key_len, long long 
  * Creates and inserts a node at the beginning of the list.
  * @param l list
  * @param key key value
- * @param value_i long long value
+ * @param value_i int64_t value
  * @param value_p sds value
  * @param user_data pointer to user_data
  * @return true on success, else false
  */
-bool list_insert(struct t_list *l, const char *key, long long value_i,
+bool list_insert(struct t_list *l, const char *key, int64_t value_i,
         const char *value_p, void *user_data)
 {
     //create new node
@@ -372,12 +413,12 @@ bool list_insert(struct t_list *l, const char *key, long long value_i,
  * @param l list
  * @param idx index of node to change
  * @param key new key value
- * @param value_i new long long value
+ * @param value_i new int64_t value
  * @param value_p new sds value
  * @param user_data new user_data pointer
  * @return true on success, else false
  */
-bool list_replace(struct t_list *l, long idx, const char *key, long long value_i,
+bool list_replace(struct t_list *l, unsigned idx, const char *key, int64_t value_i,
         const char *value_p, void *user_data)
 {
     size_t value_len = value_p == NULL
@@ -394,13 +435,13 @@ bool list_replace(struct t_list *l, long idx, const char *key, long long value_i
  * @param idx index of node to change
  * @param key new key value
  * @param key_len new key value length
- * @param value_i new long long value
+ * @param value_i new int64_t value
  * @param value_p new sds value
  * @param value_len new sds value len
  * @param user_data new user_data pointer
  * @return true on success, else false
  */
-bool list_replace_len(struct t_list *l, long idx, const char *key, size_t key_len, long long value_i,
+bool list_replace_len(struct t_list *l, unsigned idx, const char *key, size_t key_len, int64_t value_i,
         const char *value_p, size_t value_len, void *user_data)
 {
     return list_replace_len_user_data(l, idx, key, key_len, value_i,
@@ -413,13 +454,13 @@ bool list_replace_len(struct t_list *l, long idx, const char *key, size_t key_le
  * @param l list
  * @param idx index of node to change
  * @param key new key value
- * @param value_i new long long value
+ * @param value_i new int64_t value
  * @param value_p new sds value
  * @param user_data new user_data pointer
  * @param free_cb callback function to free old user_data pointer
  * @return true on success, else false
  */
-bool list_replace_user_data(struct t_list *l, long idx, const char *key, long long value_i,
+bool list_replace_user_data(struct t_list *l, unsigned idx, const char *key, int64_t value_i,
         const char *value_p, void *user_data, user_data_callback free_cb)
 {
     return list_replace_len_user_data(l, idx, key, strlen(key), value_i,
@@ -433,14 +474,14 @@ bool list_replace_user_data(struct t_list *l, long idx, const char *key, long lo
  * @param idx index of node to change
  * @param key new key value
  * @param key_len new key value length
- * @param value_i new long long value
+ * @param value_i new int64_t value
  * @param value_p new sds value
  * @param value_len new sds value len
  * @param user_data new user_data pointer
  * @param free_cb callback function to free old user_data pointer
  * @return true on success, else false
  */
-bool list_replace_len_user_data(struct t_list *l, long idx, const char *key, size_t key_len, long long value_i,
+bool list_replace_len_user_data(struct t_list *l, unsigned idx, const char *key, size_t key_len, int64_t value_i,
         const char *value_p, size_t value_len, void *user_data, user_data_callback free_cb)
 {
     if (idx >= l->length) {
@@ -472,6 +513,7 @@ bool list_replace_len_user_data(struct t_list *l, long idx, const char *key, siz
 /**
  * Frees a list node, ignoring its user_data pointer.
  * @param n node to free
+ * @return NULL
  */
 void *list_node_free(struct t_list_node *n) {
     list_node_free_user_data(n, list_free_cb_ignore_user_data);
@@ -482,6 +524,7 @@ void *list_node_free(struct t_list_node *n) {
  * Frees a list node and its user_data pointer
  * @param n node to free
  * @param free_cb callback function to free user_data pointer
+ * @return NULL
  */
 void *list_node_free_user_data(struct t_list_node *n, user_data_callback free_cb) {
     FREE_SDS(n->key);
@@ -506,7 +549,7 @@ void *list_node_free_user_data(struct t_list_node *n, user_data_callback free_cb
  * @param idx node index to free
  * @return true on success, else false
  */
-bool list_remove_node(struct t_list *l, long idx) {
+bool list_remove_node(struct t_list *l, unsigned idx) {
     return list_remove_node_user_data(l, idx, list_free_cb_ignore_user_data);
 }
 
@@ -517,13 +560,44 @@ bool list_remove_node(struct t_list *l, long idx) {
  * @param free_cb callback function to free user_data pointer
  * @return true on success, else false
  */
-bool list_remove_node_user_data(struct t_list *l, long idx, user_data_callback free_cb) {
+bool list_remove_node_user_data(struct t_list *l, unsigned idx, user_data_callback free_cb) {
     struct t_list_node *extracted = list_node_extract(l, idx);
     if (extracted == NULL) {
         return false;
     }
     list_node_free_user_data(extracted, free_cb);
     return true;
+}
+
+/**
+ * Removes the node with key
+ * Ignores user_data pointer
+ * @param l list
+ * @param key key
+ * @return bool true on success, else false
+ */
+bool list_remove_node_by_key(struct t_list *l, const char *key) {
+    return list_remove_node_by_key_user_data(l, key, NULL);
+}
+
+/**
+ * Removes the node with key
+ * @param l list
+ * @param key key
+ * @param free_cb Callback to free the user data
+ * @return bool true on success, else false
+ */
+bool list_remove_node_by_key_user_data(struct t_list *l, const char *key, user_data_callback free_cb) {
+    struct t_list_node *current = l->head;
+    unsigned i = 0;
+    while (current != NULL) {
+        if (strcmp(current->key, key) == 0) {
+            return list_remove_node_user_data(l, i, free_cb);
+        }
+        i++;
+        current = current->next;
+    }
+    return false;
 }
 
 /**
@@ -542,7 +616,7 @@ struct t_list_node *list_shift_first(struct t_list *l) {
  * @param idx node index to remove
  * @return pointer to list node
  */
-struct t_list_node *list_node_extract(struct t_list *l, long idx) {
+struct t_list_node *list_node_extract(struct t_list *l, unsigned idx) {
     if (l->head == NULL ||
         idx >= l->length) {
         return NULL;
@@ -596,7 +670,7 @@ bool list_write_to_disk(sds filepath, struct t_list *l, list_node_to_line_callba
     sds buffer = sdsempty();
     bool write_rc = true;
     while (current != NULL) {
-        buffer = node_to_line_cb(buffer, current);
+        buffer = node_to_line_cb(buffer, current, true);
         if (fputs(buffer, fp) == EOF) {
             MYMPD_LOG_ERROR(NULL, "Could not write data to file");
             write_rc = false;
@@ -609,6 +683,33 @@ bool list_write_to_disk(sds filepath, struct t_list *l, list_node_to_line_callba
     bool rc = rename_tmp_file(fp, tmp_file, write_rc);
     FREE_SDS(tmp_file);
     return rc;
+}
+
+/**
+ * Crops the list to the defined length
+ * @param l pointer to list to crop
+ * @param length max length
+ * @param free_cb callback function to free user_data pointer
+ */
+void list_crop(struct t_list *l, unsigned length, user_data_callback free_cb) {
+    if (l->length <= length) {
+        return;
+    }
+    if (length == 0) {
+        list_clear(l);
+        return;
+    }
+    unsigned idx = length - 1;
+    struct t_list_node *last = list_node_at(l, idx);
+    struct t_list_node *current = last->next;
+    while (current != NULL) {
+        struct t_list_node *next = current->next;
+        list_node_free_user_data(current, free_cb);
+        current = next;
+    }
+    l->length = length;
+    last->next = NULL;
+    l->tail = last;
 }
 
 /**

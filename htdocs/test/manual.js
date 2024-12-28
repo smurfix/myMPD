@@ -1,11 +1,13 @@
 "use strict";
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
 /* global cmds */
+
+const subdir = window.location.pathname.replace('/test/manual.html', '').replace(/\/$/, '');
 
 //escapes html characters to avoid xss
 function e(x) {
@@ -119,7 +121,7 @@ async function sendAPI() {
     if (APImethods[method].params !== undefined) {
         request.params = formToParams(APImethods[method].params, '');
     }
-    const uri = '/api/' + partition;
+    const uri = subdir + '/api/' + partition;
     document.getElementById('requestText').textContent = JSON.stringify(request);
     const time_start = new Date().getTime();
     const response = await fetch(uri, {

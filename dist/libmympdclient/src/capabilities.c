@@ -1,30 +1,5 @@
-/* libmpdclient
-   (c) 2003-2019 The Music Player Daemon Project
-   This project's homepage is: http://www.musicpd.org
-
-   Redistribution and use in source and binary forms, with or without
-   modification, are permitted provided that the following conditions
-   are met:
-
-   - Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
-
-   - Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
-
-   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-   ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-   A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR
-   CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-   EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-   PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-   PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright The Music Player Daemon Project
 
 #include <mpd/capabilities.h>
 #include <mpd/send.h>
@@ -58,6 +33,12 @@ bool
 mpd_send_list_tag_types(struct mpd_connection *connection)
 {
 	return mpd_send_command(connection, "tagtypes", NULL);
+}
+
+bool
+mpd_send_list_tag_types_available(struct mpd_connection *connection)
+{
+	return mpd_send_command(connection, "tagtypes", "available", NULL);
 }
 
 static bool
@@ -151,5 +132,126 @@ bool
 mpd_run_all_tag_types(struct mpd_connection *connection)
 {
 	return mpd_send_all_tag_types(connection) &&
+		mpd_response_finish(connection);
+}
+
+bool
+mpd_send_reset_tag_types(struct mpd_connection *connection,
+			  const enum mpd_tag_type *types, unsigned n)
+{
+	return mpd_send_tag_types_v(connection, "reset", types, n);
+}
+
+bool
+mpd_run_reset_tag_types(struct mpd_connection *connection,
+			 const enum mpd_tag_type *types, unsigned n)
+{
+	return mpd_send_reset_tag_types(connection, types, n) &&
+		mpd_response_finish(connection);
+}
+
+bool
+mpd_send_list_protocol_features(struct mpd_connection *connection)
+{
+	return mpd_send_command(connection, "protocol", NULL);
+}
+
+bool
+mpd_send_list_protocol_features_available(struct mpd_connection *connection)
+{
+	return mpd_send_command(connection, "protocol", "available", NULL);
+}
+
+static bool
+mpd_send_protocol_features_v(struct mpd_connection *connection,
+			     const char *sub_command,
+			     const enum mpd_protocol_feature *features, unsigned n)
+{
+	assert(connection != NULL);
+	assert(features != NULL);
+	assert(n > 0);
+
+	if (mpd_error_is_defined(&connection->error))
+		return false;
+
+	char buffer[1024] = "protocol ";
+	strcat(buffer, sub_command);
+	size_t length = strlen(buffer);
+
+	for (unsigned i = 0; i < n; ++i) {
+		const char *t = mpd_feature_name(features[i]);
+		assert(t != NULL);
+		size_t t_length = strlen(t);
+
+		if (length + 1 + t_length + 1 > sizeof(buffer)) {
+			mpd_error_code(&connection->error, MPD_ERROR_ARGUMENT);
+			mpd_error_message(&connection->error,
+					  "Protocol feature list is too long");
+			return false;
+		}
+
+		buffer[length++] = ' ';
+		memcpy(buffer + length, t, t_length);
+		length += t_length;
+	}
+
+	buffer[length] = 0;
+
+	return mpd_send_command(connection, buffer, NULL);
+}
+
+bool
+mpd_send_disable_protocol_features(struct mpd_connection *connection,
+			   const enum mpd_protocol_feature *features, unsigned n)
+{
+	return mpd_send_protocol_features_v(connection, "disable", features, n);
+}
+
+bool
+mpd_run_disable_protocol_features(struct mpd_connection *connection,
+				  const enum mpd_protocol_feature *features, unsigned n)
+{
+	return mpd_send_disable_protocol_features(connection, features, n) &&
+		mpd_response_finish(connection);
+}
+
+bool
+mpd_send_enable_protocol_features(struct mpd_connection *connection,
+				  const enum mpd_protocol_feature *features, unsigned n)
+{
+	return mpd_send_protocol_features_v(connection, "enable", features, n);
+}
+
+bool
+mpd_run_enable_protocol_features(struct mpd_connection *connection,
+				 const enum mpd_protocol_feature *features, unsigned n)
+{
+	return mpd_send_enable_protocol_features(connection, features, n) &&
+		mpd_response_finish(connection);
+}
+
+bool
+mpd_send_clear_protocol_features(struct mpd_connection *connection)
+{
+	return mpd_send_command(connection, "protocol", "clear", NULL);
+}
+
+bool
+mpd_run_clear_protocol_features(struct mpd_connection *connection)
+{
+	return mpd_send_clear_protocol_features(connection) &&
+		mpd_response_finish(connection);
+}
+
+bool
+mpd_send_all_protocol_features(struct mpd_connection *connection)
+{
+	return mpd_send_command(connection, "protocol", "all", NULL);
+}
+
+bool
+mpd_run_all_protocol_features(struct mpd_connection *connection)
+{
+	return mpd_send_all_protocol_features(connection) &&
 		mpd_response_finish(connection);
 }

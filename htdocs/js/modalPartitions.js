@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalPartitions_js */
@@ -100,8 +100,19 @@ function deletePartition(el, partition) {
     showConfirmInline(el.parentNode.previousSibling, tn('Do you really want to delete the partition?', {"partition": partition}), tn('Yes, delete it'), function() {
         sendAPIpartition("default", "MYMPD_API_PARTITION_RM", {
             "name": partition
-        }, savePartitionCheckError, true);
+        }, deletePartitionCheckError, true);
     });  
+}
+
+/**
+ * Handler for the MYMPD_API_PARTITION_RM jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
+function deletePartitionCheckError(obj) {
+    if (modalListApply(obj) === true) {
+        showListPartitions();
+    }
 }
 
 /**
@@ -143,12 +154,12 @@ function switchPartition(partition) {
  * @returns {void}
  */
 function parsePartitionList(obj) {
-    const partitionList = elGetById('modalPartitionsPartitionsList');
-    if (checkResult(obj, partitionList) === false) {
+    const table = elGetById('modalPartitionsPartitionsList');
+    const tbody = table.querySelector('tbody');
+    elClear(tbody);
+    if (checkResult(obj, table, 'table') === false) {
         return;
     }
-
-    elClear(partitionList);
 
     for (let i = 0, j = obj.result.data.length; i < j; i++) {
         const tr = elCreateEmpty('tr', {});
@@ -181,6 +192,6 @@ function parsePartitionList(obj) {
             );
         }
         tr.appendChild(partitionActionTd);
-        partitionList.appendChild(tr);
+        tbody.appendChild(tr);
     }
 }

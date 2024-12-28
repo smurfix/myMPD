@@ -1,8 +1,12 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief Log implementation
+ */
 
 #include "compile_time.h"
 #include "src/lib/log.h"
@@ -12,10 +16,28 @@
 #include <pthread.h>
 #include <string.h>
 
-//global variables
+/**
+ * Global variables
+ */
+
+/**
+ * Thread name
+ */
 _Thread_local sds thread_logname;
+
+/**
+ * Loglevel
+ */
 _Atomic int loglevel;
+
+/**
+ * Log to syslog?
+ */
 bool log_to_syslog;
+
+/**
+ * Log goes to tty?
+ */
 bool log_on_tty;
 
 /**
@@ -43,7 +65,7 @@ static const char *loglevel_colors[8] = {
     [LOG_WARNING] = "\033[0;33m",
     [LOG_NOTICE] = "",
     [LOG_INFO] = "",
-    [LOG_DEBUG] = "\033[0;34m"
+    [LOG_DEBUG] = "\033[0;32m"
 };
 
 /**
@@ -90,7 +112,9 @@ void mympd_log_errno(const char *file, int line, const char *partition, int errn
     }
     char err_text[256];
     int rc = strerror_r(errnum, err_text, 256);
-    const char *err_str = rc == 0 ? err_text : "Unknown error";
+    const char *err_str = rc == 0
+        ? err_text
+        : "Unknown error";
     mympd_log(LOG_ERR, file, line, partition, "%s", err_str);
 }
 
@@ -131,7 +155,7 @@ void mympd_log(int level, const char *file, int line, const char *partition, con
             logline = sdscatprintf(logline, "%02d:%02d:%02d ", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
         }
     }
-    logline = sdscatprintf(logline, "%-8s %-10s", loglevel_names[level], thread_logname);
+    logline = sdscatprintf(logline, "%-8s %-16s", loglevel_names[level], thread_logname);
     #ifdef MYMPD_DEBUG
         logline = sdscatfmt(logline, "%s:%i: ", file, line);
     #else

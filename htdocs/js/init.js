@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module init_js */
@@ -204,6 +204,7 @@ function appInit() {
     initModalAbout();
     initModalEnterPin();
     initModalHomeIcon();
+    initModalHomeWidget();
     initModalMaintenance();
     initModalMounts();
     initModalNotifications();
@@ -217,6 +218,8 @@ function appInit() {
     initModalSettingsConnection();
     initModalSettingsPlayback();
     initModalScripts();
+    initModalSticker();
+    initModalVariables();
     initModalSongDetails();
     initModalTimer();
     initModalTrigger();
@@ -225,11 +228,9 @@ function appInit() {
     initViewBrowseDatabase();
     initViewBrowseFilesystem();
     initViewBrowseRadioFavorites();
-    initViewBrowseRadioRadiobrowser();
     initViewBrowseRadioWebradiodb();
-    initViewHome();
     initViewPlayback();
-    initViewPlaylists();
+    initViewPlaylist();
     initPresets();
     initSelectActions();
     initViewQueueCurrent();
@@ -237,25 +238,6 @@ function appInit() {
     initViewQueueJukebox('QueueJukeboxAlbum');
     initViewQueueLastPlayed();
     initViewSearch();
-    //init drag and drop
-    for (const table of ['QueueCurrentList', 'BrowsePlaylistDetailList']) {
-        dragAndDropTable(table);
-    }
-    const dndTableHeader = [
-        'QueueCurrent',
-        'QueueLastPlayed',
-        'QueueJukeboxSong',
-        'QueueJukeboxAlbum',
-        'Search',
-        'BrowseFilesystem',
-        'BrowsePlaylistDetail',
-        'BrowseDatabaseAlbumDetail',
-        'BrowseRadioWebradiodb',
-        'BrowseRadioRadiobrowser'
-    ];
-    for (const table of dndTableHeader) {
-        dragAndDropTableHeader(table);
-    }
     //init custom elements
     initElements(domCache.body);
     //add bootstrap native updated event listeners for dropdowns
@@ -292,12 +274,10 @@ function appInit() {
     }
     //update state on window focus - browser pauses javascript
     window.addEventListener('focus', function() {
-        logDebug('Browser tab gots the focus -> update player state');
-        getState();
-        if (app.id === 'QueueCurrent') {
-            execSearchExpression(elGetById('QueueCurrentSearchStr').value);
-        }
-        websocketKeepAlive();
+        onShow();
+    }, false);
+    window.addEventListener('pageshow', function() {
+        onShow();
     }, false);
     //global keymap
     document.addEventListener('keydown', function(event) {
@@ -322,57 +302,24 @@ function appInit() {
             event.stopPropagation();
         }
     }, false);
-    //contextmenu for tables
-    const tables = ['BrowseFilesystemList', 'BrowseDatabaseAlbumDetailList', 'QueueCurrentList', 'QueueLastPlayedList',
-        'QueueJukeboxSongList', 'QueueJukeboxAlbumList', 'SearchList', 'BrowsePlaylistListList', 'BrowsePlaylistDetailList',
-        'BrowseRadioRadiobrowserList', 'BrowseRadioWebradiodbList'];
-    for (const tableId of tables) {
-        const tbody = document.querySelector('#' + tableId + ' > tbody');
-        tbody.addEventListener('long-press', function(event) {
-            if (event.target.parentNode.classList.contains('not-clickable') ||
-                event.target.parentNode.parentNode.classList.contains('not-clickable') ||
-                getData(event.target.parentNode, 'type') === 'parentDir')
-            {
-                return;
-            }
-            showContextMenu(event);
-        }, false);
-
-        tbody.addEventListener('contextmenu', function(event) {
-            if (event.target.parentNode.classList.contains('not-clickable') ||
-                event.target.parentNode.parentNode.classList.contains('not-clickable') ||
-                getData(event.target.parentNode, 'type') === 'parentDir')
-            {
-                return;
-            }
-            showContextMenu(event);
-        }, false);
-    }
-    //contextmenu for grids
-    const grids = ['HomeList', 'BrowseDatabaseAlbumListList', 'BrowseRadioFavoritesList'];
-    for (const gridId of grids) {
-        const gridEl = document.querySelector('#' + gridId);
-        gridEl.addEventListener('contextmenu', function(event) {
-            if (event.target.classList.contains('card-body') ||
-                event.target.classList.contains('card-footer'))
-            {
-                showContextMenu(event);
-            }
-        }, false);
-    
-        gridEl.addEventListener('long-press', function(event) {
-            if (event.target.classList.contains('card-body') ||
-                event.target.classList.contains('card-footer'))
-            {
-                showContextMenu(event);
-            }
-        }, false);
-    }
 
     //websocket
     window.addEventListener('beforeunload', function() {
         webSocketClose();
     });
+}
+
+/**
+ * Checks the connection state and reconnects the websocket on demand
+ * @returns {void}
+ */
+function onShow() {
+    logDebug('Browser focused, update player state');
+    getState();
+    if (app.id === 'QueueCurrent') {
+        execSearchExpression(elGetById('QueueCurrentSearchStr').value);
+    }
+    websocketKeepAlive();
 }
 
 /**
@@ -497,7 +444,8 @@ if (window.trustedTypes &&
                 return 'sw.js';
             }
             throw new Error('Script not allowed: ' + dirty);
-       }
+       },
+       createHTML: string => string
     });
 }
 

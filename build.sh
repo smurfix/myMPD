@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 #SPDX-License-Identifier: GPL-3.0-or-later
-#myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+#myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 #https://github.com/jcorporation/mympd
 
 #exit on error
@@ -36,24 +36,6 @@ echo_warn() {
   printf "\e[m"
 }
 
-#clang tidy options
-CLANG_TIDY_CHECKS="*"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-id-dependent-backward-branch"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-unroll-loops"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-altera-struct-pack-align,-clang-analyzer-optin.performance.Padding"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-easily-swappable-parameters"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-bugprone-assignment-in-if-condition"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-clang-diagnostic-invalid-command-line-argument"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-concurrency-mt-unsafe"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-cppcoreguidelines*"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-hicpp-*"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-llvmlibc-restrict-system-libc-headers"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-identifier-length"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-function-cognitive-complexity,-google-readability-function-size,-readability-function-size"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-magic-numbers"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-readability-non-const-parameter"
-CLANG_TIDY_CHECKS="$CLANG_TIDY_CHECKS,-google-readability-todo"
-
 #save script path and change to it
 STARTPATH=$(dirname "$(realpath "$0")")
 cd "$STARTPATH" || exit 1
@@ -63,12 +45,16 @@ umask 0022
 
 #get myMPD version
 VERSION=$(grep "  VERSION" CMakeLists.txt | sed 's/  VERSION //')
-COPYRIGHT="myMPD ${VERSION} | (c) 2018-2023 Juergen Mang <mail@jcgames.de> | SPDX-License-Identifier: GPL-3.0-or-later | https://github.com/jcorporation/mympd"
+COPYRIGHT="myMPD ${VERSION} | (c) 2018-2024 Juergen Mang <mail@jcgames.de> | SPDX-License-Identifier: GPL-3.0-or-later | https://github.com/jcorporation/mympd"
 
-MYMPD_MINIFY_JS="1"
-if [ -f .git/HEAD ] && ! grep -q "master" .git/HEAD
+# Minify JavaScript only for master branch
+if [ -z "${MYMPD_MINIFY_JS+x}" ]
 then
-  MYMPD_MINIFY_JS="0"
+  MYMPD_MINIFY_JS="1"
+  if [ -f .git/HEAD ] && ! grep -q "master" .git/HEAD
+  then
+    MYMPD_MINIFY_JS="0"
+  fi
 fi
 
 #check for command
@@ -112,8 +98,8 @@ setversion() {
 
   for F in contrib/packaging/alpine/APKBUILD contrib/packaging/arch/PKGBUILD \
       contrib/packaging/rpm/mympd.spec contrib/packaging/debian/changelog \
-      contrib/packaging/openwrt/Makefile contrib/man/mympd.1 contrib/man/mympd-script.1 \
-      contrib/packaging/freebsd/multimedia/mympd/Makefile
+      contrib/packaging/openwrt/Makefile contrib/man/mympd.1 contrib/man/mympd-config.1 \
+      contrib/man/mympd-script.1 contrib/packaging/freebsd/multimedia/mympd/Makefile
   do
     echo "$F"
     sed -e "s/__VERSION__/${VERSION}/g" -e "s/__DATE_F1__/$DATE_F1/g" -e "s/__DATE_F2__/$DATE_F2/g" \
@@ -299,10 +285,47 @@ createassets() {
   cp -v dist/material-icons/MaterialIcons-Regular.woff2 "$MYMPD_BUILDDIR/htdocs/assets/"
   $ZIPCAT dist/material-icons/ligatures.json > "$MYMPD_BUILDDIR/htdocs/assets/ligatures.json.gz"
 
+  [ -z "${MYMPD_ENABLE_LUA+x}" ] && MYMPD_ENABLE_LUA="ON"
+  if [ "${MYMPD_ENABLE_LUA}" = "on" ] || [ "${MYMPD_ENABLE_LUA}" = "ON" ]
+  then
+    lualibs
+  else
+    echo "Skip creation of lua libraries"
+  fi
+
+  return 0
+}
+
+lualibs() {
+  [ -z "${MYMPD_ENABLE_MYGPIOD+x}" ] && MYMPD_ENABLE_MYGPIOD="OFF"
+  [ -z "${MYMPD_BUILDDIR+x}" ] && MYMPD_BUILDDIR="release"
   echo "Copy integrated lua libraries"
   mkdir -p "$MYMPD_BUILDDIR/contrib/lualibs"
-  cp -v contrib/lualibs/*.lua "$MYMPD_BUILDDIR/contrib/lualibs/"
-  return 0
+  cp -v contrib/lualibs/json.lua "$MYMPD_BUILDDIR/contrib/lualibs/"
+  cp -v contrib/lualibs/mympd/00-start.lua "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
+  cat contrib/lualibs/mympd/10-mympd.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
+  cat contrib/lualibs/mympd/20-http.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
+  cat contrib/lualibs/mympd/30-execute.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
+  [ "$MYMPD_ENABLE_MYGPIOD" = "ON" ] && cat contrib/lualibs/mympd/40-mygpiod.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
+  cat contrib/lualibs/mympd/50-util.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
+  cat contrib/lualibs/mympd/60-caches.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
+  cat contrib/lualibs/mympd/70-string.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
+  cat contrib/lualibs/mympd/99-end.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
+  echo "Compiling lua libraries"
+  LUAC=$(command -v luac5.4 2> /dev/null || command -v luac5.3 2> /dev/null || command -v luac 2> /dev/null || true)
+  if [ -z "$LUAC" ]
+  then
+    echo_error "luac not found"
+    exit 1
+  fi
+  if ! $LUAC -s -o "$MYMPD_BUILDDIR/contrib/lualibs/mympd.luac" "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
+  then
+    exit 1
+  fi
+  if ! $LUAC -s -o "$MYMPD_BUILDDIR/contrib/lualibs/json.luac" "$MYMPD_BUILDDIR/contrib/lualibs/json.lua"
+  then
+    exit 1
+  fi
 }
 
 buildrelease() {
@@ -373,6 +396,8 @@ copyassets() {
   cp -v "$STARTPATH/dist/long-press-event/long-press-event.js" "$STARTPATH/htdocs/js/long-press-event.js"
   cp -v "$STARTPATH/dist/material-icons/MaterialIcons-Regular.woff2" "$STARTPATH/htdocs/assets/MaterialIcons-Regular.woff2"
   cp -v "$STARTPATH/dist/material-icons/ligatures.json" "$STARTPATH/htdocs/assets/ligatures.json"
+
+  lualibs
 
   #Create defines
   create_js_defines
@@ -449,8 +474,7 @@ cleanup() {
   rm -rf htdocs/assets/i18n
 
   #generated documentation
-  rm -rf docs/_site
-  rm -rf docs/.jekyll-cache
+  rm -rf _site
   rm -rf docs/doxygen
   rm -rf docs/jsdoc
 
@@ -543,9 +567,8 @@ check_file() {
   then
     echo "Running clang-tidy"
     rm -f clang-tidy.out
-    clang-tidy --checks="$CLANG_TIDY_CHECKS" \
-      "$FILE" > ../clang-tidy.out 2>/dev/null
-    grep -v -E "(/usr/include/|memset|memcpy|\^)" ../clang-tidy.out
+    clang-tidy --config-file="$STARTPATH/.clang-tidy" "$FILE" > ../clang-tidy.out 2>/dev/null
+    grep -v -E "(/usr/include/|memset|memcpy|_XOPEN_SOURCE|\^)" ../clang-tidy.out
   else
     echo_warn "clang-tidy not found"
   fi
@@ -563,52 +586,6 @@ check() {
     return 1
   fi
 
-  if check_cmd cppcheck
-  then
-    echo "Running cppcheck"
-    [ -z "${CPPCHECKOPTS+z}" ] && CPPCHECKOPTS="-q --force --enable=warning"
-    find ./src/ -name \*.c | while read -r FILE
-    do
-      [ "$FILE" = "./src/mympd_api/scripts_lualibs.c" ] && continue
-      [ "$FILE" = "./src/web_server/embedded_files.c" ] && continue
-      #shellcheck disable=SC2086
-      if ! cppcheck $CPPCHECKOPTS --error-exitcode=1 "$FILE"
-      then
-        return 1
-      fi
-    done
-    find ./src/ -name \*.h | while read -r FILE
-    do
-      #shellcheck disable=SC2086
-      if ! cppcheck $CPPCHECKOPTS --error-exitcode=1 "$FILE"
-      then
-        return 1
-      fi
-    done
-  else
-    echo_warn "cppcheck not found"
-    return 1
-  fi
-
-  if check_cmd flawfinder
-  then
-    echo "Running flawfinder"
-    [ -z "${FLAWFINDEROPTS+z}" ] && FLAWFINDEROPTS="-m3 --quiet --dataonly"
-    #shellcheck disable=SC2086
-    if ! flawfinder $FLAWFINDEROPTS --error-level=3 src
-    then
-      return 1
-    fi
-    #shellcheck disable=SC2086
-    if ! flawfinder $FLAWFINDEROPTS --error-level=3 cli_tools
-    then
-      return 1
-    fi
-  else
-    echo_warn "flawfinder not found"
-    return 1
-  fi
-
   if [ ! -f src/compile_commands.json ]
   then
     echo "src/compile_commands.json not found"
@@ -622,8 +599,8 @@ check() {
     rm -f clang-tidy.out
     cd src || exit 1
     find ./ -name '*.c' -exec clang-tidy \
-      --checks="$CLANG_TIDY_CHECKS" {} \; >> ../clang-tidy.out 2>/dev/null
-    ERRORS=$(grep -v -E "(/usr/include/|memset|memcpy|\^)" ../clang-tidy.out)
+      --config-file="$STARTPATH/.clang-tidy" {} \; >> ../clang-tidy.out 2>/dev/null
+    ERRORS=$(grep -v -E "(/usr/include/|memset|memcpy|_XOPEN_SOURCE|\^)" ../clang-tidy.out)
     if [ -n "$ERRORS" ]
     then
       echo "$ERRORS"
@@ -790,7 +767,12 @@ pkgarch() {
 }
 
 pkgosc() {
-  check_cmd osc
+  [ -z "${OSC_BIN+x}" ] && OSC_BIN="$HOME/python-venv/bin/osc"
+  if [ ! -x "$OSC_BIN" ]
+  then
+    echo_error "Command osc not found: $HOME/python-venv/bin/osc"
+    exit 1
+  fi
   cleanup
   cleanuposc
   if [ -z "${OSC_REPO+x}" ]
@@ -805,7 +787,7 @@ pkgosc() {
 
   mkdir osc
   cd osc || exit 1
-  osc checkout "$OSC_REPO"
+  $OSC_BIN checkout "$OSC_REPO"
   rm -f "$OSC_REPO"/*
 
   cd "$STARTPATH" || exit 1
@@ -833,10 +815,10 @@ pkgosc() {
   cp ../contrib/packaging/arch/PKGBUILD "$OSC_REPO/"
 
   cd "$OSC_REPO" || exit 1
-  osc addremove
-  osc st
-  osc vc -m "Update"
-  osc commit -m "Update"
+  $OSC_BIN addremove
+  $OSC_BIN st
+  $OSC_BIN vc -m "Update"
+  $OSC_BIN commit -m "Update"
 }
 
 installdeps() {
@@ -844,41 +826,42 @@ installdeps() {
   if [ -f /etc/debian_version ]
   then
     apt-get update
-    if ! apt-get install -y --no-install-recommends liblua5.4-dev
+    if ! apt-get install -y --no-install-recommends liblua5.4-dev lua5.4
     then
       #fallback to lua 5.3 for older debian versions
-      apt-get install -y --no-install-recommends liblua5.3-dev
+      apt-get install -y --no-install-recommends liblua5.3-dev lua5.3
     fi
     apt-get install -y --no-install-recommends \
       gcc cmake perl libssl-dev libid3tag0-dev libflac-dev \
-      build-essential pkg-config libpcre2-dev gzip jq
+      build-essential pkg-config libpcre2-dev gzip jq whiptail
   elif [ -f /etc/arch-release ]
   then
     #arch
-    pacman -Sy gcc base-devel cmake perl openssl libid3tag flac lua pkgconf pcre2 gzip jq
+    pacman -Sy gcc base-devel cmake perl openssl libid3tag flac lua pkgconf pcre2 gzip jq libnewt
   elif [ -f /etc/alpine-release ]
   then
     #alpine
-    apk add cmake perl openssl-dev libid3tag-dev flac-dev lua5.4-dev \
-      alpine-sdk linux-headers pkgconf pcre2-dev gzip jq
+    apk add cmake perl openssl-dev libid3tag-dev flac-dev lua5.4-dev lua5.4 \
+      alpine-sdk linux-headers pkgconf pcre2-dev gzip jq newt
   elif [ -f /etc/SuSE-release ]
   then
     #suse
     zypper install gcc cmake pkgconfig perl openssl-devel libid3tag-devel flac-devel \
-      lua-devel unzip pcre2-devel gzip jq
+      lua-devel unzip pcre2-devel gzip jq whiptail
   elif [ -f /etc/redhat-release ]
   then
     #fedora
     yum install gcc cmake pkgconfig perl openssl-devel libid3tag-devel flac-devel \
-      lua-devel unzip pcre2-devel gzip jq
+      lua-devel unzip pcre2-devel gzip jq whiptail
   else
     echo_warn "Unsupported distribution detected."
     echo "You should manually install:"
-    echo "  - gcc"
+    echo "  - gcc or clang"
     echo "  - cmake"
     echo "  - perl"
     echo "  - gzip"
     echo "  - jq"
+    echo "  - whiptail"
     echo "  - openssl (devel)"
     echo "  - flac (devel)"
     echo "  - libid3tag (devel)"
@@ -896,19 +879,20 @@ updatelibmympdclient() {
   cd "$TMPDIR" || exit 1
   git clone --depth=1 -b libmympdclient https://github.com/jcorporation/libmympdclient.git
   cd libmympdclient || exit 1
-  meson . output -Dbuffer_size=8192
+  meson setup . output -Dbuffer_size=8192
 
   cd "$STARTPATH/dist/libmympdclient" || exit 1
   install -d src
-  install -d include/mpd/
+  install -d include/mpd
+  install -d LICENSES
 
   rsync -av --delete "$TMPDIR/libmympdclient/src/" ./src/
   rsync -av --delete "$TMPDIR/libmympdclient/include/mpd/" ./include/mpd/
 
-  rsync -av "$TMPDIR/libmympdclient/output/version.h" include/mpd/version.h
+  rsync -av "$TMPDIR/libmympdclient/output/include/mpd/version.h" include/mpd/version.h
   rsync -av "$TMPDIR/libmympdclient/output/config.h" include/config.h
 
-  rsync -av "$TMPDIR/libmympdclient/LICENSE.md" LICENSE.md
+  rsync -av "$TMPDIR/libmympdclient/LICENSES/" LICENSES/
 
   rm -rf "$TMPDIR"
 }
@@ -928,7 +912,7 @@ updatebootstrapnative() {
   npm run build-vite
   grep -v "^//" dist/bootstrap-native.js > "$STARTPATH/dist/bootstrap-native/bootstrap-native.min.js"
   #normal build
-  sed -i 's/sourcemap: true,/sourcemap: true,\nminify: false/' vite.config.ts
+  sed -i 's/sourcemap: true,/sourcemap: true,\nminify: false/' vite.config.mts
   npm run build-vite
   grep -v "^//" dist/bootstrap-native.js > "$STARTPATH/dist/bootstrap-native/bootstrap-native.js"
   #cleanup
@@ -1263,6 +1247,8 @@ run_eslint() {
   then
     return 1
   fi
+  # Enforce minification of JavaScript
+  MYMPD_MINIFY_JS=1
   createassets
   rc=0
   echo ""
@@ -1277,7 +1263,7 @@ run_eslint() {
   for F in release/htdocs/sw.min.js release/htdocs/js/mympd.min.js release/htdocs/js/i18n.min.js
   do
     echo "Linting $F"
-    if ! npx eslint --no-eslintrc -c .eslintrc-min.json $F
+    if ! npx eslint $F
     then
       rc=1
     fi
@@ -1331,20 +1317,27 @@ run_htmlhint() {
   return 0
 }
 
-luascript_index() {
-  rm -f "docs/scripting/scripts/index.json"
-  exec 3<> "docs/scripting/scripts/index.json"
-  printf "{\"scripts\":[" >&3
-  I=0
-  for F in docs/scripting/scripts/*.lua
-  do
-    [ "$I" -gt 0 ] &&  printf "," >&3
-    SCRIPTNAME=$(basename "$F")
-    printf "\"%s\"" "$SCRIPTNAME" >&3
-    I=$((I+1))
-  done
-  printf "]}\n" >&3
-  exec 3>&-
+run_luacheck() {
+  export MYMPD_ENABLE_MYGPIOD="ON"
+  lualibs
+  if ! luacheck release/contrib/lualibs/
+  then
+    return 1
+  fi
+  return 0
+}
+
+run_markdownlint() {
+  if ! check_cmd npx
+  then
+    return 1
+  fi
+  echo "Linting docs markdown"
+  if ! npx markdownlint-cli -i "./docs/_includes/*" ./docs/**
+  then
+    return 1
+  fi
+  return 0
 }
 
 run_doxygen() {
@@ -1365,23 +1358,29 @@ run_jsdoc() {
   jsdoc htdocs/js/ -c jsdoc.json -d docs/jsdoc/
 }
 
-create_doc() {
-  DOC_DEST=$1
-  if ! check_cmd jekyll
+run_luadoc() {
+  if ! check_cmd luadoc
   then
-    echo "Jekyll not installed, can not create documentation"
     return 1
   fi
-  if ! run_doxygen
-  then
-    echo "Skipped generation of c api documentation"
-  fi
-  if ! run_jsdoc
-  then
-    echo "Skipped generation of js api documentation"
-  fi
+  echo "Running luadoc"
+  lualibs
+  luadoc --noindexpage -d docs/luadoc/ release/contrib/lualibs/mympd.lua
+}
+
+create_doc() {
+  DOC_DEST=$1
   install -d "$DOC_DEST" || return 1
-  jekyll build -s "$STARTPATH/docs" -d "$DOC_DEST"
+  if ! check_cmd python3
+  then
+    echo "Python3 not installed, can not create documentation"
+    return 1
+  fi
+  ./build.sh api_doc
+  python3 -m venv ~/python-venv/
+  ~/python-venv/bin/pip install mkdocs mkdocs-material \
+      mkdocs-include-markdown-plugin mkdocs-awesome-pages-plugin
+  ~/python-venv/bin/mkdocs build -d "$DOC_DEST"
 }
 
 translation_import() {
@@ -1480,7 +1479,7 @@ case "$ACTION" in
     installrelease
   ;;
   releaseinstall)
-    buildrelease
+    buildrelease "Release"
     installrelease
   ;;
   debug|asan|tsan|ubsan)
@@ -1608,26 +1607,13 @@ case "$ACTION" in
     sbuild_cleanup
   ;;
   lint)
-    if ! run_htmlhint
-    then
-      exit 1
-    fi
-    if ! run_eslint
-    then
-      exit 1
-    fi
-    if ! run_stylelint
-    then
-      exit 1
-    fi
-    if ! run_tsc
-    then
-      exit 1
-    fi
-    if ! run_checkjs
-    then
-      exit 1
-    fi
+    run_htmlhint
+    run_eslint
+    run_stylelint
+    run_tsc
+    run_checkjs
+    run_luacheck
+    run_markdownlint
   ;;
   eslint)
     run_eslint
@@ -1637,6 +1623,12 @@ case "$ACTION" in
   ;;
   htmlhint)
     run_htmlhint
+  ;;
+  markdownlint)
+    run_markdownlint
+  ;;
+  luacheck)
+    run_luacheck
   ;;
   luascript_index)
     luascript_index
@@ -1650,6 +1642,11 @@ case "$ACTION" in
     if ! run_jsdoc
     then
       echo "Could not create frontend api documentation"
+      exit 1
+    fi
+    if ! run_luadoc
+    then
+      echo "Could not create lua api documentation"
       exit 1
     fi
     cp -v htdocs/js/apidoc.js docs/assets/apidoc.js
@@ -1700,17 +1697,16 @@ case "$ACTION" in
     echo "  terms_export:     Exports the terms to poeditor.com"
     echo ""
     echo "Check options:"
-    echo "  check:            runs cppcheck, flawfinder and clang-tidy on source files"
-    echo "                    following environment variables are respected"
-    echo "                      - CPPCHECKOPTS=\"-q --force --enable=warning\""
-    echo "                      - FLAWFINDEROPTS=\"-m3 --quiet --dataonly\""
+    echo "  check:            runs clang-tidy on source files"
     echo "  check_file:       same as check, but for one file, second arg must be the file"
     echo "  check_docs        checks the documentation for missing API methods"
     echo "  check_includes:   checks for valid include paths"
-    echo "  lint:             runs eslint, stylelint and htmlhint"
+    echo "  lint:             runs linters for javascript, css, html and markdown"
+    echo "  markdownlint:     check for valid markdown in the docs folder"
     echo "  eslint:           combines javascript files and runs eslint"
     echo "  stylelint:        runs stylelint (lints css files)"
     echo "  htmlhint:         runs htmlhint (lints html files)"
+    echo "  luacheck:         runs luacheck (lints lua libraries)"
     echo ""
     echo "Cleanup options:"
     echo "  cleanup:          cleanup source tree"

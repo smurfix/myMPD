@@ -1,34 +1,5 @@
-/* libmpdclient
-   (c) 2003-2019 The Music Player Daemon Project
-   This project's homepage is: http://www.musicpd.org
-
-   Redistribution and use in source and binary forms, with or without
-   modification, are permitted provided that the following conditions
-   are met:
-
-   - Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
-
-   - Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
-
-   - Neither the name of the Music Player Daemon nor the names of its
-   contributors may be used to endorse or promote products derived from
-   this software without specific prior written permission.
-
-   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-   ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-   A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR
-   CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-   EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-   PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-   PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright The Music Player Daemon Project
 
 /*! \file
  * \brief MPD client library
@@ -170,6 +141,22 @@ bool
 mpd_send_list_playlist(struct mpd_connection *connection, const char *name);
 
 /**
+ * Like mpd_send_list_playlist(), but specifies a (position) range.
+ * Use mpd_recv_entity() to receive the songs (#MPD_ENTITY_TYPE_SONG).
+ *
+ * @param connection the connection to MPD
+ * @param name the name of the playlist
+ * @param start the start position of the range (including)
+ * @param end the end position of the range (excluding); the special
+ * @return true on success, false on error
+ *
+ * @since libmpdclient 2.23, MPD 0.24
+ */
+bool
+mpd_send_list_playlist_range(struct mpd_connection *connection, const char *name,
+			     unsigned start, unsigned end);
+
+/**
  * List the content, with full metadata, of the stored playlist identified by
  * name.  Use mpd_recv_entity() to receive the songs (#MPD_ENTITY_TYPE_SONG).
  *
@@ -179,6 +166,22 @@ mpd_send_list_playlist(struct mpd_connection *connection, const char *name);
  */
 bool
 mpd_send_list_playlist_meta(struct mpd_connection *connection, const char *name);
+
+/**
+ * Like mpd_send_list_playlist_meta(), but specifies a (position) range.
+ * Use mpd_recv_entity() to receive the songs (#MPD_ENTITY_TYPE_SONG).
+ *
+ * @param connection the connection to MPD
+ * @param name the name of the playlist
+ * @param start the start position of the range (including)
+ * @param end the end position of the range (excluding); the special
+ * @return true on success, false on error
+ *
+ * @since libmpdclient 2.23, MPD 0.24
+ */
+bool
+mpd_send_list_playlist_range_meta(struct mpd_connection *connection, const char *name,
+				  unsigned start, unsigned end);
 
 /**
  * Clear the playlist name (i.e. truncate name.m3u)
@@ -582,6 +585,76 @@ mpd_send_rm(struct mpd_connection *connection, const char *name);
  */
 bool
 mpd_run_rm(struct mpd_connection *connection, const char *name);
+
+/**
+ * Count the number of songs and their total playtime (seconds) in the
+ * playlist.
+ *
+ * @param connection the connection to MPD
+ * @param name the name of the playlist file
+ * @return true on success, false on error
+ *
+ * @since libmpdclient 2.23, MPD 0.24
+ */
+bool
+mpd_send_playlistlength(struct mpd_connection *connection, const char *name);
+
+
+/**
+ * Search for songs in the stored playlist.
+ * A window may be specified with mpd_playlist_search_add_window().
+ * Send the search command with mpd_playlist_search_commit(), and read the
+ * response items with mpd_recv_song().
+ *
+ * @param connection the connection to MPD
+ * @param name the name of the stored playlist
+ * @param expression the expression string; must be enclosed in
+ * parentheses
+ * @return true on success, false on error
+ *
+ * @since libmpdclient 2.23, MPD 0.24
+ */
+bool
+mpd_playlist_search_begin(struct mpd_connection *connection, const char *name,
+			  const char *expression);
+
+/**
+ * Request only a portion of the result set.
+ *
+ * @param connection a #mpd_connection
+ * @param start the start offset (including)
+ * @param end the end offset (not including)
+ * value "UINT_MAX" makes the end of the range open
+ * @return true on success, false on error
+ *
+ * @since libmpdclient 2.23, MPD 0.24
+ */
+bool
+mpd_playlist_search_add_window(struct mpd_connection *connection,
+			       unsigned start, unsigned end);
+
+/**
+ * Starts the real search.
+ *
+ * @param connection the connection to MPD
+ * @return true on success, false on error
+ *
+ * @since libmpdclient 2.23, MPD 0.24
+ */
+bool
+mpd_playlist_search_commit(struct mpd_connection *connection);
+
+/**
+ * Cancels the search request before you have called
+ * mpd_playlist_search_commit(). Call this to clear the current search
+ * request.
+ *
+ * @param connection the connection to MPD
+ *
+ * @since libmpdclient 2.23, MPD 0.24
+ */
+void
+mpd_playlist_search_cancel(struct mpd_connection *connection);
 
 #ifdef __cplusplus
 }

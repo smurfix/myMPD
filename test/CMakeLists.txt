@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+# myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 # https://github.com/jcorporation/mympd
 
 set(MYMPD_BUILD_DIR "${PROJECT_BINARY_DIR}")
@@ -8,37 +8,49 @@ configure_file(utility.h.in "${PROJECT_BINARY_DIR}/test/utility.h")
 set(TEST_SOURCES
   main.c
   utility.c
-  ../src/lib/album_cache.c
   ../src/lib/api.c
+  ../src/lib/cache_disk_lyrics.c
+  ../src/lib/cache_rax_album.c
+  ../src/lib/cache_rax.c
   ../src/lib/cert.c
+  ../src/lib/config.c
+  ../src/lib/convert.c
+  ../src/lib/datetime.c
+  ../src/lib/event.c
   ../src/lib/env.c
+  ../src/lib/fields.c
   ../src/lib/filehandler.c
   ../src/lib/http_client.c
   ../src/lib/jsonrpc.c
+  ../src/lib/last_played.c
   ../src/lib/list.c
   ../src/lib/log.c
-  ../src/lib/lua_mympd_state.c
-  ../src/lib/m3u.c
+  ../src/lib/mg_str_utils.c
   ../src/lib/mimetype.c
   ../src/lib/mpack.c
   ../src/lib/msg_queue.c
   ../src/lib/mympd_state.c
   ../src/lib/passwd.c
   ../src/lib/random.c
+  ../src/lib/rax_extras.c
   ../src/lib/sds_extras.c
+  ../src/lib/search.c
+  ../src/lib/smartpls.c
   ../src/lib/state_files.c
   ../src/lib/sticker.c
-  ../src/lib/tags.c
+  ../src/lib/timer.c
   ../src/lib/utility.c
   ../src/lib/validate.c
+  ../src/lib/webradio.c
   ../src/mpd_client/connection.c
   ../src/mpd_client/errorhandler.c
   ../src/mpd_client/features.c
   ../src/mpd_client/jukebox.c
   ../src/mpd_client/presets.c
   ../src/mpd_client/queue.c
+  ../src/mpd_client/playlists.c
+  ../src/mpd_client/random_select.c
   ../src/mpd_client/search.c
-  ../src/mpd_client/search_local.c
   ../src/mpd_client/shortcuts.c
   ../src/mpd_client/stickerdb.c
   ../src/mpd_client/tags.c
@@ -48,7 +60,9 @@ set(TEST_SOURCES
   ../src/mympd_api/home.c
   ../src/mympd_api/last_played.c
   ../src/mympd_api/jukebox.c
+  ../src/mympd_api/lua_mympd_state.c
   ../src/mympd_api/lyrics.c
+  ../src/mympd_api/requests.c
   ../src/mympd_api/settings.c
   ../src/mympd_api/status.c
   ../src/mympd_api/sticker.c
@@ -56,33 +70,43 @@ set(TEST_SOURCES
   ../src/mympd_api/timer_handlers.c
   ../src/mympd_api/trigger.c
   ../src/mympd_api/queue.c
-  ../src/mympd_api/webradios.c
+  ../src/mympd_api/webradio.c
+  ../src/scripts/events.c
+  tests/test_album_cache.c
   tests/test_api.c
   tests/test_cert.c
+  tests/test_convert.c
+  tests/test_datetime.c
   tests/test_env.c
   tests/test_filehandler.c
   tests/test_http_client.c
   tests/test_jsonrpc.c
   tests/test_list.c
-  tests/test_m3u.c
   tests/test_mimetype.c
-  tests/test_mpd_client_tags.c
   tests/test_mympd_queue.c
   tests/test_mympd_state.c
   tests/test_radix_sort.c
   tests/test_random.c
   tests/test_sds_extras.c
+  tests/test_search.c
   tests/test_state_files.c
+  tests/test_tags.c
   tests/test_timer.c
   tests/test_utility.c
   tests/test_validate.c
 )
 
 if(LIBID3TAG_FOUND)
-  set(TEST_SOURCES_LIBID3TAG "tests/test_lyrics_id3.c")
+  set(TEST_SOURCES_LIBID3TAG
+    ../src/mympd_api/lyrics_id3.c
+    tests/test_lyrics_id3.c
+  )
 endif()
 if(FLAC_FOUND)
-  set(TEST_SOURCES_FLAC "tests/test_lyrics_flac.c")
+  set(TEST_SOURCES_FLAC
+  ../src/mympd_api/lyrics_flac.c
+    tests/test_lyrics_flac.c
+  )
 endif()
 
 add_executable(unit_test
@@ -102,10 +126,11 @@ target_compile_options(unit_test
   PRIVATE
     "-Wno-unused-function"
     "-Wno-redundant-decls"
+    "-DMG_MAX_HTTP_HEADERS=50"
 )
 
 target_link_libraries(unit_test
-  libmympdclient
+  mympdclient
   mjson
   mpack
   mongoose
@@ -124,9 +149,6 @@ endif()
 if(FLAC_FOUND)
   target_link_libraries(unit_test ${FLAC_LIBRARIES})
 endif()
-if(LUA_FOUND)
-  target_link_libraries(unit_test ${LUA_LIBRARIES})
-endif()
 
 add_custom_command(TARGET unit_test PRE_BUILD
   COMMAND ${CMAKE_COMMAND} -E create_symlink
@@ -137,6 +159,8 @@ list(APPEND test_categories
   "album_cache"
   "api"
   "cert"
+  "convert"
+  "datetime"
   "env"
   "filehandler"
   "http_client"
@@ -144,15 +168,15 @@ list(APPEND test_categories
   "list"
   "m3u"
   "mimetype"
-  "mpd_client_search_local"
-  "mpd_client_tags"
   "mympd_queue"
   "mympd_state"
   "passwd"
   "radix_sort"
   "random"
   "sds_extras"
+  "search_local"
   "state_files"
+  "tags"
   "timer"
   "utility"
   "validate"

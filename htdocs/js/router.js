@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module router_js */
@@ -22,7 +22,7 @@ function appPrepare() {
             'cardQueue', 'tabQueueCurrent', 'tabQueueLastPlayed',
             'tabQueueJukebox', 'viewQueueJukeboxSong', 'viewQueueJukeboxAlbum',
             'cardBrowse', 'tabBrowseFilesystem',
-            'tabBrowseRadio', 'viewBrowseRadioFavorites', 'viewBrowseRadioWebradiodb', 'viewBrowseRadioRadiobrowser',
+            'tabBrowseRadio', 'viewBrowseRadioFavorites', 'viewBrowseRadioWebradiodb',
             'tabBrowsePlaylist', 'viewBrowsePlaylistDetail', 'viewBrowsePlaylistList',
             'tabBrowseDatabase', 'viewBrowseDatabaseTagList', 'viewBrowseDatabaseAlbumDetail', 'viewBrowseDatabaseAlbumList'];
         for (const card of cards) {
@@ -131,7 +131,7 @@ function appGoto(card, tab, view, offset, limit, filter, sort, tag, search, newS
     }
     //build hash
     app.goto = true;
-    location.hash = myEncodeURIComponent(
+    const newHash = myEncodeURIComponent(
         JSON.stringify({
             "card": card,
             "tab": tab,
@@ -144,6 +144,9 @@ function appGoto(card, tab, view, offset, limit, filter, sort, tag, search, newS
             "search": search
         })
     );
+    if (location.hash !== '#' + newHash) {
+        location.hash = newHash;
+    }
     appRoute(card, tab, view, offset, limit, filter, sort, tag, search);
 }
 
@@ -195,6 +198,7 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
             }
             catch(error) {
                 //do nothing
+                logDebug(error);
             }
         }
         if (jsonHash === null) {
@@ -267,7 +271,6 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
         case 'BrowseDatabaseAlbumDetail': handleBrowseDatabaseAlbumDetail(); break;
         case 'BrowseRadioFavorites':      handleBrowseRadioFavorites(); break;
         case 'BrowseRadioWebradiodb':     handleBrowseRadioWebradiodb(); break;
-        case 'BrowseRadioRadiobrowser':   handleBrowseRadioRadiobrowser(); break;
         case 'Search':                    handleSearch(); break;
         default: {
             let initialStartupView = settings.webuiSettings.startupView;

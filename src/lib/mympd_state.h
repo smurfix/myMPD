@@ -1,19 +1,25 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief Central myMPD state for the mympd_api thread
+ */
 
 #ifndef MYMPD_STATE_H
 #define MYMPD_STATE_H
 
 #include "dist/libmympdclient/include/mpd/client.h"
-#include "dist/rax/rax.h"
 #include "dist/sds/sds.h"
+#include "src/lib/cache_rax.h"
 #include "src/lib/config_def.h"
+#include "src/lib/event.h"
+#include "src/lib/fields.h"
 #include "src/lib/list.h"
-#include "src/lib/tags.h"
-#include <poll.h>
+#include "src/lib/webradio.h"
+
 #include <time.h>
 
 /**
@@ -23,6 +29,7 @@ enum jukebox_modes {
     JUKEBOX_OFF,        //!< jukebox is disabled
     JUKEBOX_ADD_SONG,   //!< jukebox adds single songs
     JUKEBOX_ADD_ALBUM,  //!< jukebox adds whole albums
+    JUKEBOX_SCRIPT,     //!< jukebox queue is filled by a script
     JUKEBOX_UNKNOWN     //!< jukebox mode is unknown
 };
 
@@ -30,28 +37,45 @@ enum jukebox_modes {
  * MPD connection states
  */
 enum mpd_conn_states {
-    MPD_CONNECTED,           //!< mpd is connected
-    MPD_DISCONNECTED,        //!< mpd is disconnected, try to reconnect
-    MPD_FAILURE,             //!< mpd connection failed, disconnect mpd and reconnect after wait time
-    MPD_DISCONNECT,          //!< disconnect mpd and reconnect after wait time
-    MPD_DISCONNECT_INSTANT,  //!< disconnect mpd and reconnect as soon as possible
-    MPD_WAIT,                //!< waiting for reconnection
-    MPD_REMOVED              //!< connection was removed
+    MPD_CONNECTED,     //!< mpd is connected
+    MPD_DISCONNECTED,  //!< mpd is disconnected
+    MPD_FAILURE        //!< mpd is in unrecoverable failure state
 };
 
 /**
- * Holds cache information
+ * MPD feature flags
  */
-struct t_cache {
-    bool building;  //!< true if the mpd_worker thread is creating the cache
-    rax *cache;     //!< pointer to the cache
+struct t_mpd_features {
+    bool mpd_0_24_0;               //!< MPD version is ge 0.24.0
+    bool advqueue;                 //!< mpd supports the prio filter / sort for queue and the save modes (MPD 0.24)
+    bool albumart;                 //!< mpd supports the albumart command
+    bool binarylimit;              //!< mpd supports the binarylimit command
+    bool fingerprint;              //!< mpd supports the fingerprint command
+    bool library;                  //!< myMPD has access to the mpd music directory
+    bool mount;                    //!< mpd supports mounts
+    bool neighbor;                 //!< mpd supports neighbors command
+    bool partitions;               //!< mpd supports partitions
+    bool playlists;                //!< mpd supports playlists
+    bool playlist_rm_range;        //!< mpd supports the playlist rm range command
+    bool readpicture;              //!< mpd supports the readpicture command
+    bool stickers;                 //!< mpd supports stickers
+    bool tags;                     //!< mpd tags are enabled
+    bool whence;                   //!< mpd supports the whence feature (relative position in queue)
+    bool consume_oneshot;          //!< mpd supports consume oneshot mode
+    bool playlist_dir_auto;        //!< mpd supports autodetection of playlist directory
+    bool starts_with;              //!< mpd supports starts_with filter expression
+    bool pcre;                     //!< mpd supports pcre for filter expressions
+    bool db_added;                 //!< mpd supports added attribute for songs
+    bool advsticker;               //!< mpd supports new sticker commands from MPD 0.24
+    bool search_add_sort_window;   //!< mpd supports search and window for findadd/searchadd/searchaddpl
+    bool listplaylist_range;       //!< mpd supports the listplaylist with range parameter
 };
 
 /**
  * Holds MPD specific states shared across all partitions
  */
 struct t_mpd_state {
-    struct t_mympd_state *mympd_state;  //!< pointer to myMPD state
+    struct t_config *config;            //!< pointer to static config
     //connection configuration
     sds mpd_host;                       //!< mpd host configuration
     unsigned mpd_port;                  //!< mpd port configuration
@@ -63,85 +87,66 @@ struct t_mpd_state {
     sds playlist_directory_value;       //!< real playlist directory set by feature detection
     //tags
     sds tag_list;                       //!< comma separated string of mpd tags to enable
-    struct t_tags tags_mympd;           //!< tags enabled by myMPD and mpd
-    struct t_tags tags_mpd;             //!< all available mpd tags
-    struct t_tags tags_search;          //!< tags enabled for search
-    struct t_tags tags_browse;          //!< tags enabled for browse
-    struct t_tags tags_album;           //!< tags enabled for albums
+    struct t_mpd_tags tags_mympd;       //!< tags enabled by myMPD and mpd
+    struct t_mpd_tags tags_mpd;         //!< all available mpd tags
+    struct t_mpd_tags tags_search;      //!< tags enabled for search
+    struct t_mpd_tags tags_browse;      //!< tags enabled for browse
+    struct t_mpd_tags tags_album;       //!< tags enabled for albums
     enum mpd_tag_type tag_albumartist;  //!< tag to use for AlbumArtist
     //Feature flags
     const unsigned *protocol;           //!< mpd protocol version
-    bool feat_advqueue;                 //!< mpd supports the prio filter / sort for queue and the save modes
-    bool feat_albumart;                 //!< mpd supports the albumart command
-    bool feat_binarylimit;              //!< mpd supports the binarylimit command
-    bool feat_fingerprint;              //!< mpd supports the fingerprint command
-    bool feat_library;                  //!< myMPD has access to the mpd music directory
-    bool feat_mount;                    //!< mpd supports mounts
-    bool feat_neighbor;                 //!< mpd supports neighbors command
-    bool feat_partitions;               //!< mpd supports partitions
-    bool feat_playlists;                //!< mpd supports playlists
-    bool feat_playlist_rm_range;        //!< mpd supports the playlist rm range command
-    bool feat_readpicture;              //!< mpd supports the readpicture command
-    bool feat_stickers;                 //!< mpd supports stickers
-    bool feat_tags;                     //!< mpd tags are enabled
-    bool feat_whence;                   //!< mpd supports the whence feature (relative position in queue)
-    bool feat_consume_oneshot;          //!< mpd supports consume oneshot mode
-    bool feat_playlist_dir_auto;        //!< mpd supports autodetection of playlist directory
-    bool feat_starts_with;              //!< mpd supports starts_with filter expression
-    bool feat_pcre;                     //!< mpd supports pcre for filter expressions
-    //caches
-    struct t_cache album_cache;         //!< the album cache created by the mpd_worker thread
-    //lists
-    long last_played_count;             //!< number of songs to keep in the last played list (disk + memory)
-    sds booklet_name;                   //!< name of the booklet files
+    struct t_mpd_features feat;         //!< feature flags
+    struct t_list sticker_types;        //!< mpd sticker types
+};
+
+/**
+ * Holds the jukebox states for a partition
+ */
+struct t_jukebox_state {
+    enum jukebox_modes mode;       //!< the jukebox mode
+    sds playlist;                  //!< playlist from which the jukebox queue is generated
+    unsigned queue_length;         //!< how many songs should the mpd queue have
+    unsigned last_played;          //!< only add songs with last_played state older than seconds from now
+    struct t_mpd_tags uniq_tag;      //!< single tag for the jukebox uniq constraint
+    struct t_list *queue;          //!< the jukebox queue itself
+    bool ignore_hated;             //!< ignores hated songs for the jukebox mode
+    sds filter_include;            //!< mpd search filter to include songs / albums
+    sds filter_exclude;            //!< mpd search filter to exclude songs / albums
+    unsigned min_song_duration;    //!< minimum song duration
+    unsigned max_song_duration;    //!< maximum song duration
+    bool filling;                  //!< indication flag for filling jukebox thread
+    sds last_error;                //!< last jukebox error message
 };
 
 /**
  * Holds partition specific states
  */
 struct t_partition_state {
-    struct t_mympd_state *mympd_state;     //!< pointer to myMPD state
+    struct t_config *config;               //!< pointer to static config
     struct t_mpd_state *mpd_state;         //!< pointer to shared mpd state
     //mpd connection
     struct mpd_connection *conn;           //!< mpd connection object from libmpdclient
     enum mpd_conn_states conn_state;       //!< mpd connection state
-    //reconnect timer
-    time_t reconnect_time;                 //!< timestamp at which next connection attempt is made
-    time_t reconnect_interval;             //!< interval for connections attempts (increases by failed attempts)
     //track player states
     enum mpd_state play_state;             //!< mpd player state
     int song_id;                           //!< current song id from queue
     int next_song_id;                      //!< next song id from queue
     int last_song_id;                      //!< previous song id from queue
     int song_pos;                          //!< current song pos in queue
-    sds song_uri;                          //!< current song uri
-    sds last_song_uri;                     //!< previous song uri
+    time_t song_duration;                  //!< current song length
+    struct mpd_song *song;                 //!< current song
+    struct mpd_song *last_song;            //!< previous song
     unsigned queue_version;                //!< queue version number (increments on queue change)
-    long long queue_length;                //!< length of the queue
-    int last_scrobbled_id;                 //!< last scrobble event was fired for this song id
+    unsigned queue_length;                 //!< length of the queue
     int last_skipped_id;                   //!< last skipped event was fired for this song id
     time_t song_end_time;                  //!< timestamp at which current song should end (starttime + duration)
     time_t last_song_end_time;             //!< timestamp at which previous song should end (starttime + duration)
     time_t song_start_time;                //!< timestamp at which current song has started
     time_t last_song_start_time;           //!< timestamp at which previous song has started
     time_t crossfade;                      //!< used for determine when to add next song from jukebox queue
-    time_t song_scrobble_time;             //!< timestamp at which the next scrobble event will be fired
-    time_t last_song_scrobble_time;        //!< timestamp of the previous scrobble event
     bool auto_play;                        //!< start play if queue changes
     bool player_error;                     //!< signals mpd player error condition
-    //jukebox
-    enum jukebox_modes jukebox_mode;       //!< the jukebox mode
-    sds jukebox_playlist;                  //!< playlist from which the jukebox queue is generated
-    long jukebox_queue_length;             //!< how many songs should the mpd queue have
-    long jukebox_last_played;              //!< only add songs with last_played state older than this timestamp
-    struct t_tags jukebox_unique_tag;      //!< single tag for the jukebox unique constraint
-    bool jukebox_enforce_unique;           //!< flag indicating if unique constraint is enabled
-    struct t_list jukebox_queue;           //!< the jukebox queue itself
-    struct t_list jukebox_queue_tmp;       //!< temporary jukebox queue for the add random to queue function
-    bool jukebox_ignore_hated;             //!< ignores hated songs for the jukebox mode
-    sds jukebox_filter_include;            //!< mpd search filter to include songs / albums
-    sds jukebox_filter_exclude;            //!< mpd search filter to exclude songs / albums
-    unsigned jukebox_min_song_duration;    //!< minimum song duration
+    struct t_jukebox_state jukebox;        //!< jukebox
     //partition
     sds name;                              //!< partition name
     sds highlight_color;                   //!< highlight color
@@ -157,6 +162,24 @@ struct t_partition_state {
     //lists
     struct t_list last_played;             //!< last_played list
     struct t_list preset_list;             //!< Playback presets
+    //timers
+    int timer_fd_jukebox;                  //!< Timerfd for jukebox runs
+    int timer_fd_scrobble;                 //!< Timerfd for scrobble event
+    int timer_fd_mpd_connect;              //!< Timerfd for mpd reconnection
+    //events
+    enum pfd_type waiting_events;          //!< Bitmask for events
+};
+
+/**
+ * Holds stickerdb specific states
+ */
+struct t_stickerdb_state {
+    struct t_config *config;               //!< pointer to static config
+    struct t_mpd_state *mpd_state;         //!< pointer to shared mpd state
+    //mpd connection
+    struct mpd_connection *conn;           //!< mpd connection object from libmpdclient
+    enum mpd_conn_states conn_state;       //!< mpd connection state
+    sds name;                              //!< name for logging
 };
 
 /**
@@ -181,19 +204,17 @@ struct t_timer_definition {
  * Struct for timers containing a t_list with t_timer_nodes
  */
 struct t_timer_list {
-    long long last_id;                   //!< highest timer id in the list
-    int active;                          //!< number of enabled timers
-    struct t_list list;                  //!< timer definition
-    struct pollfd ufds[LIST_TIMER_MAX];  //!< timerfds to poll
-    nfds_t ufds_len;                     //!< number of fds in ufds
+    unsigned last_id;                   //!< highest timer id in the list
+    int active;                         //!< number of enabled timers
+    struct t_list list;                 //!< timer definition
 };
 
 /**
  * Lyrics settings
  */
 struct t_lyrics {
-    sds uslt_ext;     //!< fileextension for unsynced lyrics
-    sds sylt_ext;     //!< fileextension for synced lyrics
+    sds uslt_ext;     //!< file extension for unsynced lyrics
+    sds sylt_ext;     //!< file extension for synced lyrics
     sds vorbis_uslt;  //!< vorbis comment for unsynced lyrics
     sds vorbis_sylt;  //!< vorbis comment for synced lyrics
 };
@@ -202,63 +223,79 @@ struct t_lyrics {
  * Holds central myMPD state and configuration values.
  */
 struct t_mympd_state {
-    struct t_config *config;                      //!< pointer to static config
-    struct t_mpd_state *mpd_state;                //!< mpd state shared across partitions
-    struct t_partition_state *partition_state;    //!< list of partition states
-    struct t_partition_state *stickerdb;          //!< states for stickerdb connection
-    struct pollfd fds[MPD_CONNECTION_MAX];        //!< mpd connection fds
-    nfds_t nfds;                                  //!< number of mpd connection fds
-    struct t_timer_list timer_list;               //!< list of timers
-    struct t_list home_list;                      //!< list of home icons
-    struct t_list trigger_list;                   //!< list of triggers
-    sds tag_list_search;                          //!< comma separated string of tags for search
-    sds tag_list_browse;                          //!< comma separated string of tags for browse
-    bool smartpls;                                //!< enable smart playlists
-    sds smartpls_sort;                            //!< sort smart playlists by this tag
-    sds smartpls_prefix;                          //!< name prefix for smart playlists
-    time_t smartpls_interval;                     //!< interval to refresh smart playlists in seconds
-    struct t_tags smartpls_generate_tag_types;    //!< generate smart playlists for each value for this tag
-    sds smartpls_generate_tag_list;               //!< generate smart playlists for each value for this tag (string representation)
-    sds cols_queue_current;                       //!< columns for the queue view
-    sds cols_search;                              //!< columns for the search view
-    sds cols_browse_database_album_detail_info;   //!< columns for the album detail view
-    sds cols_browse_database_album_detail;        //!< columns for the album detail title list
-    sds cols_browse_database_album_list;          //!< columns for the album list view
-    sds cols_browse_playlist_detail;              //!< columns for the listing of playlists
-    sds cols_browse_filesystem;                   //!< columns for filesystem listing
-    sds cols_playback;                            //!< columns for playback view
-    sds cols_queue_last_played;                   //!< columns for last played view
-    sds cols_queue_jukebox_song;                  //!< columns for the jukebox queue view for songs
-    sds cols_queue_jukebox_album;                 //!< columns for the jukebox queue view for albums
-    sds cols_browse_radio_webradiodb;             //!< columns for the webradiodb view
-    sds cols_browse_radio_radiobrowser;           //!< columns for the radiobrowser view
-    sds music_directory;                          //!< mpd music directory setting (real value is in mpd_state)
-    sds playlist_directory;                       //!< mpd playlist directory (real value is in mpd_state)
-    sds navbar_icons;                             //!< json string of navigation bar icons
-    sds coverimage_names;                         //!< comma separated string of coverimage names
-    sds thumbnail_names;                          //!< comma separated string of coverimage thumbnail names
-    unsigned volume_min;                          //!< minimum mpd volume
-    unsigned volume_max;                          //!< maximum mpd volume
-    unsigned volume_step;                         //!< volume step for +/- buttons
-    struct t_lyrics lyrics;                       //!< lyrics settings
-    sds listenbrainz_token;                       //!< listenbrainz token
-    sds webui_settings;                           //!< settings only relevant for webui, saved as string containing json
-    bool tag_disc_empty_is_first;                 //!< handle empty disc tag as disc one for albums
+    struct t_config *config;                        //!< pointer to static config
+    struct t_mpd_state *mpd_state;                  //!< mpd state shared across partitions
+    struct t_partition_state *partition_state;      //!< list of partition states
+    struct t_stickerdb_state *stickerdb;            //!< states for stickerdb connection
+    struct mympd_pfds pfds;                         //!< fds to poll in the event loop
+    struct t_timer_list timer_list;                 //!< list of timers
+    struct t_list home_list;                        //!< list of home icons
+    struct t_list trigger_list;                     //!< list of triggers
+    sds tag_list_search;                            //!< comma separated string of tags for search
+    sds tag_list_browse;                            //!< comma separated string of tags for browse
+    bool smartpls;                                  //!< enable smart playlists
+    sds smartpls_sort;                              //!< sort smart playlists by this tag
+    sds smartpls_prefix;                            //!< name prefix for smart playlists
+    int smartpls_interval;                          //!< interval to refresh smart playlists in seconds
+    struct t_mpd_tags smartpls_generate_tag_types;  //!< generate smart playlists for each value for this tag
+    sds smartpls_generate_tag_list;                 //!< generate smart playlists for each value for this tag (string representation)
+    sds view_queue_current;                         //!< view settings for the queue view
+    sds view_search;                                //!< view settings for the search view
+    sds view_browse_database_album_detail_info;     //!< view settings for the album detail view
+    sds view_browse_database_album_detail;          //!< view settings for the album detail title list
+    sds view_browse_database_album_list;            //!< view settings for the album list view
+    sds view_browse_database_tag_list;              //!< view settings for the album list view
+    sds view_browse_playlist_list;                  //!< view settings for the listing of playlists
+    sds view_browse_playlist_detail;                //!< view settings for the listing of playlist contents
+    sds view_browse_filesystem;                     //!< view settings for filesystem listing
+    sds view_playback;                              //!< view settings for playback view
+    sds view_queue_last_played;                     //!< view settings for last played view
+    sds view_queue_jukebox_song;                    //!< view settings for the jukebox queue view for songs
+    sds view_queue_jukebox_album;                   //!< view settings for the jukebox queue view for albums
+    sds view_browse_radio_webradiodb;               //!< view settings for the webradiodb view
+    sds view_browse_radio_favorites;                //!< view settings for the radio favorites view
+    sds music_directory;                            //!< mpd music directory setting (real value is in mpd_state)
+    sds playlist_directory;                         //!< mpd playlist directory (real value is in mpd_state)
+    sds navbar_icons;                               //!< json string of navigation bar icons
+    sds coverimage_names;                           //!< comma separated string of coverimage names
+    sds thumbnail_names;                            //!< comma separated string of coverimage thumbnail names
+    unsigned volume_min;                            //!< minimum mpd volume
+    unsigned volume_max;                            //!< maximum mpd volume
+    unsigned volume_step;                           //!< volume step for +/- buttons
+    struct t_lyrics lyrics;                         //!< lyrics settings
+    sds webui_settings;                             //!< settings only relevant for webui, saved as string containing json
+    bool tag_disc_empty_is_first;                   //!< handle empty disc tag as disc one for albums
+    sds booklet_name;                               //!< name of the booklet files
+    sds info_txt_name;                              //!< name of album info files
+    struct t_cache album_cache;                     //!< the album cache created by the mpd_worker thread
+    unsigned last_played_count;                     //!< number of songs to keep in the last played list (disk + memory)
+    struct t_webradios *webradiodb;                 //!< WebradioDB
+    struct t_webradios *webradio_favorites;         //!< webradio favorites
 };
 
 /**
  * Public functions
  */
 void mympd_state_save(struct t_mympd_state *mympd_state, bool free_data);
-
 void mympd_state_default(struct t_mympd_state *mympd_state, struct t_config *config);
 void mympd_state_free(struct t_mympd_state *mympd_state);
 
-void mpd_state_default(struct t_mpd_state *mpd_state, struct t_mympd_state *mympd_state);
-void mpd_state_features_disable(struct t_mpd_state *mpd_state);
+void mpd_state_features_default(struct t_mpd_features *feat);
+void mpd_state_features_copy(struct t_mpd_features *src, struct t_mpd_features *dst);
+
+void mpd_state_default(struct t_mpd_state *mpd_state, struct t_config *config);
+void mpd_state_copy(struct t_mpd_state *src, struct t_mpd_state *dst);
 void mpd_state_free(struct t_mpd_state *mpd_state);
 
-void partition_state_default(struct t_partition_state *partition_state, const char *name, struct t_mympd_state *mympd_state);
+void partition_state_default(struct t_partition_state *partition_state, const char *name,
+        struct t_mpd_state *mpd_state, struct t_config *config);
 void partition_state_free(struct t_partition_state *partition_state);
+
+void stickerdb_state_default(struct t_stickerdb_state *stickerdb, struct t_config *config);
+void stickerdb_state_free(struct t_stickerdb_state *stickerdb);
+
+void jukebox_state_default(struct t_jukebox_state *jukebox_state);
+void jukebox_state_copy(struct t_jukebox_state *src, struct t_jukebox_state *dst);
+void jukebox_state_free(struct t_jukebox_state *jukebox_state);
 
 #endif

@@ -1,13 +1,17 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief myMPD queue API
+ */
 
 #include "compile_time.h"
 #include "src/mympd_api/queue.h"
 
-#include "src/lib/album_cache.h"
+#include "src/lib/cache_rax_album.h"
 #include "src/lib/jsonrpc.h"
 #include "src/lib/log.h"
 #include "src/lib/sds_extras.h"
@@ -19,7 +23,7 @@
 #include "src/mpd_client/stickerdb.h"
 #include "src/mpd_client/tags.h"
 #include "src/mympd_api/sticker.h"
-#include "src/mympd_api/webradios.h"
+#include "src/mympd_api/webradio.h"
 
 #include <limits.h>
 #include <string.h>
@@ -27,10 +31,10 @@
 /**
  * Private definitions
  */
- static bool add_queue_search_adv_params(struct t_partition_state *partition_state,
+static bool add_queue_search_adv_params(struct t_partition_state *partition_state,
         sds sort, bool sortdesc, unsigned offset, unsigned limit);
-sds print_queue_entry(struct t_partition_state *partition_state, sds buffer,
-        const struct t_tags *tagcols, struct mpd_song *song);
+sds print_queue_entry(struct t_mympd_state *mympd_state, struct t_partition_state *partition_state,
+        sds buffer, const struct t_fields *tagcols, bool print_stickers, struct mpd_song *song);
 
 /**
  * Public functions
@@ -45,7 +49,7 @@ sds print_queue_entry(struct t_partition_state *partition_state, sds buffer,
  * @return bool true on success, else false
  */
 bool mympd_api_queue_save(struct t_partition_state *partition_state, sds name, sds mode, sds *error) {
-    if (partition_state->mpd_state->feat_advqueue == true) {
+    if (partition_state->mpd_state->feat.advqueue == true) {
         enum mpd_queue_save_mode save_mode = mpd_parse_queue_save_mode(mode);
         if (save_mode == MPD_QUEUE_SAVE_MODE_UNKNOWN) {
             *error = sdscat(*error, "Unknown queue save mode");
@@ -177,7 +181,7 @@ bool mympd_api_queue_prio_set_highest(struct t_partition_state *partition_state,
  */
 bool mympd_api_queue_move_relative(struct t_partition_state *partition_state, struct t_list *song_ids, unsigned to, unsigned whence, sds *error) {
     if (whence != MPD_POSITION_ABSOLUTE &&
-        partition_state->mpd_state->feat_whence == false)
+        partition_state->mpd_state->feat.whence == false)
     {
         *error = sdscat(*error, "Method not supported");
         return false;
@@ -203,6 +207,135 @@ bool mympd_api_queue_move_relative(struct t_partition_state *partition_state, st
 }
 
 /**
+ * Inserts an uri to the queue and sets tag values for it.
+ * @param partition_state pointer to partition state
+ * @param uri uri to add to the queue
+ * @param tags list of tags with values to set
+ * @param to where to insert the uri
+ * @param whence How to interprete the to parameter
+ * @param error pointer to an already allocated sds string for the error message
+ * @return bool true on success, else false
+ */
+bool mympd_api_queue_insert_uri_tags(struct t_partition_state *partition_state, sds uri,
+        struct t_list *tags, unsigned to, unsigned whence, sds *error)
+{
+    int id = to == UINT_MAX
+        ? mpd_run_add_id(partition_state->conn, uri)
+        : mpd_run_add_id_whence(partition_state->conn, uri, to, whence);
+    if (id == -1) {
+        mympd_check_error_and_recover(partition_state, error, "mpd_run_add_id_whence");
+        if (sdslen(*error) == 0) {
+            *error = sdscat(*error, "Failure getting inserted song id");
+        }
+        return false;
+    }
+    if (mpd_command_list_begin(partition_state->conn, false)) {
+        struct t_list_node *current = tags->head;
+        while (current != NULL) {
+            enum mpd_tag_type tag = mpd_tag_name_iparse(current->key);
+            if (mpd_send_add_tag_id(partition_state->conn, (unsigned)id, tag, current->value_p) == false) {
+                mympd_set_mpd_failure(partition_state, "Error adding command to command list mpd_send_add_tag_id");
+                break;
+            }
+            current = current->next;
+            to++;
+        }
+        mpd_client_command_list_end_check(partition_state);
+    }
+    mpd_response_finish(partition_state->conn);
+    return mympd_check_error_and_recover(partition_state, error, "mpd_send_add_tag_id");
+}
+
+/**
+ * Appends an uri to the queue and sets tag values for it.
+ * @param partition_state pointer to partition state
+ * @param uri uri to add to the queue
+ * @param tags list of tags with values to set
+ * @param error pointer to an already allocated sds string for the error message
+ * @return bool true on success, else false
+ */
+bool mympd_api_queue_append_uri_tags(struct t_partition_state *partition_state, sds uri, struct t_list *tags, sds *error) {
+    return mympd_api_queue_insert_uri_tags(partition_state, uri, tags, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
+}
+
+/**
+ * Replaces the queue with the uri and sets tag values for it.
+ * @param partition_state pointer to partition state
+ * @param uri uri to add to the queue
+ * @param tags list of tags with values to set
+ * @param error pointer to an already allocated sds string for the error message
+ * @return bool true on success, else false
+ */
+bool mympd_api_queue_replace_uri_tags(struct t_partition_state *partition_state, sds uri, struct t_list *tags, sds *error) {
+    return mpd_client_queue_clear(partition_state, error) &&
+        mympd_api_queue_append_uri_tags(partition_state, uri, tags, error);
+}
+
+/**
+ * Inserts an uri to the queue and resumes playback.
+ * @param partition_state pointer to partition state
+ * @param stickerdb pointer to stickerdb
+ * @param uri uri to add to the queue
+ * @param to where to insert the uri
+ * @param whence How to interprete the to parameter
+ * @param error pointer to an already allocated sds string for the error message
+ * @return bool true on success, else false
+ */
+bool mympd_api_queue_insert_uri_resume(struct t_partition_state *partition_state, struct t_stickerdb_state *stickerdb,
+        sds uri, unsigned to, unsigned whence, sds *error)
+{
+    int64_t elapsed = stickerdb_get_int64(stickerdb, STICKER_TYPE_SONG, uri, "elapsed");
+    int id = to == UINT_MAX
+        ? mpd_run_add_id(partition_state->conn, uri)
+        : mpd_run_add_id_whence(partition_state->conn, uri, to, whence);
+    if (id == -1) {
+        mympd_check_error_and_recover(partition_state, error, "mpd_run_add_id_whence");
+        if (sdslen(*error) == 0) {
+            *error = sdscat(*error, "Failure getting inserted song id");
+        }
+        return false;
+    }
+    if (mpd_command_list_begin(partition_state->conn, false)) {
+        mpd_send_play_id(partition_state->conn, (unsigned)id);
+        if (elapsed > 0) {
+            mpd_send_seek_id(partition_state->conn, (unsigned)id, (unsigned)elapsed);
+        }
+        mpd_client_command_list_end_check(partition_state);
+    }
+    mpd_response_finish(partition_state->conn);
+    return mympd_check_error_and_recover(partition_state, error, "mpd_send_seek_id");
+}
+
+/**
+ * Appends an uri to the queue and resumes playback.
+ * @param partition_state pointer to partition state
+ * @param stickerdb pointer to stickerdb
+ * @param uri uri to add to the queue
+ * @param error pointer to an already allocated sds string for the error message
+ * @return bool true on success, else false
+ */
+bool mympd_api_queue_append_uri_resume(struct t_partition_state *partition_state, struct t_stickerdb_state *stickerdb,
+        sds uri, sds *error)
+{
+    return mympd_api_queue_insert_uri_resume(partition_state, stickerdb, uri, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
+}
+
+/**
+ * Replaces the queue with the uri and resumes playback.
+ * @param partition_state pointer to partition state
+ * @param stickerdb pointer to stickerdb
+ * @param uri uri to add to the queue
+ * @param error pointer to an already allocated sds string for the error message
+ * @return bool true on success, else false
+ */
+bool mympd_api_queue_replace_uri_resume(struct t_partition_state *partition_state, struct t_stickerdb_state *stickerdb,
+        sds uri, sds *error)
+{
+    return mpd_client_queue_clear(partition_state, error) &&
+        mympd_api_queue_append_uri_resume(partition_state, stickerdb, uri, error);
+}
+
+/**
  * Insert uris into the queue
  * @param partition_state pointer to partition state
  * @param uris uris to insert
@@ -212,35 +345,7 @@ bool mympd_api_queue_move_relative(struct t_partition_state *partition_state, st
  * @return true on success, else false
  */
 bool mympd_api_queue_insert(struct t_partition_state *partition_state, struct t_list *uris, unsigned to, unsigned whence, sds *error) {
-    if (whence != MPD_POSITION_ABSOLUTE &&
-        partition_state->mpd_state->feat_whence == false)
-    {
-        *error = sdscat(*error, "Method not supported");
-        return false;
-    }
-    if (uris->length == 0) {
-        *error = sdscat(*error, "No uris provided");
-        return false;
-    }
-    if (mpd_command_list_begin(partition_state->conn, false)) {
-        struct t_list_node *current;
-        while ((current = list_shift_first(uris)) != NULL) {
-            bool rc = to == UINT_MAX
-                ? mpd_send_add(partition_state->conn, current->key)
-                : mpd_send_add_whence(partition_state->conn, current->key, to, whence);
-            list_node_free(current);
-            if (rc == false) {
-                mympd_set_mpd_failure(partition_state, "Error adding command to command list mpd_send_add");
-                break;
-            }
-            if (to != UINT_MAX) {
-                to++;
-            }
-        }
-        mpd_client_command_list_end_check(partition_state);
-    }
-    mpd_response_finish(partition_state->conn);
-    return mympd_check_error_and_recover(partition_state, error, "mpd_send_add_whence");
+    return mpd_client_add_uris_to_queue(partition_state, uris, to, whence, error);
 }
 
 /**
@@ -251,7 +356,7 @@ bool mympd_api_queue_insert(struct t_partition_state *partition_state, struct t_
  * @return true on success, else false
  */
 bool mympd_api_queue_append(struct t_partition_state *partition_state, struct t_list *uris, sds *error) {
-    return mympd_api_queue_insert(partition_state, uris, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
+    return mpd_client_add_uris_to_queue(partition_state, uris, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
 }
 
 /**
@@ -281,7 +386,7 @@ bool mympd_api_queue_insert_search(struct t_partition_state *partition_state, sd
         unsigned to, unsigned whence, const char *sort, bool sort_desc, sds *error)
 {
     if (whence != MPD_POSITION_ABSOLUTE &&
-        partition_state->mpd_state->feat_whence == false)
+        partition_state->mpd_state->feat.whence == false)
     {
         *error = sdscat(*error, "Method not supported");
         return false;
@@ -323,92 +428,76 @@ bool mympd_api_queue_replace_search(struct t_partition_state *partition_state, s
 /**
  * Inserts albums into the queue
  * @param partition_state pointer to partition state
+ * @param album_cache pointer to album cache
  * @param albumids album ids to insert
  * @param to position to insert
  * @param whence how to interpret the to parameter
  * @param error pointer to an already allocated sds string for the error message
  * @return true on success, else false
  */
-bool mympd_api_queue_insert_albums(struct t_partition_state *partition_state, struct t_list *albumids, unsigned to, unsigned whence, sds *error) {
-    if (whence != MPD_POSITION_ABSOLUTE &&
-        partition_state->mpd_state->feat_whence == false)
-    {
-        *error = sdscat(*error, "Method not supported");
-        return false;
-    }
-    if (albumids->length == 0) {
-        *error = sdscat(*error, "No album ids provided");
-        return false;
-    }
-    struct t_list_node *current = albumids->head;
-    bool rc = true;
-    while (current != NULL) {
-        struct mpd_song *mpd_album = album_cache_get_album(&partition_state->mpd_state->album_cache, current->key);
-        if (mpd_album == NULL) {
-            *error = sdscat(*error, "Album not found");
-            return false;
-        }
-        sds expression = get_search_expression_album(partition_state->mpd_state->tag_albumartist,
-            mpd_album, &partition_state->mympd_state->config->albums);
-        const char *sort = NULL;
-        bool sortdesc = false;
-        rc = mpd_client_search_add_to_queue(partition_state, expression, to, whence, sort, sortdesc, error);
-        FREE_SDS(expression);
-        if (rc == false) {
-            break;
-        }
-        current = current->next;
-    }
-    return rc;
+bool mympd_api_queue_insert_albums(struct t_partition_state *partition_state, struct t_cache *album_cache,
+    struct t_list *albumids, unsigned to, unsigned whence, sds *error)
+{
+    return mpd_client_add_albums_to_queue(partition_state, album_cache, albumids, to, whence, error);
 }
 
 /**
  * Appends albums to the queue
  * @param partition_state pointer to partition state
+ * @param album_cache pointer to album cache
  * @param albumids album ids to append
  * @param error pointer to an already allocated sds string for the error message
  * @return true on success, else false
  */
-bool mympd_api_queue_append_albums(struct t_partition_state *partition_state, struct t_list *albumids, sds *error) {
-    return mympd_api_queue_insert_albums(partition_state, albumids, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
+bool mympd_api_queue_append_albums(struct t_partition_state *partition_state, struct t_cache *album_cache,
+        struct t_list *albumids, sds *error)
+{
+    return mpd_client_add_albums_to_queue(partition_state, album_cache, albumids, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
 }
 
 /**
  * Replaces the queue with albums
  * @param partition_state pointer to partition state
+ * @param album_cache pointer to album cache
  * @param albumids album ids to insert
  * @param error pointer to an already allocated sds string for the error message
  * @return true on success, else false
  */
-bool mympd_api_queue_replace_albums(struct t_partition_state *partition_state, struct t_list *albumids, sds *error) {
+bool mympd_api_queue_replace_albums(struct t_partition_state *partition_state, struct t_cache *album_cache,
+        struct t_list *albumids, sds *error)
+{
     return mpd_client_queue_clear(partition_state, error) &&
-        mympd_api_queue_append_albums(partition_state, albumids, error);
+        mympd_api_queue_append_albums(partition_state, album_cache, albumids, error);
 }
 
 /**
- * Inserts one disc of an album into the queue
+ * Inserts songs of an album filtered by tag into the queue
  * @param partition_state pointer to partition state
+ * @param album_cache pointer to album cache
  * @param albumid album id to insert
- * @param disc disc to insert
+ * @param tag MPD tag
+ * @param value MPD tag value
  * @param to position to insert
  * @param whence how to interpret the to parameter
  * @param error pointer to an already allocated sds string for the error message
  * @return true on success, else false
  */
-bool mympd_api_queue_insert_album_disc(struct t_partition_state *partition_state, sds albumid, sds disc, unsigned to, unsigned whence, sds *error) {
+bool mympd_api_queue_insert_album_tag(struct t_partition_state *partition_state, struct t_cache *album_cache,
+        sds albumid, enum mpd_tag_type tag, sds value, unsigned to, unsigned whence, sds *error)
+{
     if (whence != MPD_POSITION_ABSOLUTE &&
-        partition_state->mpd_state->feat_whence == false)
+        partition_state->mpd_state->feat.whence == false)
     {
         *error = sdscat(*error, "Method not supported");
         return false;
     }
-    struct mpd_song *mpd_album = album_cache_get_album(&partition_state->mpd_state->album_cache, albumid);
+    struct mpd_song *mpd_album = album_cache_get_album(album_cache, albumid);
     if (mpd_album == NULL) {
         *error = sdscat(*error, "Album not found");
         return false;
     }
-    sds expression = get_search_expression_album_disc(partition_state->mpd_state->tag_albumartist,
-        mpd_album, disc, &partition_state->mympd_state->config->albums);
+    sds expression = get_search_expression_album_tag(sdsempty(), partition_state->mpd_state->tag_albumartist,
+        mpd_album, tag, value, &partition_state->config->albums);
     const char *sort = NULL;
     bool sortdesc = false;
     bool rc = mpd_client_search_add_to_queue(partition_state, expression, to, whence, sort, sortdesc, error);
@@ -417,28 +506,176 @@ bool mympd_api_queue_insert_album_disc(struct t_partition_state *partition_state
 }
 
 /**
- * Appends one disc of an album to the queue
+ * Appends songs of an album filtered by tag to the queue
  * @param partition_state pointer to partition state
+ * @param album_cache pointer to album cache
  * @param albumid album id to append
- * @param disc disc to append
+ * @param tag MPD tag
+ * @param value MPD tag value
  * @param error pointer to an already allocated sds string for the error message
  * @return true on success, else false
  */
-bool mympd_api_queue_append_album_disc(struct t_partition_state *partition_state, sds albumid, sds disc, sds *error) {
-    return mympd_api_queue_insert_album_disc(partition_state, albumid, disc, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
+bool mympd_api_queue_append_album_tag(struct t_partition_state *partition_state, struct t_cache *album_cache,
+        sds albumid, enum mpd_tag_type tag, sds value, sds *error)
+{
+    return mympd_api_queue_insert_album_tag(partition_state, album_cache, albumid, tag, value, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
 }
 
 /**
- * Replaces the queue with one disc of an album
+ * Replaces the queue with an album filted by tag
  * @param partition_state pointer to partition state
+ * @param album_cache pointer to album cache
  * @param albumid album id to insert
- * @param disc disc to insert
+ * @param tag MPD tag
+ * @param value MPD tag value
  * @param error pointer to an already allocated sds string for the error message
  * @return true on success, else false
  */
-bool mympd_api_queue_replace_album_disc(struct t_partition_state *partition_state, sds albumid, sds disc, sds *error) {
+bool mympd_api_queue_replace_album_tag(struct t_partition_state *partition_state,struct t_cache *album_cache,
+        sds albumid, enum mpd_tag_type tag, sds value, sds *error)
+{
     return mpd_client_queue_clear(partition_state, error) &&
-        mympd_api_queue_append_album_disc(partition_state, albumid, disc, error);
+        mympd_api_queue_append_album_tag(partition_state, album_cache, albumid, tag, value, error);
+}
+
+/**
+ * Inserts a range of song from an album into the queue
+ * @param partition_state pointer to partition state
+ * @param album_cache pointer to album cache
+ * @param albumid album id to insert
+ * @param start start of the range (including)
+ * @param end end of the range (excluded)
+ * @param to position to insert
+ * @param whence how to interpret the to parameter
+ * @param error pointer to an already allocated sds string for the error message
+ * @return true on success, else false
+ */
+bool mympd_api_queue_insert_album_range(struct t_partition_state *partition_state, struct t_cache *album_cache,
+        sds albumid, unsigned start, int end, unsigned to, unsigned whence, sds *error)
+{
+    if (whence != MPD_POSITION_ABSOLUTE &&
+        partition_state->mpd_state->feat.whence == false)
+    {
+        *error = sdscat(*error, "Method not supported");
+        return false;
+    }
+    if (partition_state->mpd_state->feat.search_add_sort_window == false) {
+        *error = sdscat(*error, "Method not supported");
+        return false;
+    }
+    struct mpd_song *mpd_album = album_cache_get_album(album_cache, albumid);
+    if (mpd_album == NULL) {
+        *error = sdscat(*error, "Album not found");
+        return false;
+    }
+    unsigned end_uint = end == -1
+        ? UINT_MAX
+        : (unsigned)end;
+    sds expression = get_search_expression_album(sdsempty(), partition_state->mpd_state->tag_albumartist,
+        mpd_album, &partition_state->config->albums);
+    const char *sort = "Disc";
+    bool sortdesc = false;
+    bool rc = mpd_client_search_add_to_queue_window(partition_state, expression, to, whence,
+        sort, sortdesc, start, end_uint, error);
+    FREE_SDS(expression);
+    return rc;
+}
+
+/**
+ * Appends a range of song from an album to the queue
+ * @param partition_state pointer to partition state
+ * @param album_cache pointer to album cache
+ * @param albumid album id to append
+ * @param start start of the range (including)
+ * @param end end of the range (excluded)
+ * @param error pointer to an already allocated sds string for the error message
+ * @return true on success, else false
+ */
+bool mympd_api_queue_append_album_range(struct t_partition_state *partition_state, struct t_cache *album_cache,
+        sds albumid, unsigned start, int end, sds *error)
+{
+    return mympd_api_queue_insert_album_range(partition_state, album_cache, albumid, start, end, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
+}
+
+/**
+ * Replaces the queue with a range of song from an album
+ * @param partition_state pointer to partition state
+ * @param album_cache pointer to album cache
+ * @param albumid album id to insert
+ * @param start start of the range (including)
+ * @param end end of the range (excluded)
+ * @param error pointer to an already allocated sds string for the error message
+ * @return true on success, else false
+ */
+bool mympd_api_queue_replace_album_range(struct t_partition_state *partition_state,struct t_cache *album_cache,
+        sds albumid, unsigned start, int end, sds *error)
+{
+    return mpd_client_queue_clear(partition_state, error) &&
+        mympd_api_queue_append_album_range(partition_state, album_cache, albumid, start, end, error);
+}
+
+/**
+ * Inserts a playlist range into the queue
+ * @param partition_state pointer to partition state
+ * @param plist playlist to insert
+ * @param to position to insert
+ * @param whence how to interpret the to parameter
+ * @param start start of the range (including)
+ * @param end end of the range (excluded)
+ * @param error pointer to an already allocated sds string for the error message
+ * @return true on success, else false
+ */
+bool mympd_api_queue_insert_plist_range(struct t_partition_state *partition_state, sds plist,
+        unsigned to, unsigned whence, unsigned start, int end, sds *error) {
+    if (whence != MPD_POSITION_ABSOLUTE &&
+        partition_state->mpd_state->feat.whence == false)
+    {
+        *error = sdscat(*error, "Method not supported");
+        return false;
+    }
+    plist = resolv_mympd_uri(plist, partition_state->mpd_state->mpd_host, partition_state->config, false);
+    unsigned end_uint = end == -1
+        ? UINT_MAX
+        : (unsigned)end;
+    if (to == UINT_MAX) {
+        mpd_send_load_range(partition_state->conn, plist, start, end_uint);
+    }
+    else {
+        mpd_send_load_range_to(partition_state->conn, plist, start, end_uint, to, whence);
+    }
+    mpd_response_finish(partition_state->conn);
+    return mympd_check_error_and_recover(partition_state, error, "mpd_send_load_range_to");
+}
+
+/**
+ * Appends a playlist range to the queue
+ * @param partition_state pointer to partition state
+ * @param plist playlist to append
+ * @param start start of the range (including)
+ * @param end end of the range (excluded)
+ * @param error pointer to an already allocated sds string for the error message
+ * @return true on success, else false
+ */
+bool mympd_api_queue_append_plist_range(struct t_partition_state *partition_state, sds plist,
+        unsigned start, int end, sds *error)
+{
+    return mympd_api_queue_insert_plist_range(partition_state, plist, UINT_MAX, MPD_POSITION_ABSOLUTE, start, end, error);
+}
+
+/**
+ * Replaces the queue with a playlist range
+ * @param partition_state pointer to partition state
+ * @param plist playlist to add
+ * @param start start of the range (including)
+ * @param end end of the range (excluded)
+ * @param error pointer to an already allocated sds string for the error message
+ * @return true on success, else false
+ */
+bool mympd_api_queue_replace_plist_range(struct t_partition_state *partition_state, sds plist,
+        unsigned start, int end, sds *error)
+{
+    return mpd_client_queue_clear(partition_state, error) &&
+        mympd_api_queue_append_plist_range(partition_state, plist, start, end, error);
 }
 
 /**
@@ -450,9 +687,9 @@ bool mympd_api_queue_replace_album_disc(struct t_partition_state *partition_stat
  * @param error pointer to an already allocated sds string for the error message
  * @return true on success, else false
  */
-bool mympd_api_queue_insert_plist(struct t_partition_state *partition_state, struct t_list *plists, unsigned to, unsigned whence, sds *error) {
+bool mympd_api_queue_insert_plists(struct t_partition_state *partition_state, struct t_list *plists, unsigned to, unsigned whence, sds *error) {
     if (whence != MPD_POSITION_ABSOLUTE &&
-        partition_state->mpd_state->feat_whence == false)
+        partition_state->mpd_state->feat.whence == false)
     {
         *error = sdscat(*error, "Method not supported");
         return false;
@@ -464,7 +701,7 @@ bool mympd_api_queue_insert_plist(struct t_partition_state *partition_state, str
     if (mpd_command_list_begin(partition_state->conn, false)) {
         struct t_list_node *current = plists->head;
         while (current != NULL) {
-            current->key = resolv_mympd_uri(current->key, partition_state->mpd_state->mpd_host, partition_state->mympd_state->config);
+            current->key = resolv_mympd_uri(current->key, partition_state->mpd_state->mpd_host, partition_state->config, false);
             bool rc = to == UINT_MAX
                 ? mpd_send_load(partition_state->conn, current->key)
                 : mpd_send_load_range_to(partition_state->conn, current->key, 0, UINT_MAX, to, whence);
@@ -487,8 +724,8 @@ bool mympd_api_queue_insert_plist(struct t_partition_state *partition_state, str
  * @param error pointer to an already allocated sds string for the error message
  * @return true on success, else false
  */
-bool mympd_api_queue_append_plist(struct t_partition_state *partition_state, struct t_list *plists, sds *error) {
-    return mympd_api_queue_insert_plist(partition_state, plists, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
+bool mympd_api_queue_append_plists(struct t_partition_state *partition_state, struct t_list *plists, sds *error) {
+    return mympd_api_queue_insert_plists(partition_state, plists, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
 }
 
 /**
@@ -498,9 +735,9 @@ bool mympd_api_queue_append_plist(struct t_partition_state *partition_state, str
  * @param error pointer to an already allocated sds string for the error message
  * @return true on success, else false
  */
-bool mympd_api_queue_replace_plist(struct t_partition_state *partition_state, struct t_list *plists, sds *error) {
+bool mympd_api_queue_replace_plists(struct t_partition_state *partition_state, struct t_list *plists, sds *error) {
     return mpd_client_queue_clear(partition_state, error) &&
-        mympd_api_queue_append_plist(partition_state, plists, error);
+        mympd_api_queue_append_plists(partition_state, plists, error);
 }
 
 /**
@@ -512,7 +749,7 @@ bool mympd_api_queue_replace_plist(struct t_partition_state *partition_state, st
  * @param or_clear if true: clears the queue if there is no current playing or paused song
  * @return pointer to buffer
  */
-sds mympd_api_queue_crop(struct t_partition_state *partition_state, sds buffer, enum mympd_cmd_ids cmd_id, long request_id, bool or_clear) {
+sds mympd_api_queue_crop(struct t_partition_state *partition_state, sds buffer, enum mympd_cmd_ids cmd_id, unsigned request_id, bool or_clear) {
     struct mpd_status *status = mpd_run_status(partition_state->conn);
     unsigned length = 0;
     int playing_song_pos = 0;
@@ -571,6 +808,7 @@ sds mympd_api_queue_crop(struct t_partition_state *partition_state, sds buffer, 
 
 /**
  * Lists the queue, this is faster for older MPD servers than the search function below.
+ * @param mympd_state pointer to mympd_state
  * @param partition_state pointer to partition state
  * @param buffer already allocated sds string to append the response
  * @param request_id jsonrpc id
@@ -579,21 +817,20 @@ sds mympd_api_queue_crop(struct t_partition_state *partition_state, sds buffer, 
  * @param tagcols columns to print
  * @return pointer to buffer
  */
-sds mympd_api_queue_list(struct t_partition_state *partition_state, sds buffer, long request_id,
-        unsigned offset, unsigned limit, const struct t_tags *tagcols)
+sds mympd_api_queue_list(struct t_mympd_state *mympd_state, struct t_partition_state *partition_state,
+        sds buffer, unsigned request_id, unsigned offset, unsigned limit, const struct t_fields *tagcols)
 {
     enum mympd_cmd_ids cmd_id = MYMPD_API_QUEUE_SEARCH;
     //update the queue status
-    mpd_client_queue_status(partition_state, NULL);
+    mpd_client_queue_status_update(partition_state);
     //Check offset
     if (offset >= partition_state->queue_length) {
         offset = 0;
     }
     //list the queue
-    if (partition_state->mpd_state->feat_stickers == true &&
-        tagcols->stickers_len > 0)
-    {
-        stickerdb_exit_idle(partition_state->mympd_state->stickerdb);
+    bool print_stickers = check_get_sticker(partition_state->mpd_state->feat.stickers, &tagcols->stickers);
+    if (print_stickers == true) {
+        stickerdb_exit_idle(mympd_state->stickerdb);
     }
     unsigned real_limit = offset + limit;
     if (mpd_send_list_queue_range_meta(partition_state->conn, offset, real_limit) == true) {
@@ -606,23 +843,21 @@ sds mympd_api_queue_list(struct t_partition_state *partition_state, sds buffer, 
             if (entities_returned++) {
                 buffer = sdscatlen(buffer, ",", 1);
             }
-            buffer = print_queue_entry(partition_state, buffer, tagcols, song);
+            buffer = print_queue_entry(mympd_state, partition_state, buffer, tagcols, print_stickers, song);
             total_time += mpd_song_get_duration(song);
             mpd_song_free(song);
         }
 
         buffer = sdscatlen(buffer, "],", 2);
         buffer = tojson_uint(buffer, "totalTime", total_time, true);
-        buffer = tojson_llong(buffer, "totalEntities", partition_state->queue_length, true);
+        buffer = tojson_uint(buffer, "totalEntities", partition_state->queue_length, true);
         buffer = tojson_uint(buffer, "offset", offset, true);
         buffer = tojson_uint(buffer, "returnedEntities", entities_returned, false);
         buffer = jsonrpc_end(buffer);
     }
     mpd_response_finish(partition_state->conn);
-    if (partition_state->mpd_state->feat_stickers == true &&
-        tagcols->stickers_len > 0)
-    {
-        stickerdb_enter_idle(partition_state->mympd_state->stickerdb);
+    if (print_stickers == true) {
+        stickerdb_enter_idle(mympd_state->stickerdb);
     }
     mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_send_list_queue_range_meta");
     return buffer;
@@ -630,6 +865,7 @@ sds mympd_api_queue_list(struct t_partition_state *partition_state, sds buffer, 
 
 /**
  * Searches the queue
+ * @param mympd_state pointer to mympd_state
  * @param partition_state pointer to partition state
  * @param buffer already allocated sds string to append the response
  * @param request_id jsonrpc id
@@ -641,13 +877,13 @@ sds mympd_api_queue_list(struct t_partition_state *partition_state, sds buffer, 
  * @param tagcols columns to print
  * @return pointer to buffer
  */
-sds mympd_api_queue_search(struct t_partition_state *partition_state, sds buffer, long request_id,
-        sds expression, sds sort, bool sortdesc, unsigned offset, unsigned limit,
-        const struct t_tags *tagcols)
+sds mympd_api_queue_search(struct t_mympd_state *mympd_state, struct t_partition_state *partition_state,
+        sds buffer, unsigned request_id, sds expression, sds sort, bool sortdesc, unsigned offset, unsigned limit,
+        const struct t_fields *tagcols)
 {
     enum mympd_cmd_ids cmd_id = MYMPD_API_QUEUE_SEARCH;
     //update the queue status
-    mpd_client_queue_status(partition_state, NULL);
+    mpd_client_queue_status_update(partition_state);
 
     sds real_expression = sdslen(expression) == 0
         ? sdsnew("(base '')")
@@ -663,10 +899,9 @@ sds mympd_api_queue_search(struct t_partition_state *partition_state, sds buffer
             JSONRPC_SEVERITY_ERROR, "Error creating MPD search queue command");
     }
     FREE_SDS(real_expression);
-    if (partition_state->mpd_state->feat_stickers == true &&
-        tagcols->stickers_len > 0)
-    {
-        stickerdb_exit_idle(partition_state->mympd_state->stickerdb);
+    bool print_stickers = check_get_sticker(partition_state->mpd_state->feat.stickers, &tagcols->stickers);
+    if (print_stickers == true) {
+        stickerdb_exit_idle(mympd_state->stickerdb);
     }
     if (mpd_search_commit(partition_state->conn)) {
         buffer = jsonrpc_respond_start(buffer, cmd_id, request_id);
@@ -677,17 +912,17 @@ sds mympd_api_queue_search(struct t_partition_state *partition_state, sds buffer
         unsigned entities_returned = 0;
         unsigned entity_count = 0;
         while ((song = mpd_recv_song(partition_state->conn)) != NULL) {
-            if (partition_state->mpd_state->feat_advqueue == true ||
+            if (partition_state->mpd_state->feat.advqueue == true ||
                 entity_count >= offset)
             {
                 if (entities_returned++) {
                     buffer= sdscatlen(buffer, ",", 1);
                 }
-                buffer = print_queue_entry(partition_state, buffer, tagcols, song);
+                buffer = print_queue_entry(mympd_state, partition_state, buffer, tagcols, print_stickers, song);
                 total_time += mpd_song_get_duration(song);
             }
             mpd_song_free(song);
-            if (partition_state->mpd_state->feat_advqueue == false) {
+            if (partition_state->mpd_state->feat.advqueue == false) {
                 entity_count++;
                 if (entity_count == real_limit) {
                     break;
@@ -697,23 +932,21 @@ sds mympd_api_queue_search(struct t_partition_state *partition_state, sds buffer
         buffer = sdscatlen(buffer, "],", 2);
         buffer = tojson_uint(buffer, "totalTime", total_time, true);
         if (sdslen(expression) == 0) {
-            buffer = tojson_llong(buffer, "totalEntities", partition_state->queue_length, true);
+            buffer = tojson_uint(buffer, "totalEntities", partition_state->queue_length, true);
         }
         if (entities_returned < limit) {
             buffer = tojson_uint(buffer, "totalEntities", (offset + entities_returned), true);
         }
         else {
-            buffer = tojson_long(buffer, "totalEntities", -1, true);
+            buffer = tojson_int(buffer, "totalEntities", -1, true);
         }
         buffer = tojson_uint(buffer, "offset", offset, true);
         buffer = tojson_uint(buffer, "returnedEntities", entities_returned, false);
         buffer = jsonrpc_end(buffer);
     }
     mpd_response_finish(partition_state->conn);
-    if (partition_state->mpd_state->feat_stickers == true &&
-        tagcols->stickers_len > 0)
-    {
-        stickerdb_enter_idle(partition_state->mympd_state->stickerdb);
+    if (print_stickers == true) {
+        stickerdb_enter_idle(mympd_state->stickerdb);
     }
     if (mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_search_queue_songs") == false) {
         return buffer;
@@ -732,10 +965,10 @@ sds mympd_api_queue_search(struct t_partition_state *partition_state, sds buffer
  * @param limit maximum entries to print - only relevant for feat_advqueue
  * @return true on success, else false
  */
-static bool add_queue_search_adv_params(struct t_partition_state *partition_state,
+static bool add_queue_search_adv_params(struct t_partition_state *partition_state, 
         sds sort, bool sortdesc, unsigned offset, unsigned limit)
 {
-    if (partition_state->mpd_state->feat_advqueue == false) {
+    if (partition_state->mpd_state->feat.advqueue == false) {
         return true;
     }
 
@@ -748,8 +981,19 @@ static bool add_queue_search_adv_params(struct t_partition_state *partition_stat
     }
     else if (strcmp(sort, "Last-Modified") == 0) {
         //swap order
-        sortdesc = sortdesc == false ? true : false;
+        sortdesc = sortdesc == false
+            ? true
+            : false;
         if (mpd_search_add_sort_name(partition_state->conn, "Last-Modified", sortdesc) == false) {
+            return false;
+        }
+    }
+    else if (strcmp(sort, "Added") == 0) {
+        //swap order
+        sortdesc = sortdesc == false
+            ? true
+            : false;
+        if (mpd_search_add_sort_name(partition_state->conn, "Added", sortdesc) == false) {
             return false;
         }
     }
@@ -771,14 +1015,16 @@ static bool add_queue_search_adv_params(struct t_partition_state *partition_stat
 
 /**
  * Prints a queue entry as an json object string
+ * @param mympd_state pointer to mympd_state
  * @param partition_state pointer to partition state
  * @param buffer already allocated sds string to append the response
  * @param tagcols columns to print
+ * @param print_stickers Print stickers?
  * @param song pointer to mpd song struct
  * @return pointer to buffer
  */
-sds print_queue_entry(struct t_partition_state *partition_state, sds buffer,
-        const struct t_tags *tagcols, struct mpd_song *song)
+sds print_queue_entry(struct t_mympd_state *mympd_state, struct t_partition_state *partition_state,
+        sds buffer, const struct t_fields *tagcols, bool print_stickers, struct mpd_song *song)
 {
     buffer = sdscatlen(buffer, "{", 1);
     buffer = tojson_uint(buffer, "id", mpd_song_get_id(song), true);
@@ -787,15 +1033,15 @@ sds print_queue_entry(struct t_partition_state *partition_state, sds buffer,
     const struct mpd_audio_format *audioformat = mpd_song_get_audio_format(song);
     buffer = printAudioFormat(buffer, audioformat);
     buffer = sdscatlen(buffer, ",", 1);
-    buffer = print_song_tags(buffer, partition_state->mpd_state->feat_tags, tagcols, song, &partition_state->mympd_state->config->albums);
+    buffer = print_song_tags(buffer, partition_state->mpd_state, &tagcols->mpd_tags, song);
     const char *uri = mpd_song_get_uri(song);
     buffer = sdscatlen(buffer, ",", 1);
     if (is_streamuri(uri) == true) {
-        sds webradio = get_webradio_from_uri(partition_state->mympd_state->config->workdir, uri);
+        sds webradio = mympd_api_webradio_from_uri_tojson(mympd_state, uri);
         if (sdslen(webradio) > 0) {
-            buffer = sdscat(buffer, "\"webradio\":{");
+            buffer = sdscat(buffer, "\"webradio\":");
             buffer = sdscatsds(buffer, webradio);
-            buffer = sdscatlen(buffer, "},", 2);
+            buffer = sdscatlen(buffer, ",", 1);
             buffer = tojson_char(buffer, "Type", "webradio", false);
         }
         else {
@@ -806,10 +1052,8 @@ sds print_queue_entry(struct t_partition_state *partition_state, sds buffer,
     else {
         buffer = tojson_char(buffer, "Type", "song", false);
     }
-    if (partition_state->mpd_state->feat_stickers == true &&
-        tagcols->stickers_len > 0)
-    {
-        buffer = mympd_api_sticker_get_print_batch(buffer, partition_state->mympd_state->stickerdb, uri, tagcols);
+    if (print_stickers == true) {
+        buffer = mympd_api_sticker_get_print_batch(buffer, mympd_state->stickerdb, STICKER_TYPE_SONG, uri, &tagcols->stickers);
     }
     buffer = sdscatlen(buffer, "}", 1);
     return buffer;

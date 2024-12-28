@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalTimer_js */
@@ -72,8 +72,19 @@ function deleteTimer(el, timerid) {
     showConfirmInline(el.parentNode.previousSibling, tn('Do you really want to delete the timer?'), tn('Yes, delete it'), function() {
         sendAPI("MYMPD_API_TIMER_RM", {
             "timerid": timerid
-        }, saveTimerCheckError, true);
+        }, deleteTimerCheckError, true);
     });
+}
+
+/**
+ * Handler for the MYMPD_API_TIMER_RM jsonrpc response
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
+function deleteTimerCheckError(obj) {
+    if (modalListApply(obj) === true) {
+        showListTimer();
+    }
 }
 
 /**
@@ -362,8 +373,9 @@ function showListTimer() {
  * @returns {void}
  */
 function parseListTimer(obj) {
-    const tbody = elGetById('modalTimerList');
-    if (checkResult(obj, tbody) === false) {
+    const table = elGetById('modalTimerList');
+    const tbody = table.querySelector('tbody');
+    if (checkResult(obj, table, 'table') === false) {
         return;
     }
     elClear(tbody);

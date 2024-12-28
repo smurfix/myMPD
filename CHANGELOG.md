@@ -4,6 +4,595 @@ https://github.com/jcorporation/myMPD/
 
 ***
 
+## myMPD v19.0.2 (2024-12-26)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Show MPD Sticker Connection settings
+- Fix: Link to API documentation #1395
+- Fix: Link only "Tags to browse" in playback view #1396
+- Fix: Urldecode script names
+- Fix: startupview for playlists #1399
+
+***
+
+## myMPD v19.0.1 (2024-12-15)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Import of scripts
+- Fix: Lua wrapper for `mympd.api`
+- Fix: Emmit correct trigger event for INTERNAL_API_TRIGGER_EVENT_EMIT
+
+***
+
+## myMPD v19.0.0 (2024-12-15)
+
+This is a small maintenance release. It ships support for the newest MPD 0.24 protocol commands and enhancements for user defined stickers.
+
+### Scripting
+
+- The deprecated `var_` entries are remove from `mympd_env`, use the subtable `var`.
+
+### API changes
+
+- MYMPD_API_STICKER_NAMES: respect type parameter
+
+### Changelog
+
+- Feat: Support "stickernamestypes" command (MPD 0.24) #1092
+- Feat: Support "tagtypes reset" command (MPD 0.24) #1367
+- Feat: Generate smart playlists by user defined song stickers #1345
+- Feat: Show user defined stickers in lists #1368
+- Feat: New Lua method `mympd.api_partition` #1387
+- Upd: Improve lists layout
+- Upd: libmympdclient 1.0.32
+- Upd: bootstrap.native 5.1 #1372
+- Upd: Improve local playback
+- Upd: Mongoose 7.16 #1375
+- Upd: Improve http client
+- Upd: sds to current master
+- Upd: Remove IntersectionObserver, use image tag with lazy loading
+- Fix: Support "contains" and "starts_with" sticker operators
+- Fix: Increase max header count from 30 to 50
+- Fix: rpm dependency - whiptail is in package newt #1381
+
+***
+
+## myMPD v18.2.2 (2024-11-21)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Parse hh:mm:ss timestamps #1370
+- Fix: Pause streams with known duration #1371
+- Fix: Show title for last played song in album view
+
+***
+
+## myMPD v18.2.1 (2024-11-15)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Upd: Translations
+- Fix: Add correct number of songs to sticker based smart playlist #1369
+- Fix: Do not crop playlists on shuffle #1369
+- Fix: Remove duplicate depends in Debian Control file
+
+***
+
+## myMPD v18.2.0 (2024-11-01)
+
+This is a small maintenance release.
+
+### Changelog
+
+- Feat: Add Last-Modified and Added (MPD 0.24) to sort tags in Search and Current Queue view
+- Feat: Support new "tagtypes available" command (MPD 0.24) #1352
+- Feat: Support new "protocol" command (MPD 0.24) #1353
+- Feat: Support mpd playlist search command (MPD 0.24) #1351
+- Upd: Translations
+- Upd: libmympdclient 1.0.31
+- Upd: bootstrap.native
+- Fix: Populate sort tags for Radio Favorites
+- Fix: Home Widgets in Chrome
+- Fix: Home Widgets behind Reverse Proxy
+
+***
+
+## myMPD v18.1.2 (2024-10-13)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Upd: Improve webserver error logging and responses
+- Upd: mongoose to latest master with fix for #1358
+- Fix: Add check featStickers before setting feedback #1359
+
+***
+
+## myMPD v18.1.1 (2024-10-09)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Revert to mongoose 7.14 #1358
+
+***
+
+## myMPD v18.1.0 (2024-10-09)
+
+This is a small maintenance release.
+
+### Changelog
+
+- Feat: New Lua function: `mympd.read_file()`, `mympd.sleep`, `mympd.splitlines()`, `mympd.trim()`
+- Upd: Translations
+- Upd: Add Lua integer sanity checks
+- Upd: Mongoose to current master
+- Fix: Contextmenu for songs #1356
+
+***
+
+## myMPD v18.0.0 (2024-09-29)
+
+This release improves the support for the new MPD 0.24 sticker features. You can now rate not only songs but also albums and playlists and add custom stickers to songs, albums and playlists. On the basis of stickers a new resume feature for songs, playlists and albums is available.
+
+This version also introduces scriptable widgets for the home screen. This widgets using myMPD scripts as the backend and can therefore be fully customized.
+
+An another notable feature is the new list view that supplements the table and grid views.
+
+### Script API
+
+- `mympd_state` includes now a subtable `current_song`. You do not need to call `MYMPD_API_CURRENT_SONG` manually.
+- `mympd_env` includes now a subtable `var` with the user defined variables. The entries with `var_` prefix are deprecated.
+- `mympd.http_client` supports now all HTTP methods
+
+All scripts in the mympd-scripts repository are updated accordingly, do not forget to update your imported scripts.
+
+### API changes
+
+- MYMPD_API_DATABASE_LIST_RANDOM: new
+- MYMPD_API_HOME_WIDGET_SAVE: new
+- MYMPD_API_STICKER_GET: new
+- MYMPD_API_STICKER_DELETE: new
+- MYMPD_API_STICKER_LIST: new
+- MYMPD_API_STICKER_NAMES: new
+- MYMPD_API_STICKER_SET: new
+- MYMPD_API_STICKER_INC: new
+- MYMPD_API_PLAYLIST_LIST: add parameter fields, sort, sortdesc
+- MYMPD_API_QUEUE_APPEND_URI_RESUME: new
+- MYMPD_API_QUEUE_INSERT_URI_RESUME: new
+- MYMPD_API_QUEUE_REPLACE_URI_RESUME: new
+- MYMPD_API_QUEUE_APPEND_PLAYLIST_RANGE: new
+- MYMPD_API_QUEUE_INSERT_PLAYLIST_RANGE: new
+- MYMPD_API_QUEUE_REPLACE_PLAYLIST_RANGE: new
+- MYMPD_API_QUEUE_APPEND_ALBUM_RANGE: new
+- MYMPD_API_QUEUE_INSERT_ALBUM_RANGE: new
+- MYMPD_API_QUEUE_REPLACE_ALBUM_RANGE: new
+- MYMPD_API_SETTINGS_GET: returns now available sticker types
+- MYMPD_API_QUEUE_APPEND_ALBUM_DISC renamed to MYMPD_API_QUEUE_APPEND_ALBUM_TAG
+- MYMPD_API_QUEUE_INSERT_ALBUM_DISC renamed to MYMPD_API_QUEUE_INSERT_ALBUM_TAG
+- MYMPD_API_QUEUE_REPLACE_ALBUM_DISC renamed to MYMPD_API_QUEUE_REPLACE_ALBUM_TAG
+- MYMPD_API_PLAYLIST_CONTENT_APPEND_ALBUM_DISC renamed to MYMPD_API_PLAYLIST_CONTENT_APPEND_ALBUM_TAG
+- MYMPD_API_PLAYLIST_CONTENT_INSERT_ALBUM_DISC renamed to MYMPD_API_PLAYLIST_CONTENT_INSERT_ALBUM_TAG
+- MYMPD_API_PLAYLIST_CONTENT_REPLACE_ALBUM_DISC renamed to MYMPD_API_PLAYLIST_CONTENT_REPLACE_ALBUM_TAG
+
+### Changelog
+
+- Feat: Resume for songs #1338
+- Feat: Resume for playlists and albums (MPD 0.24) #1338
+- Feat: Rating for albums and playlists (MPD 0.24) #1134
+- Feat: User defined stickers #1091
+- Feat: Support stickers for playlists, filters and tag types (MPD 0.24).
+- Feat: Add list view
+- Feat: Add widgets for home screen
+- Feat: Sort list of playlists by name or last-modified
+- Feat: Work actions in album detail view
+- Feat: New documentation site with search made with Material for MkDocs
+- Upd: Playlist pictures are moved in a separate folder `/var/lib/mympd/pics/playlists`
+- Upd: Latest libmympdclient based on libmpdclient master
+- Upd: Hide advanced search by default
+- Upd: Dependency sds and rax
+- Fix: Send JSONRPC_EVENT_UPDATE_OPTIONS only on feature change
+- Fix: Outdated documentation
+
+***
+
+## myMPD 17.0.4 (2024-09-16)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Upd: Russian translation
+- Fix: Delete webradio favorite
+
+***
+
+## myMPD 17.0.3 (2024-08-25)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Upd: Add variable mympd_uri_plain to mympd_env for Lua scripts
+- Upd: ja-JP and zh-Hans translations
+
+***
+
+## myMPD 17.0.2 (2024-08-18)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Handling of folder placeholder images
+- Fix: Handling of Enter key for search inputs #1336
+
+***
+
+## myMPD 17.0.1 (2024-08-12)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Delete variables with special characters in key name
+- Fix: Show errors in modal lists
+- Fix: Script dialogs
+
+***
+
+## myMPD 17.0.0 (2024-07-30)
+
+This release improves the WebradioDB integration and removes the radiobrowser.info integration. You can use the [RadioBrowser](https://github.com/jcorporation/mympd-scripts/tree/main/Radiobrowser) script to query the radiobrowser.info API.
+
+### API changes
+
+- MYMPD_API_WEBRADIODB_UPDATE: new
+- MYMPD_API_WEBRADIODB_SEARCH: new
+- MYMPD_API_WEBRADIODB_RADIO_GET_BY_NAME: new
+- MYMPD_API_WEBRADIODB_RADIO_GET_BY_URI: new
+- MYMPD_API_WEBRADIO_FAVORITE_LIST renamed to MYMPD_API_WEBRADIO_FAVORITE_SEARCH
+- MYMPD_API_WEBRADIO_FAVORITE_GET_BY_NAME: new
+- MYMPD_API_WEBRADIO_FAVORITE_GET_BY_URI: new
+- MYMPD_API_CLOUD_WEBRADIODB_COMBINED_GET: removed
+- MYMPD_API_CLOUD_RADIOBROWSER_NEWEST: removed
+- MYMPD_API_CLOUD_RADIOBROWSER_SEARCH: removed
+- MYMPD_API_CLOUD_RADIOBROWSER_SERVERLIST: removed
+- MYMPD_API_CLOUD_RADIOBROWSER_STATION_DETAIL: removed
+- MYMPD_API_CLOUD_RADIOBROWSER_CLICK_COUNT: removed
+
+### Changelog
+
+- Feat: Implement uniq backend for WebradioDB and webradio favorites #1071
+- Feat: Improve Work-Tag handling
+- Feat: Support ShowMovement tag (MPD 0.24)
+- Upd: Remove radiobrowser integration #1311
+- Upd: Avoid obsolete redirects serving placeholder images
+- Upd: Complete internal API documentation generated by Doxygen
+- Upd: Leave MPD idle mode only on demand
+- Fix: Return myMPD SSL uri in mympd_state lua table
+
+***
+
+## myMPD 16.1.0 (2024-07-15)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Feat: New API method MYMPD_API_SCRIPT_RELOAD to reload scripts from disk #1327
+- Upd: zh-Hans translation
+- Upd: Increase max size for scripts to 100kB
+- Fix: Implicit conversion creating keys on systems with OpenSSL 1.1.x #1323
+- Fix: Request stored playlist entries in chunks (MPD 0.24)
+- Fix: Add missing event parameter to mympd-script #1325
+
+***
+
+## myMPD 16.0.1 (2024-07-03)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Build with disabled lua #1317
+- Fix: Serve placeholder image if tagart was not found #1320
+- Fix: mympd.update_mtime lua function
+- Upd: Send "Accept-Encoding: none" header for http client connections
+
+***
+
+## myMPD 16.0.0 (2024-06-28)
+
+This release reworks and enhances the scripting functionality of myMPD. There are several new myMPD specific Lua functions and new usage scenarios for scripts. With this release scripts can respond to specific http requests.
+
+The scripts to import in myMPD are moved to a separate [mympd-scripts repository](https://github.com/jcorporation/mympd-scripts). Check it out, there are now much more scripts that are ready to use and demonstrate all the new functionality introduced in this myMPD release.
+
+There are also new triggers introduced:
+
+- mpd_channel
+- mpd_message
+- mympd_albumart: Triggers if no local albumart was found
+- mympd_lyrics: Triggers if no local lyrics are found
+- mympd_tagart: Triggers if no local tagart was found
+- mympd_jukebox: Triggers if the jukebox mode is set to `Script`
+
+### Notes
+
+- `mympd.os_capture` does not strip newlines anymore
+- The config setting for the ListenBrainz API token was removed in favor of a new central function to declare variables for scripts.
+- The config setting `covercache_keep_days` was renamed to `cache_cover_keep_days`.
+- The global variables and tables for Lua scripts are renamed.
+- The `lualibs` configuration option was removed. myMPD loads always all Lua standard libraries.
+- `/var/cache/mympd/covercache` was renamed to `/var/cache/mympd/cover`
+- The native Radiobrowser integration is now deprecated and will be removed in the next major release. Use the RadioBrowser script instead.
+
+### API changes
+
+- MYMPD_API_SCRIPT_VAR_DELETE: new
+- MYMPD_API_SCRIPT_VAR_LIST: new
+- MYMPD_API_SCRIPT_VAR_SET: new
+- MYMPD_API_QUEUE_APPEND_URI_TAGS: new
+- MYMPD_API_QUEUE_INSERT_URI_TAGS: new
+- MYMPD_API_QUEUE_REPLACE_URI_TAGS: new
+- MYMPD_API_COVERCACHE_CLEAR renamed to MYMPD_API_CACHE_DISK_CLEAR
+- MYMPD_API_COVERCACHE_CROP renamed to MYMPD_API_CACHE_DISK_CROP
+- MYMPD_API_CHANNEL_SUBSCRIBE: new
+- MYMPD_API_CHANNEL_UNSUBSCRIBE: new
+- MYMPD_API_CHANNEL_LIST: new
+- MYMPD_API_MESSAGE_SEND renamed to MYMPD_API_CHANNEL_MESSAGE_SEND
+- MYMPD_API_CHANNEL_MESSAGES_READ: new
+- MYMPD_API_JUKEBOX_LENGTH: new
+- MYMPD_API_JUKEBOX_APPEND_URIS: new
+- MYMPD_API_QUEUE_ADD_RANDOM: parameters changed
+
+### Changelog
+
+- Feat: Script improvements
+  - Performance improvements
+  - Better error handling
+  - Handling of http requests #1279
+  - Send log messages from scripts
+  - Send notifications from scripts #1280
+  - Url encoding/decoding functions
+  - Hashing functions
+  - Cache functions for images and lyrics
+  - Jukebox interface
+  - HTTP client follows now redirects
+  - HTTP download function
+  - Dialogs
+  - Improved script import
+- Feat: Set custom variables for scripts #1265
+- Feat: New triggers #1288
+- Feat: Use EC private keys for SSL certificates
+- Upd: Add length checks for albumart uris #1284
+- Upd: Update mongoose to 7.14
+- Upd: Do not use deprecated OpenSSL API functions
+- Upd: Optimize Lua stack usage
+- Fix: Add missing NULL ptr checks to Lua interface functions
+- Fix: Error checking for results in modals
+- Fix: JavaScript error on right click in tags view
+- Fix: Alignment of action icons in tag view
+- Fix: Display image carousel for covers in playback view and footer #1316
+
+***
+
+## myMPD 15.0.2 (2024-05-13)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Upd: Translations
+- Upd: Improve docker documentation #1268
+- Fix: Missing parameter for `build.sh releaseinstall` #1271
+- Fix: Alignment of footer content
+- Fix: Drag and Drop in queue in playlist view #1278
+
+***
+
+## myMPD 15.0.1 (2024-05-02)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Upd: Japanese translation
+- Fix: Save playback view #1264
+- Fix: JavaScript minification #1264
+- Fix: GPIO set and toggle functions
+
+***
+
+## myMPD v15.0.0 (2024-05-02)
+
+This release reworks the table and grid layouts for all views. Each view can now be displayed as table or grid.
+
+### API changes
+
+- The `cols` param was renamed to `fields`
+- MYMPD_API_PLAYLIST_LIST: response changed
+- MYMPD_API_VIEW_SAVE: new
+- MYMPD_API_COLS_SAVE: removed
+
+### Changelog
+
+- Feat: All views can be displayed as table or grid (with pictures) #1051
+- Feat: Add setting for default sort tag in library view #1207
+- Feat: Add lua library for myGPIOd support #1208
+- Feat: Support range for listplaylist and listplaylistinfo (MPD 0.24) #1214
+- Feat: Support playlistlength command (MPD 0.24) #1213
+- Feat: Add column for "File type" in song lists #1225
+- Feat: Add thumbnail column to views #1093
+- Feat: Add playlist art handler
+- Feat: Configurable columns for playlist view
+- Feat: Add option to disable covercache pruning #1237
+- Feat: Add support for sticker find operators contains, starts_with (MPD 0.24)
+- Feat: Provide and install a systemd user unit #1262
+- Upd: Bootstrap 5.3.3
+- Upd: Support ESLint 9
+- Fix: List and search playlists in filesystem view
+- Fix: SSL issues with iPhone clients
+
+***
+
+## myMPD 14.1.2 (2024-04-15)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Fix: Output enabled state is bool type #1254
+- Fix: Add missing sort parameters to home icon for search #1257
+- Fix: Set default stream port if stream uri is defined #1255
+
+***
+
+## myMPD 14.1.1 (2023-04-03)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Fix: `-c` command line option cleans up the config dir #1245
+
+***
+
+## myMPD 14.1.0 (2024-03-12)
+
+This release enables the support for sticker sorting and fixes a severe mongoose bug.
+
+### Changelog
+
+- Feat: Sort sticker search results (MPD 0.24) #1094
+- Fix: Problems with settings in 14.0.x #1221
+- Fix: Browse filesystem layout #1235
+- Fix: Re-add custom css to mongoose dir listing
+
+***
+
+## myMPD 14.0.4 (2024-03-03)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Upd: translations
+- Fix: Disable search on type for Android #1220
+- Fix: Remove newlines from state files #1232
+- Fix: Remember last state of filesystem folder #1234
+
+***
+
+## myMPD 14.0.3 (2024-02-15)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Fix: myMPD does not work with safari on iOS #1212
+- Fix: Volume slider color #1218
+- Fix: Gentoo ebuild install #1219
+
+***
+
+## myMPD v14.0.2 (2024-02-11)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Fix: Use only configured tags #1215
+- Fix: Reconnect to MPD after connection parameters has changed
+- Fix: Remove split char from vorbis comment value #1217
+
+***
+
+## myMPD v14.0.1 (2024-02-08)
+
+This is a small bugfix release.
+
+### Changelog
+
+- Fix: Skip event
+- Feat: Add skip event trigger
+- Fix: cmake dependency for Gentoo #1210
+
+***
+
+## myMPD v14.0.0 (2024-01-30)
+
+This version ships many improvements for stickers, smart playlists and the jukebox mode.
+
+It also supports the new "added" timestamp for songs in the mpd database.
+
+### Notes
+
+- The schema of smart playlist was changed, you must recreate it.
+- Arguments for the feedback trigger has changed to support the new rating sticker.
+
+### API changes
+
+- MYMPD_API_RATING: new
+- MYMPD_API_SMARTPLS_STICKER_SAVE: parameters changed
+- MYMPD_API_SMARTPLS_NEWEST_SAVE: parameters changed
+- MYMPD_API_SMARTPLS_SEARCH_SAVE: parameters changed
+- MYMPD_API_JUKEBOX_CLEARERROR: new
+- MYMPD_API_JUKEBOX_RESTART: new
+- MYMPD_API_PLAYER_OUTPUT_LIST: response changed
+- MYMPD_API_PLAYER_OUTPUT_GET: new
+- MYMPD_API_QUEUE_ADD_RANDOM: is now async
+- MYMPD_API_PLAYLIST_CONTENT_ENUMERATE: new
+
+### Changelog
+
+- Feat: Support info.txt in music directory folders #1120
+- Feat: Add max. song duration as jukebox constraint #1146
+- Feat: Add numeric and string operators lt, gt, eq for sticker based smart playlists (MPD 0.24) #1090
+- Feat: Add max entries option to all smart playlists #1157
+- Feat: Add rating sticker - stars like cantata #1141
+- Feat: Add sort by sticker for smart playlists (MPD 0.24) #1162
+- Feat: Support added timestamp for songs (MPD 0.24) #1150
+- Feat: Support modified-since for search expressions #1158
+- Feat: Support added-since for search expressions (MPD 0.24) #1158
+- Feat: Support new "State" field of webradiodb #1165
+- Feat: Cleanup covercache in worker thread #1166
+- Feat: Simplify Last-Played implementation and save it in MessagePack format
+- Feat: "Add random songs/album" is executed in worker thread
+- Feat: Filling the jukebox queue is executed in worker thread
+- Feat: Rework data structures to improve thread safety
+- Feat: Improve random number generation
+- Feat: Add option to show audioformat in the footer #1184
+- Feat: New mympd-config utility
+- Feat: Add config option to pad integer values for stickers
+- Upd: Date tag is optional for simple album cache
+- Upd: Improve number conversions and enforcement of limits
+- Upd: Manual add random songs or albums should ignore the jukebox constraints
+- Upd: libmympdclient 1.0.26 (based on libmpdclient 2.23)
+- Upd: bootstrap.native to 5.0.10 #1176
+- Upd: Sanitize % special char for stream images
+- Upd: Smart playlist interval can be disabled
+- Upd: Improve JSON encoding performance
+- Upd: Improve event loop resource usage
+- Upd: utf8.h dependency
+- Fix: More reliable websocket reconnection
+- Fix: Limit sort tags for simple album mode #1204
+- Fix: Sticker feature detection
+
+***
+
 ## myMPD v13.0.6 (2023-12-20)
 
 This is a small bugfix release.

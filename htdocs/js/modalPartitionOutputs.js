@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalPartitionOutputs_js */
@@ -26,7 +26,7 @@ function initModalPartitionOutputs() {
         //get all outputs
         sendAPIpartition("default", "MYMPD_API_PLAYER_OUTPUT_LIST", {}, function(allOutputs) {
             const outputList = elGetById('modalPartitionOutputsList');
-            if (checkResult(allOutputs, outputList) === false) {
+            if (checkResult(allOutputs, outputList, 'table') === false) {
                 return;
             }
             //get partition specific outputs
@@ -79,24 +79,25 @@ function moveOutputsCheckError(obj) {
  * @returns {void}
  */
 function parsePartitionOutputsList(allOutputs, partitionOutputs) {
-    const outputList = elGetById('modalPartitionOutputsList');
-    if (checkResult(partitionOutputs, outputList) === false) {
+    const table = elGetById('modalPartitionOutputsList');
+    const tbody = table.querySelector('tbody');
+    elClear(tbody);
+    //checkResult can not be used here because the displayed result count is determined below
+    if (partitionOutputs.error) {
+        tbody.appendChild(errorMsgEl(partitionOutputs, 1, 'table'));
         return;
     }
-
-    elClear(outputList);
     /** @type {object} */
     const curOutputs = [];
-    for (let i = 0; i < partitionOutputs.result.numOutputs; i++) {
+    for (let i = 0; i < partitionOutputs.result.returnedEntities; i++) {
         if (partitionOutputs.result.data[i].plugin !== 'dummy') {
             curOutputs.push(partitionOutputs.result.data[i].name);
         }
     }
 
     const selBtn = elCreateText('button', {"class": ["btn", "btn-secondary", "btn-xs", "mi", "mi-sm", "me-3"]}, 'radio_button_unchecked');
-
-    let nr = 0;
-    for (let i = 0; i < allOutputs.result.numOutputs; i++) {
+    let count = 0;
+    for (let i = 0; i < allOutputs.result.returnedEntities; i++) {
         if (curOutputs.includes(allOutputs.result.data[i].name) === false) {
             const tr = elCreateNode('tr', {},
                 elCreateNodes('td', {}, [
@@ -105,11 +106,11 @@ function parsePartitionOutputsList(allOutputs, partitionOutputs) {
                 ])
             );
             setData(tr, 'output', allOutputs.result.data[i].name);
-            outputList.appendChild(tr);
-            nr++;
+            tbody.appendChild(tr);
+            count++;
         }
     }
-    if (nr === 0) {
-        outputList.appendChild(emptyRow(1));
+    if (count === 0) {
+        tbody.appendChild(emptyMsgEl(1, 'table'));
     }
 }

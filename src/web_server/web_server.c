@@ -1,25 +1,38 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief Webserver implementation
+ */
 
 #include "compile_time.h"
 #include "src/web_server/web_server.h"
 
 #include "src/lib/api.h"
+#include "src/lib/cert.h"
 #include "src/lib/filehandler.h"
 #include "src/lib/http_client.h"
 #include "src/lib/jsonrpc.h"
 #include "src/lib/log.h"
 #include "src/lib/mem.h"
+#include "src/lib/mg_str_utils.h"
 #include "src/lib/msg_queue.h"
 #include "src/lib/sds_extras.h"
 #include "src/lib/thread.h"
 #include "src/web_server/albumart.h"
+#include "src/web_server/folderart.h"
+#include "src/web_server/placeholder.h"
+#include "src/web_server/playlistart.h"
 #include "src/web_server/proxy.h"
 #include "src/web_server/request_handler.h"
 #include "src/web_server/tagart.h"
+
+#ifdef MYMPD_ENABLE_LUA
+    #include "src/web_server/scripts.h"
+#endif
 
 #include <inttypes.h>
 #include <libgen.h>
@@ -28,12 +41,15 @@
  * Private definitions
  */
 
-static void get_placeholder_image(sds workdir, const char *name, sds *result);
+static void read_queue(struct mg_mgr *mgr);
 static bool parse_internal_message(struct t_work_response *response, struct t_mg_user_data *mg_user_data);
-static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn_data);
-static void ev_handler_redirect(struct mg_connection *nc_http, int ev, void *ev_data, void *fn_data);
+static void ev_handler(struct mg_connection *nc, int ev, void *ev_data);
+static void ev_handler_redirect(struct mg_connection *nc_http, int ev, void *ev_data);
 static void send_ws_notify(struct mg_mgr *mgr, struct t_work_response *response);
 static void send_ws_notify_client(struct mg_mgr *mgr, struct t_work_response *response);
+static struct mg_connection *get_nc_by_id(struct mg_mgr *mgr, unsigned long id);
+static void send_raw_response(struct mg_mgr *mgr, struct t_work_response *response);
+static void send_redirect(struct mg_mgr *mgr, struct t_work_response *response);
 static void send_api_response(struct mg_mgr *mgr, struct t_work_response *response);
 static bool enforce_acl(struct mg_connection *nc, sds acl);
 static bool enforce_conn_limit(struct mg_connection *nc, int connection_count);
@@ -55,10 +71,13 @@ bool web_server_init(struct mg_mgr *mgr, struct t_config *config, struct t_mg_us
     mg_user_data->config = config;
     mg_user_data->browse_directory = sdscatfmt(sdsempty(), "%S/%s", config->workdir, DIR_WORK_EMPTY);
     mg_user_data->music_directory = sdsempty();
-    mg_user_data->custom_booklet_image = sdsempty();
-    mg_user_data->custom_mympd_image = sdsempty();
-    mg_user_data->custom_na_image = sdsempty();
-    mg_user_data->custom_stream_image = sdsempty();
+    mg_user_data->placeholder_booklet = sdsempty();
+    mg_user_data->placeholder_mympd = sdsempty();
+    mg_user_data->placeholder_na = sdsempty();
+    mg_user_data->placeholder_stream = sdsempty();
+    mg_user_data->placeholder_playlist = sdsempty();
+    mg_user_data->placeholder_smartpls = sdsempty();
+    mg_user_data->placeholder_folder = sdsempty();
     sds default_coverimage_names = sdsnew(MYMPD_COVERIMAGE_NAMES);
     mg_user_data->coverimage_names= sds_split_comma_trim(default_coverimage_names, &mg_user_data->coverimage_names_len);
     FREE_SDS(default_coverimage_names);
@@ -68,7 +87,7 @@ bool web_server_init(struct mg_mgr *mgr, struct t_config *config, struct t_mg_us
     mg_user_data->publish_music = false;
     mg_user_data->publish_playlists = false;
     mg_user_data->feat_albumart = false;
-    mg_user_data->connection_count = 0;
+    mg_user_data->connection_count = 2; // listening + wakeup
     list_init(&mg_user_data->stream_uris);
     list_init(&mg_user_data->session_list);
     mg_user_data->mympd_api_started = false;
@@ -76,6 +95,8 @@ bool web_server_init(struct mg_mgr *mgr, struct t_config *config, struct t_mg_us
     mg_user_data->cert = mg_str("");
     mg_user_data->key_content = sdsempty();
     mg_user_data->key = mg_str("");
+    mg_user_data->webradiodb = NULL;
+    mg_user_data->webradio_favorites = NULL;
 
     //init monogoose mgr
     mg_mgr_init(mgr);
@@ -132,12 +153,23 @@ bool webserver_read_certs(struct t_mg_user_data *mg_user_data, struct t_config *
     if (config->ssl == false) {
         return true;
     }
-    if (sds_getfile(&mg_user_data->cert_content, config->ssl_cert, SSL_FILE_MAX, false, true) <= 0 ||
-        sds_getfile(&mg_user_data->key_content, config->ssl_key, SSL_FILE_MAX, false, true) <= 0)
-    {
-        MYMPD_LOG_ERROR(NULL, "Failure reading ssl key and cert from disc");
+    int nread = 0;
+    mg_user_data->cert_content = sds_getfile(mg_user_data->cert_content, config->ssl_cert, SSL_FILE_MAX, false, true, &nread);
+    if (nread <= 0) {
+        MYMPD_LOG_ERROR(NULL, "Failure reading ssl certificate from disc");
         return false;
     }
+    nread = 0;
+    mg_user_data->key_content = sds_getfile(mg_user_data->key_content, config->ssl_key, SSL_FILE_MAX, false, true, &nread);
+    if (nread <= 0) {
+        MYMPD_LOG_ERROR(NULL, "Failure reading ssl key from disc");
+        return false;
+    }
+    sds cert_details = certificate_get_detail(mg_user_data->cert_content);
+    if (sdslen(cert_details) > 0) {
+        MYMPD_LOG_INFO(NULL, "Certificate: %s", cert_details);
+    }
+    FREE_SDS(cert_details);
     mg_user_data->cert = mg_str(mg_user_data->cert_content);
     mg_user_data->key = mg_str(mg_user_data->key_content);
     return true;
@@ -169,46 +201,18 @@ void *web_server_loop(void *arg_mgr) {
 
     //set mongoose loglevel to error
     mg_log_set(1);
+    //debug logging
+    //mg_log_set(4);
     mg_log_set_fn(mongoose_log, NULL);
-
+    // Initialise wakeup socket pair
+    mg_wakeup_init(mgr);
     if (mg_user_data->config->ssl == true) {
         MYMPD_LOG_DEBUG(NULL, "Using certificate: %s", mg_user_data->config->ssl_cert);
         MYMPD_LOG_DEBUG(NULL, "Using private key: %s", mg_user_data->config->ssl_key);
     }
     while (s_signal_received == 0) {
-        //poll webserver response queue
-        struct t_work_response *response = mympd_queue_shift(web_server_queue, 50, 0);
-        if (response != NULL) {
-            switch(response->conn_id) {
-                case CONN_ID_NOTIFY_CLIENT:
-                    //websocket notify for specific clients
-                    send_ws_notify_client(mgr, response);
-                    break;
-                case CONN_ID_CONFIG_TO_WEBSERVER:
-                    //internal message
-                    if (response->cmd_id == INTERNAL_API_WEBSERVER_READY) {
-                        mg_user_data->mympd_api_started = true;
-                        free_response(response);
-                    }
-                    else if (response->cmd_id == INTERNAL_API_WEBSERVER_SETTINGS){
-                        parse_internal_message(response, mg_user_data);
-                    }
-                    else {
-                        MYMPD_LOG_ERROR(response->partition, "Invalid API method: %s", get_cmd_id_method_name(response->cmd_id));
-                    }
-                    break;
-                case CONN_ID_NOTIFY_ALL:
-                    //websocket notify for all clients
-                    send_ws_notify(mgr, response);
-                    break;
-                default:
-                    //api response
-                    MYMPD_LOG_DEBUG(response->partition, "Got API response for id \"%lld\"", response->conn_id);
-                    send_api_response(mgr, response);
-            }
-        }
         //webserver polling
-        mg_mgr_poll(mgr, 50);
+        mg_mgr_poll(mgr, -1);
     }
     MYMPD_LOG_DEBUG(NULL, "Stopping web_server thread");
     FREE_SDS(thread_logname);
@@ -218,6 +222,58 @@ void *web_server_loop(void *arg_mgr) {
 /**
  * Private functions
  */
+
+/**
+ * Reads and processes all messages from the queue
+ * @param mgr pointer to mongoose mgr
+ */
+static void read_queue(struct mg_mgr *mgr) {
+    struct t_mg_user_data *mg_user_data = (struct t_mg_user_data *) mgr->userdata;
+    struct t_work_response *response;
+    while ((response = mympd_queue_shift(web_server_queue, -1, 0)) != NULL) {
+        switch(response->type) {
+            case RESPONSE_TYPE_SCRIPT_DIALOG:
+            case RESPONSE_TYPE_NOTIFY_CLIENT:
+                //websocket notify for specific clients
+                send_ws_notify_client(mgr, response);
+                break;
+            case RESPONSE_TYPE_NOTIFY_PARTITION:
+                //websocket notify for all clients
+                send_ws_notify(mgr, response);
+                break;
+            case RESPONSE_TYPE_PUSH_CONFIG:
+                //internal message
+                if (response->cmd_id == INTERNAL_API_WEBSERVER_READY) {
+                    mg_user_data->mympd_api_started = true;
+                    free_response(response);
+                }
+                else if (response->cmd_id == INTERNAL_API_WEBSERVER_SETTINGS){
+                    parse_internal_message(response, mg_user_data);
+                }
+                else {
+                    MYMPD_LOG_ERROR(response->partition, "Invalid API method: %s", get_cmd_id_method_name(response->cmd_id));
+                }
+                break;
+            case RESPONSE_TYPE_DEFAULT:
+                //api response
+                MYMPD_LOG_DEBUG(response->partition, "Got API response for id \"%lu\"", response->conn_id);
+                send_api_response(mgr, response);
+                break;
+            case RESPONSE_TYPE_RAW:
+                MYMPD_LOG_DEBUG(response->partition, "Got raw response for id \"%lu\" with %lu bytes", response->conn_id, (unsigned long)sdslen(response->data));
+                send_raw_response(mgr, response);
+                break;
+            case RESPONSE_TYPE_REDIRECT:
+                MYMPD_LOG_DEBUG(response->partition, "Got redirect for id \"%lu\" to %s", response->conn_id, response->data);
+                send_redirect(mgr, response);
+                break;
+            case RESPONSE_TYPE_SCRIPT:
+            case RESPONSE_TYPE_DISCARD:
+                //ignore
+                break;
+        }
+    }
+}
 
 /**
  * Sets the mg_user_data values from set_mg_user_data_request.
@@ -236,7 +292,6 @@ static bool parse_internal_message(struct t_work_response *response, struct t_mg
         mg_user_data->browse_directory = sdscatfmt(mg_user_data->browse_directory, "%S/%s", config->workdir, DIR_WORK_EMPTY);
         mg_user_data->browse_directory = sdscatfmt(mg_user_data->browse_directory, ",/browse/pics=%S/%s", config->workdir, DIR_WORK_PICS);
         mg_user_data->browse_directory = sdscatfmt(mg_user_data->browse_directory, ",/browse/smartplaylists=%S/%s", config->workdir, DIR_WORK_SMARTPLS);
-        mg_user_data->browse_directory = sdscatfmt(mg_user_data->browse_directory, ",/browse/webradios=%S/%s", config->workdir, DIR_WORK_WEBRADIOS);
         if (sdslen(new_mg_user_data->playlist_directory) > 0) {
             mg_user_data->browse_directory = sdscatfmt(mg_user_data->browse_directory, ",/browse/playlists=%S", new_mg_user_data->playlist_directory);
             mg_user_data->publish_playlists = true;
@@ -257,6 +312,10 @@ static bool parse_internal_message(struct t_work_response *response, struct t_mg
         mg_user_data->music_directory = sds_replace(mg_user_data->music_directory, new_mg_user_data->music_directory);
         FREE_SDS(new_mg_user_data->music_directory);
         MYMPD_LOG_DEBUG(NULL, "Document root: \"%s\"", mg_user_data->browse_directory);
+
+        //webradios
+        mg_user_data->webradiodb = new_mg_user_data->webradiodb;
+        mg_user_data->webradio_favorites = new_mg_user_data->webradio_favorites;
 
         //coverimage names
         sdsfreesplitres(mg_user_data->coverimage_names, mg_user_data->coverimage_names_len);
@@ -287,10 +346,13 @@ static bool parse_internal_message(struct t_work_response *response, struct t_mg
         FREE_SDS(uri);
 
         //custom placeholder images
-        get_placeholder_image(config->workdir, "coverimage-booklet", &mg_user_data->custom_booklet_image);
-        get_placeholder_image(config->workdir, "coverimage-mympd", &mg_user_data->custom_mympd_image);
-        get_placeholder_image(config->workdir, "coverimage-notavailable", &mg_user_data->custom_na_image);
-        get_placeholder_image(config->workdir, "coverimage-stream", &mg_user_data->custom_stream_image);
+        get_placeholder_image(config->workdir, "coverimage-booklet", &mg_user_data->placeholder_booklet);
+        get_placeholder_image(config->workdir, "coverimage-folder", &mg_user_data->placeholder_folder);
+        get_placeholder_image(config->workdir, "coverimage-mympd", &mg_user_data->placeholder_mympd);
+        get_placeholder_image(config->workdir, "coverimage-notavailable", &mg_user_data->placeholder_na);
+        get_placeholder_image(config->workdir, "coverimage-playlist", &mg_user_data->placeholder_playlist);
+        get_placeholder_image(config->workdir, "coverimage-smartpls", &mg_user_data->placeholder_smartpls);
+        get_placeholder_image(config->workdir, "coverimage-stream", &mg_user_data->placeholder_stream);
 
         //cleanup
         FREE_SDS(new_mg_user_data->mpd_host);
@@ -306,25 +368,6 @@ static bool parse_internal_message(struct t_work_response *response, struct t_mg
 }
 
 /**
- * Finds and sets the placeholder images
- * @param workdir myMPD working directory
- * @param name basename to search for
- * @param result pointer to sds result
- */
-static void get_placeholder_image(sds workdir, const char *name, sds *result) {
-    sds file = sdscatfmt(sdsempty(), "%S/%s/%s", workdir, DIR_WORK_PICS_THUMBS, name);
-    MYMPD_LOG_DEBUG(NULL, "Check for custom placeholder image \"%s\"", file);
-    file = webserver_find_image_file(file);
-    sdsclear(*result);
-    if (sdslen(file) > 0) {
-        file = sds_basename(file);
-        MYMPD_LOG_INFO(NULL, "Setting custom placeholder image for na to \"%s\"", file);
-        *result = sdscatsds(*result, file);
-    }
-    FREE_SDS(file);
-}
-
-/**
  * Broadcasts a message through all websocket connections for a specific or all partitions
  * @param mgr mongoose mgr
  * @param response jsonrpc notification
@@ -333,13 +376,18 @@ static void send_ws_notify(struct mg_mgr *mgr, struct t_work_response *response)
     struct mg_connection *nc = mgr->conns;
     int send_count = 0;
     int conn_count = 0;
+    time_t last_ping = time(NULL) - WS_PING_TIMEOUT;
     while (nc != NULL) {
-        if ((int)nc->is_websocket == 1) {
+        if (nc->is_websocket == 1U) {
             struct t_frontend_nc_data *frontend_nc_data = (struct t_frontend_nc_data *)nc->fn_data;
-            if (strcmp(response->partition, frontend_nc_data->partition) == 0 ||
+            if (frontend_nc_data->last_ws_ping < last_ping) {
+                MYMPD_LOG_INFO(NULL, "Closing stale websocket connection \"%lu\"", nc->id);
+                nc->is_closing = 1;
+            }
+            else if (strcmp(response->partition, frontend_nc_data->partition) == 0 ||
                 strcmp(response->partition, MPD_PARTITION_ALL) == 0)
             {
-                MYMPD_LOG_DEBUG(response->partition, "Sending notify to conn_id %lu: %s", nc->id, response->data);
+                MYMPD_LOG_DEBUG(response->partition, "Sending notify to conn_id \"%lu\": %s", nc->id, response->data);
                 mg_ws_send(nc, response->data, sdslen(response->data), WEBSOCKET_OP_TEXT);
                 send_count++;
             }
@@ -367,13 +415,13 @@ static void send_ws_notify(struct mg_mgr *mgr, struct t_work_response *response)
 static void send_ws_notify_client(struct mg_mgr *mgr, struct t_work_response *response) {
     struct mg_connection *nc = mgr->conns;
     int send_count = 0;
-    const long clientId = response->id / 1000;
-    //const long requestId = response->id % 1000;
+    const unsigned client_id = response->id / 1000;
+    //const unsigned request_id = response->id % 1000;
     while (nc != NULL) {
-        if ((int)nc->is_websocket == 1) {
+        if (nc->is_websocket == 1U) {
             struct t_frontend_nc_data *frontend_nc_data = (struct t_frontend_nc_data *)nc->fn_data;
-            if (clientId == frontend_nc_data->id) {
-                MYMPD_LOG_DEBUG(response->partition, "Sending notify to conn_id %lu, jsonrpc client id %ld: %s", nc->id, clientId, response->data);
+            if (client_id == frontend_nc_data->id) {
+                MYMPD_LOG_DEBUG(response->partition, "Sending notify to conn_id \"%lu\", jsonrpc client id %u: %s", nc->id, client_id, response->data);
                 mg_ws_send(nc, response->data, sdslen(response->data), WEBSOCKET_OP_TEXT);
                 send_count++;
                 break;
@@ -382,7 +430,53 @@ static void send_ws_notify_client(struct mg_mgr *mgr, struct t_work_response *re
         nc = nc->next;
     }
     if (send_count == 0) {
-        MYMPD_LOG_DEBUG(NULL, "No websocket client connected, discarding message: %s", response->data);
+        MYMPD_LOG_DEBUG(NULL, "No websocket client with id %u connected, discarding message: %s", client_id, response->data);
+    }
+    free_response(response);
+}
+
+/**
+ * Returns the mongoose connection by id
+ * @param mgr mongoose mgr
+ * @param id connection id
+ * @return struct mg_connection* or NULL if not found
+ */
+static struct mg_connection *get_nc_by_id(struct mg_mgr *mgr, unsigned long id) {
+    struct mg_connection *nc = mgr->conns;
+    while (nc != NULL) {
+        if (nc->id == id) {
+            return nc;
+        }
+        nc = nc->next;
+    }
+    return NULL;
+}
+
+/**
+ * Sends a raw http response message
+ * @param mgr mongoose mgr
+ * @param response jsonrpc response
+ */
+static void send_raw_response(struct mg_mgr *mgr, struct t_work_response *response) {
+    struct mg_connection *nc = get_nc_by_id(mgr, response->conn_id);
+    if (nc != NULL) {
+        webserver_send_raw(nc, response->data, sdslen(response->data));
+    }
+    free_response(response);
+}
+
+/**
+ * Sends a redirect http response message
+ * @param mgr mongoose mgr
+ * @param response jsonrpc response
+ */
+static void send_redirect(struct mg_mgr *mgr, struct t_work_response *response) {
+    struct mg_connection *nc = get_nc_by_id(mgr, response->conn_id);
+    if (nc != NULL) {
+        webserver_send_header_redirect(nc, response->data, NULL);
+    }
+    else {
+        MYMPD_LOG_ERROR(NULL, "Connection for id \"%lu\" not found", response->conn_id);
     }
     free_response(response);
 }
@@ -393,24 +487,25 @@ static void send_ws_notify_client(struct mg_mgr *mgr, struct t_work_response *re
  * @param response jsonrpc response
  */
 static void send_api_response(struct mg_mgr *mgr, struct t_work_response *response) {
-    struct mg_connection *nc = mgr->conns;
-    while (nc != NULL) {
-        if ((int)nc->is_websocket == 0 &&
-            nc->id == (long unsigned)response->conn_id)
-        {
-            if (response->cmd_id == INTERNAL_API_ALBUMART_BY_URI) {
+    struct mg_connection *nc = get_nc_by_id(mgr, response->conn_id);
+    if (nc != NULL) {
+        switch(response->cmd_id) {
+            case INTERNAL_API_ALBUMART_BY_URI:
                 webserver_send_albumart(nc, response->data, response->binary);
-            }
-            else if (response->cmd_id == INTERNAL_API_ALBUMART_BY_ALBUMID) {
+                break;
+            case INTERNAL_API_ALBUMART_BY_ALBUMID:
                 webserver_send_albumart_redirect(nc, response->data);
-            }
-            else {
-                MYMPD_LOG_DEBUG(response->partition, "Sending response to conn_id %lu (length: %lu): %s", nc->id, (unsigned long)sdslen(response->data), response->data);
+                break;
+            case INTERNAL_API_TAGART:
+                webserver_redirect_placeholder_image(nc, PLACEHOLDER_NA);
+                break;
+            default:
+                MYMPD_LOG_DEBUG(response->partition, "Sending response to conn_id \"%lu\" (length: %lu): %s", nc->id, (unsigned long)sdslen(response->data), response->data);
                 webserver_send_data(nc, response->data, sdslen(response->data), EXTRA_HEADERS_JSON_CONTENT);
-            }
-            break;
         }
-        nc = nc->next;
+    }
+    else {
+        MYMPD_LOG_ERROR(NULL, "Connection for id \"%lu\" not found", response->conn_id);
     }
     free_response(response);
 }
@@ -476,27 +571,47 @@ static bool enforce_conn_limit(struct mg_connection *nc, int connection_count) {
  * @param nc mongoose connection
  * @param ev connection event
  * @param ev_data event data (http / websocket message)
- * @param fn_data backend connection for proxy connections
  */
-static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn_data) {
+static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
     //connection specific data structure
-    struct t_frontend_nc_data *frontend_nc_data = (struct t_frontend_nc_data *) fn_data;
+    struct t_frontend_nc_data *frontend_nc_data = (struct t_frontend_nc_data *) nc->fn_data;
     //mongoose user data
     struct t_mg_user_data *mg_user_data = (struct t_mg_user_data *) nc->mgr->userdata;
     struct t_config *config = mg_user_data->config;
     switch(ev) {
         case MG_EV_OPEN: {
-            mg_user_data->connection_count++;
-            //initialize fn_data
-            frontend_nc_data = malloc_assert(sizeof(struct t_frontend_nc_data));
-            frontend_nc_data->partition = NULL;  // populated on websocket handshake
-            frontend_nc_data->id = 0;            // populated through websocket message
-            frontend_nc_data->backend_nc = NULL; // used for reverse proxy function
-            nc->fn_data = frontend_nc_data;
-            //set labels
-            nc->data[0] = 'F'; // connection type
-            nc->data[1] = '-'; // http method
-            nc->data[2] = 'C'; // connection header
+            if (nc->is_listening) {
+                nc->fn_data = NULL;
+                web_server_queue->mg_conn_id = nc->id;
+                web_server_queue->mg_mgr = nc->mgr;
+            }
+            else {
+                mg_user_data->connection_count++;
+                //initialize fn_data
+                frontend_nc_data = malloc_assert(sizeof(struct t_frontend_nc_data));
+                frontend_nc_data->partition = NULL;           // populated on websocket handshake
+                frontend_nc_data->id = 0;                     // populated through websocket message
+                frontend_nc_data->last_ws_ping = time(NULL);  // websocket ping timestamp
+                frontend_nc_data->backend_nc = NULL;          // used for reverse proxy function
+                nc->fn_data = frontend_nc_data;
+                //set labels
+                nc->data[0] = 'F'; // connection type
+                nc->data[1] = '-'; // http method
+                nc->data[2] = 'C'; // connection header
+            }
+            break;
+        }
+        case MG_EV_WAKEUP: {
+            struct mg_str *data = (struct mg_str *) ev_data;
+            assert(data->len == 1);
+            switch(data->buf[0]) {
+                case 'Q':
+                    read_queue(nc->mgr);
+                    break;
+                case 'X':
+                    MYMPD_LOG_DEBUG(NULL, "Wakeup mongoose polling");
+                    break;
+            }
             break;
         }
         case MG_EV_ACCEPT:
@@ -523,62 +638,68 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
                 break;
             }
             break;
+        case MG_EV_WS_OPEN: {
+            nc->is_resp = 1;
+            break;
+        }
         case MG_EV_WS_MSG: {
             struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
             struct mg_str matches[1];
             size_t sent = 0;
-            #ifdef MYMPD_DEBUG
-                MYMPD_LOG_DEBUG(frontend_nc_data->partition, "Websocket message (%lu): %.*s", nc->id, (int)wm->data.len, wm->data.ptr);
-            #endif
             if (wm->data.len > 9) {
-                MYMPD_LOG_ERROR(frontend_nc_data->partition, "Websocket message too long: %lu", (long unsigned)wm->data.len);
+                MYMPD_LOG_ERROR(frontend_nc_data->partition, "Websocket (%lu) message too long: %lu", nc->id, (unsigned long)wm->data.len);
                 sent = mg_ws_send(nc, "too long", 8, WEBSOCKET_OP_TEXT);
             }
-            else if (mg_vcmp(&wm->data, "ping") == 0) {
+            else if (mg_strcmp(wm->data, mg_str("ping")) == 0) {
                 sent = mg_ws_send(nc, "pong", 4, WEBSOCKET_OP_TEXT);
             }
             else if (mg_match(wm->data, mg_str("id:*"), matches)) {
-                frontend_nc_data->id = mg_str_to_long(&matches[0]);
-                MYMPD_LOG_INFO(frontend_nc_data->partition, "Setting websocket id to %ld", frontend_nc_data->id);
+                frontend_nc_data->id = mg_str_to_uint(&matches[0]);
+                MYMPD_LOG_INFO(frontend_nc_data->partition, "Setting websocket (%lu) id to \"%u\"", nc->id, frontend_nc_data->id);
                 sent = mg_ws_send(nc, "ok", 2, WEBSOCKET_OP_TEXT);
             }
             else {
-                MYMPD_LOG_ERROR(frontend_nc_data->partition, "Invalid Websocket message");
+                MYMPD_LOG_DEBUG(frontend_nc_data->partition, "Websocket (%lu) message: %.*s", nc->id, (int)wm->data.len, wm->data.buf);
+                MYMPD_LOG_ERROR(frontend_nc_data->partition, "Websocket (%lu): Invalid message", nc->id);
                 sent = mg_ws_send(nc, "invalid", 7, WEBSOCKET_OP_TEXT);
             }
             if (sent == 0) {
-                MYMPD_LOG_ERROR(frontend_nc_data->partition, "Websocket: Could not reply, closing connection");
+                MYMPD_LOG_ERROR(frontend_nc_data->partition, "Websocket (%lu): Could not reply, closing connection", nc->id);
                 nc->is_closing = 1;
+            }
+            else {
+                frontend_nc_data->last_ws_ping = time(NULL);
             }
             break;
         }
         case MG_EV_HTTP_MSG: {
+            nc->is_resp = 1;
             struct mg_http_message *hm = (struct mg_http_message *) ev_data;
             if (hm->query.len > 0) {
-                MYMPD_LOG_INFO(NULL, "HTTP request (%lu): %.*s %.*s?%.*s", nc->id, (int)hm->method.len, hm->method.ptr,
-                    (int)hm->uri.len, hm->uri.ptr, (int)hm->query.len, hm->query.ptr);
+                MYMPD_LOG_INFO(NULL, "HTTP request (%lu): %.*s %.*s?%.*s", nc->id, (int)hm->method.len, hm->method.buf,
+                    (int)hm->uri.len, hm->uri.buf, (int)hm->query.len, hm->query.buf);
             }
             else {
-                MYMPD_LOG_INFO(NULL, "HTTP request (%lu): %.*s %.*s", nc->id, (int)hm->method.len, hm->method.ptr,
-                    (int)hm->uri.len, hm->uri.ptr);
+                MYMPD_LOG_INFO(NULL, "HTTP request (%lu): %.*s %.*s", nc->id, (int)hm->method.len, hm->method.buf,
+                    (int)hm->uri.len, hm->uri.buf);
             }
             //limit allowed http methods
-            if (mg_vcmp(&hm->method, "GET") == 0) {
+            if (mg_strcmp(hm->method, mg_str("GET")) == 0) {
                 nc->data[1] = 'G';
             }
-            else if (mg_vcmp(&hm->method, "HEAD") == 0) {
+            else if (mg_strcmp(hm->method, mg_str("HEAD")) == 0) {
                 nc->data[1] = 'H';
             }
-            else if (mg_vcmp(&hm->method, "POST") == 0) {
+            else if (mg_strcmp(hm->method, mg_str("POST")) == 0) {
                 nc->data[1] = 'P';
             }
-            else if (mg_vcmp(&hm->method, "OPTIONS") == 0) {
+            else if (mg_strcmp(hm->method, mg_str("OPTIONS")) == 0) {
                 nc->data[1] = 'O';
                 webserver_send_cors_reply(nc);
                 return;
             }
             else {
-                MYMPD_LOG_ERROR(NULL, "Invalid http method \"%.*s\" (%lu)", (int)hm->method.len, hm->method.ptr, nc->id);
+                MYMPD_LOG_ERROR(NULL, "Invalid http method \"%.*s\" (%lu)", (int)hm->method.len, hm->method.buf, nc->id);
                 webserver_send_error(nc, 405, "Invalid http method");
                 nc->is_draining = 1;
                 return;
@@ -600,7 +721,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
             //respect connection close header
             struct mg_str *connection_hdr = mg_http_get_header(hm, "Connection");
             if (connection_hdr != NULL) {
-                if (mg_vcasecmp(connection_hdr, "close") == 0) {
+                if (mg_strcasecmp(*connection_hdr, mg_str("close")) == 0) {
                     nc->data[2] = 'C';
                 }
                 else {
@@ -608,7 +729,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
                 }
             }
             //handle uris
-            if (mg_http_match_uri(hm, "/api/*") == true) {
+            if (mg_match(hm->uri, mg_str("/api/*"), NULL)) {
                 //api request
                 if (mg_user_data->mympd_api_started == false) {
                     //mympd_api thread not yet ready
@@ -620,16 +741,21 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
                 }
                 //check partition
                 if (get_partition_from_uri(nc, hm, frontend_nc_data) == false) {
+                    MYMPD_LOG_ERROR(NULL, "API request without partition");
+                    sds response = jsonrpc_respond_message(sdsempty(), GENERAL_API_UNKNOWN, 0,
+                        JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Invalid API uri, partition not found");
+                    webserver_send_data(nc, response, sdslen(response), EXTRA_HEADERS_JSON_CONTENT);
+                    FREE_SDS(response);
                     break;
                 }
                 //body
-                sds body = sdsnewlen(hm->body.ptr, hm->body.len);
+                sds body = sdsnewlen(hm->body.buf, hm->body.len);
                 /*
                  * We use the custom header X-myMPD-Session for authorization
                  * to allow other authorization methods in reverse proxy setups
                  */
                 struct mg_str *auth_header = mg_http_get_header(hm, "X-myMPD-Session");
-                bool rc = request_handler_api(nc, body, auth_header, mg_user_data, frontend_nc_data->backend_nc);
+                bool rc = request_handler_api(nc, body, auth_header, mg_user_data);
                 FREE_SDS(body);
                 if (rc == false) {
                     MYMPD_LOG_ERROR(frontend_nc_data->partition, "Invalid API request");
@@ -639,27 +765,38 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
                     FREE_SDS(response);
                 }
             }
-            else if (mg_http_match_uri(hm, "/albumart-thumb/*") == true) {
-                request_handler_albumart_by_album_id(hm, (long long)nc->id, ALBUMART_THUMBNAIL);
+            else if (mg_match(hm->uri, mg_str("/albumart-thumb/*"), NULL)) {
+                request_handler_albumart_by_album_id(hm, nc->id, ALBUMART_THUMBNAIL);
             }
-            else if (mg_http_match_uri(hm, "/albumart/*") == true) {
-                request_handler_albumart_by_album_id(hm, (long long)nc->id, ALBUMART_FULL);
+            else if (mg_match(hm->uri, mg_str("/albumart/*"), NULL)) {
+                request_handler_albumart_by_album_id(hm, nc->id, ALBUMART_FULL);
             }
-            else if (mg_http_match_uri(hm, "/albumart-thumb") == true) {
-                request_handler_albumart_by_uri(nc, hm, mg_user_data, (long long)nc->id, ALBUMART_THUMBNAIL);
+            else if (mg_match(hm->uri, mg_str("/albumart-thumb"), NULL)) {
+                request_handler_albumart_by_uri(nc, hm, mg_user_data, nc->id, ALBUMART_THUMBNAIL);
             }
-            else if (mg_http_match_uri(hm, "/albumart") == true) {
-                request_handler_albumart_by_uri(nc, hm, mg_user_data, (long long)nc->id, ALBUMART_FULL);
+            else if (mg_match(hm->uri, mg_str("/albumart"), NULL)) {
+                request_handler_albumart_by_uri(nc, hm, mg_user_data, nc->id, ALBUMART_FULL);
             }
-            else if (mg_http_match_uri(hm, "/tagart") == true) {
+            else if (mg_match(hm->uri, mg_str("/folderart"), NULL)) {
+                request_handler_folderart(nc, hm, mg_user_data);
+            }
+            else if (mg_match(hm->uri, mg_str("/tagart"), NULL)) {
                 request_handler_tagart(nc, hm, mg_user_data);
             }
-            else if (mg_http_match_uri(hm, "/browse/#") == true) {
+            else if (mg_match(hm->uri, mg_str("/playlistart"), NULL)) {
+                request_handler_playlistart(nc, hm, mg_user_data);
+            }
+            else if (mg_match(hm->uri, mg_str("/browse/#"), NULL)) {
                 request_handler_browse(nc, hm, mg_user_data);
             }
-            else if (mg_http_match_uri(hm, "/ws/*") == true) {
+            else if (mg_match(hm->uri, mg_str("/webradio"), NULL)) {
+                request_handler_extm3u(nc, hm, mg_user_data);
+            }
+            else if (mg_match(hm->uri, mg_str("/ws/*"), NULL)) {
                 //check partition
                 if (get_partition_from_uri(nc, hm, frontend_nc_data) == false) {
+                    MYMPD_LOG_ERROR(NULL, "Websocket request without partition");
+                    webserver_send_error(nc, 404, "Invalid websocket uri, partition not found");
                     break;
                 }
                 mg_ws_upgrade(nc, hm, NULL);
@@ -668,9 +805,11 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
                 mg_ws_send(nc, response, sdslen(response), WEBSOCKET_OP_TEXT);
                 FREE_SDS(response);
             }
-            else if (mg_http_match_uri(hm, "/stream/*") == true) {
+            else if (mg_match(hm->uri, mg_str("/stream/*"), NULL)) {
                 //check partition
                 if (get_partition_from_uri(nc, hm, frontend_nc_data) == false) {
+                    MYMPD_LOG_ERROR(NULL, "Stream request without partition");
+                    webserver_send_error(nc, 404, "Invalid stream uri, partition not found");
                     break;
                 }
                 struct t_list_node *node = list_get_node(&mg_user_data->stream_uris, frontend_nc_data->partition);
@@ -679,29 +818,35 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
                     nc->is_draining = 1;
                     break;
                 }
-                create_backend_connection(nc, frontend_nc_data->backend_nc, node->value_p, forward_backend_to_frontend_stream);
+                create_backend_connection(nc, frontend_nc_data->backend_nc, node->value_p, forward_backend_to_frontend_stream, true);
             }
-            else if (mg_http_match_uri(hm, "/proxy") == true) {
+            else if (mg_match(hm->uri, mg_str("/proxy"), NULL)) {
                 //Makes a get request to the defined uri and returns the response
                 request_handler_proxy(nc, hm, frontend_nc_data->backend_nc);
             }
-            else if (mg_http_match_uri(hm, "/proxy-covercache") == true) {
+            else if (mg_match(hm->uri, mg_str("/proxy-covercache"), NULL)) {
                 //Makes a get request to the defined uri and caches and returns the response
                 request_handler_proxy_covercache(nc, hm, frontend_nc_data->backend_nc);
             }
-            else if (mg_http_match_uri(hm, "/serverinfo") == true) {
+            else if (mg_match(hm->uri, mg_str("/serverinfo"), NULL)) {
                 request_handler_serverinfo(nc);
             }
-            else if (mg_http_match_uri(hm, "/script-api/*") == true) {
+        #ifdef MYMPD_ENABLE_LUA
+            else if (mg_match(hm->uri, mg_str("/script-api/*"), NULL)) {
                 //enforce script acl
                 if (enforce_acl(nc, config->scriptacl) == false) {
                     break;
                 }
                 //check partition
                 if (get_partition_from_uri(nc, hm, frontend_nc_data) == false) {
+                    MYMPD_LOG_ERROR(NULL, "script-api request without partition");
+                    sds response = jsonrpc_respond_message(sdsempty(), GENERAL_API_UNKNOWN, 0,
+                        JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Invalid API uri, partition not found");
+                    webserver_send_data(nc, response, sdslen(response), EXTRA_HEADERS_JSON_CONTENT);
+                    FREE_SDS(response);
                     break;
                 }
-                sds body = sdsnewlen(hm->body.ptr, hm->body.len);
+                sds body = sdsnewlen(hm->body.buf, hm->body.len);
                 bool rc = request_handler_script_api(nc, body);
                 FREE_SDS(body);
                 if (rc == false) {
@@ -712,25 +857,38 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
                     FREE_SDS(response);
                 }
             }
-            else if (mg_http_match_uri(hm, "/assets/coverimage-booklet") == true) {
-                webserver_serve_booklet_image(nc);
+            else if (mg_match(hm->uri, mg_str("/script/*/*"), NULL)) {
+                script_execute_http(nc, hm, config);
             }
-            else if (mg_http_match_uri(hm, "/assets/coverimage-mympd") == true) {
-                webserver_serve_mympd_image(nc);
+        #endif
+            else if (mg_match(hm->uri, mg_str("/assets/coverimage-booklet"), NULL)) {
+                webserver_serve_placeholder_image(nc, hm, mg_user_data->placeholder_booklet);
             }
-            else if (mg_http_match_uri(hm, "/assets/coverimage-notavailable") == true) {
-                webserver_serve_na_image(nc);
+            else if (mg_match(hm->uri, mg_str("/assets/coverimage-folder"), NULL)) {
+                webserver_serve_placeholder_image(nc, hm, mg_user_data->placeholder_folder);
             }
-            else if (mg_http_match_uri(hm, "/assets/coverimage-stream") == true) {
-                webserver_serve_stream_image(nc);
+            else if (mg_match(hm->uri, mg_str("/assets/coverimage-mympd"), NULL)) {
+                webserver_serve_placeholder_image(nc, hm, mg_user_data->placeholder_mympd);
             }
-            else if (mg_http_match_uri(hm, "/index.html") == true) {
-                webserver_send_header_redirect(nc, "/");
+            else if (mg_match(hm->uri, mg_str("/assets/coverimage-notavailable"), NULL)) {
+                webserver_serve_placeholder_image(nc, hm, mg_user_data->placeholder_na);
             }
-            else if (mg_http_match_uri(hm, "/favicon.ico") == true) {
-                webserver_send_header_redirect(nc, "/assets/appicon-192.png");
+            else if (mg_match(hm->uri, mg_str("/assets/coverimage-smartpls"), NULL)) {
+                webserver_serve_placeholder_image(nc, hm, mg_user_data->placeholder_smartpls);
             }
-            else if (mg_http_match_uri(hm, "/ca.crt") == true) {
+            else if (mg_match(hm->uri, mg_str("/assets/coverimage-stream"), NULL)) {
+                webserver_serve_placeholder_image(nc, hm, mg_user_data->placeholder_stream);
+            }
+            else if (mg_match(hm->uri, mg_str("/assets/coverimage-playlist"), NULL)) {
+                webserver_serve_placeholder_image(nc, hm, mg_user_data->placeholder_playlist);
+            }
+            else if (mg_match(hm->uri, mg_str("/index.html"), NULL)) {
+                webserver_send_header_redirect(nc, "/", "");
+            }
+            else if (mg_match(hm->uri, mg_str("/favicon.ico"), NULL)) {
+                webserver_send_header_redirect(nc, "/assets/appicon-192.png", "");
+            }
+            else if (mg_match(hm->uri, mg_str("/ca.crt"), NULL)) {
                 request_handler_ca(nc, hm, mg_user_data);
             }
             else {
@@ -739,7 +897,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
                     //serve all files from filesystem
                     static struct mg_http_serve_opts s_http_server_opts;
                     s_http_server_opts.root_dir = MYMPD_DOC_ROOT;
-                    if (mg_http_match_uri(hm, "/test/#") == true) {
+                    if (mg_match(hm->uri, mg_str("/test/#"), NULL)) {
                         //test suite uses innerHTML
                         s_http_server_opts.extra_headers = EXTRA_HEADERS_UNSAFE;
                     }
@@ -750,7 +908,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
                     mg_http_serve_dir(nc, hm, &s_http_server_opts);
                 #else
                     //serve embedded files
-                    sds uri = sdsnewlen(hm->uri.ptr, hm->uri.len);
+                    sds uri = sdsnewlen(hm->uri.buf, hm->uri.len);
                     webserver_serve_embedded_files(nc, uri);
                     FREE_SDS(uri);
                 #endif
@@ -758,10 +916,12 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
             break;
         }
         case MG_EV_CLOSE: {
-            MYMPD_LOG_INFO(NULL, "HTTP connection %lu closed", nc->id);
+            MYMPD_LOG_INFO(NULL, "HTTP connection \"%lu\" closed", nc->id);
             mg_user_data->connection_count--;
             if (frontend_nc_data == NULL) {
-                MYMPD_LOG_WARN(NULL, "frontend_nc_data not allocated");
+                if (nc->is_listening == 0) {
+                    MYMPD_LOG_WARN(NULL, "frontend_nc_data not allocated");
+                }
                 break;
             }
             if (frontend_nc_data->backend_nc != NULL) {
@@ -786,10 +946,8 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data, void *fn
  * @param nc mongoose connection
  * @param ev connection event
  * @param ev_data event data (http / websocket message)
- * @param fn_data not used
  */
-static void ev_handler_redirect(struct mg_connection *nc, int ev, void *ev_data, void *fn_data) {
-    (void)fn_data;
+static void ev_handler_redirect(struct mg_connection *nc, int ev, void *ev_data) {
     struct t_mg_user_data *mg_user_data = (struct t_mg_user_data *) nc->mgr->userdata;
     struct t_config *config = mg_user_data->config;
 
@@ -809,16 +967,17 @@ static void ev_handler_redirect(struct mg_connection *nc, int ev, void *ev_data,
             break;
         case MG_EV_HTTP_MSG: {
             struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-            if (mg_http_match_uri(hm, "/browse/webradios/*") == true) {
-                //we serve the webradio directory without https to avoid the required ssl configuration for the mpd curl plugin
-                static struct mg_http_serve_opts s_http_server_opts;
-                s_http_server_opts.extra_headers = EXTRA_HEADERS_UNSAFE;
-                s_http_server_opts.mime_types = EXTRA_MIME_TYPES;
-                s_http_server_opts.root_dir = mg_user_data->browse_directory;
-                MYMPD_LOG_INFO(NULL, "Serving uri \"%.*s\"", (int)hm->uri.len, hm->uri.ptr);
-                mg_http_serve_dir(nc, hm, &s_http_server_opts);
+            // Serve some directories without ssl
+            if (mg_match(hm->uri, mg_str("/webradio"), NULL)) {
+                request_handler_extm3u(nc, hm, mg_user_data);
                 break;
             }
+            #ifdef MYMPD_ENABLE_LUA
+                if (mg_match(hm->uri, mg_str("/script/*/*"), NULL)) {
+                    script_execute_http(nc, hm, config);
+                    break;
+                }
+            #endif
             //redirect to https
             struct mg_str *host_hdr = mg_http_get_header(hm, "Host");
             if (host_hdr == NULL) {
@@ -827,7 +986,7 @@ static void ev_handler_redirect(struct mg_connection *nc, int ev, void *ev_data,
                 break;
             }
 
-            sds host_header = sdscatlen(sdsempty(), host_hdr->ptr, host_hdr->len);
+            sds host_header = sdscatlen(sdsempty(), host_hdr->buf, host_hdr->len);
             int count = 0;
             sds *tokens = sdssplitlen(host_header, (ssize_t)sdslen(host_header), ":", 1, &count);
             sds s_redirect = sdscatfmt(sdsempty(), "https://%S", tokens[0]);
@@ -835,7 +994,7 @@ static void ev_handler_redirect(struct mg_connection *nc, int ev, void *ev_data,
                 s_redirect = sdscatfmt(s_redirect, ":%i", config->ssl_port);
             }
             MYMPD_LOG_INFO(NULL, "Redirecting to %s", s_redirect);
-            webserver_send_header_redirect(nc, s_redirect);
+            webserver_send_header_found(nc, s_redirect, "");
             nc->is_draining = 1;
             sdsfreesplitres(tokens, count);
             FREE_SDS(host_header);
@@ -843,7 +1002,7 @@ static void ev_handler_redirect(struct mg_connection *nc, int ev, void *ev_data,
             break;
         }
         case MG_EV_CLOSE:
-            MYMPD_LOG_INFO(NULL, "Connection %lu closed", nc->id);
+            MYMPD_LOG_INFO(NULL, "Connection \"%lu\" closed", nc->id);
             mg_user_data->connection_count--;
             break;
     }

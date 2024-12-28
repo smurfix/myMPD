@@ -26,21 +26,21 @@ A clear and concise description of what you expected to happen.
 
 If applicable, add screenshots to help explain your problem.
 
-**Server plattform (please complete the following information):**
+**Server platform (please complete the following information):**
  - OS: [e.g. DietPI]
  - OS version [e.g. 6.26]
- - Plattform: [e.g. x86_64]
+ - Platform: [e.g. x86_64]
  - MPD version: [e.g. 0.21.16]
 
-**Client plattform (please complete the following information):**
+**Client platform (please complete the following information):**
  - Device: [e.g. iPhone6, Laptop]
  - OS: [e.g. iOS, Windows 10, Ubuntu Linux 19.10]
  - Browser [e.g. chrome, safari]
  - Browser version [e.g. 22]
 
-**Debug logs (please attach if it can be useful)**
+**Debug logs**
 
-Look at https://jcorporation.github.io/myMPD/debug
+Look at [https://jcorporation.github.io/myMPD/debug](https://jcorporation.github.io/myMPD/040-debug/)
 
  - myMPD debug log
  - MPD verbose log

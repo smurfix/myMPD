@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module utility_js */
@@ -11,12 +11,13 @@
  * @returns {boolean} true if key event should be ignored, else false
  */
 function ignoreKeys(event) {
-    if (event === undefined ||
-        event.key === undefined)
-    {
+    if (event === undefined) {
         return true;
     }
     switch (event.key) {
+        case undefined:
+        case 'Unidentified':
+            return true;
         case 'Escape':
             // @ts-ignore
             event.target.blur();
@@ -40,9 +41,13 @@ function ignoreKeys(event) {
  * @returns {boolean} true if target is clickable else false
  */
 function checkTargetClick(target) {
-    return target === null || target.classList.contains('not-clickable')
-        ? false
-        : true;
+    if (target === null ||
+        target.classList.contains('not-clickable') ||
+        target.parentNode.nodeName === 'TH')
+    {
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -143,6 +148,19 @@ function arrayToLines(a) {
 }
 
 /**
+ * Parses a comma separated string to an array
+ * @param {string} str string to parse
+ * @returns {Array}  Parsed string as array
+ */
+function stringToArray(str) {
+    const a = str.split(/,/);
+    for (let i = 0, j=a.length; i < j; i++) {
+        a[i] = a[i].trim();
+    }
+    return a;
+}
+
+/**
  * Escape a MPD filter value
  * @param {string} str value to escape
  * @returns {string} escaped value
@@ -229,13 +247,20 @@ function splitFilename(filename) {
 /**
  * Returns a description of the filetype from uri
  * @param {string} uri the uri
+ * @param {boolean} long return long description?
  * @returns {string} description of filetype
  */
-function filetype(uri) {
+function filetype(uri, long) {
     if (uri === undefined) {
         return '';
     }
+    if (isStreamUri(uri) === true) {
+        return 'Stream';
+    }
     const ext = uri.split('.').pop().toUpperCase();
+    if (long === false) {
+        return ext;
+    }
     switch(ext) {
         case 'MP3':  return ext + smallSpace + nDash + smallSpace + tn('MPEG-1 Audio Layer III');
         case 'FLAC': return ext + smallSpace + nDash + smallSpace + tn('Free Lossless Audio Codec');
@@ -329,14 +354,6 @@ function parseCmd(event, cmd) {
         return window[context][functionToExecute];
     }
     return window[functionName];
-}
-
-/**
- * Gets a unix timestamp
- * @returns {number} the unix timestamp
- */
-function getTimestamp() {
-    return Math.floor(Date.now() / 1000);
 }
 
 /**
@@ -470,18 +487,20 @@ async function httpGet(uri, callback, json) {
         return;
     }
 
+    let data;
     try {
-        const data = json === true
+        data = json === true
             ? await response.json()
             : await response.text();
-        callback(data);
     }
     catch(error) {
         showNotification(tn('API error') + '\n' + tn('Can not parse response from %{uri}', {"uri": uri}), 'general', 'error');
         logError('Can not parse response from ' + uri);
         logError(error);
         callback(null);
+        return;
     }
+    callback(data);
 }
 
 /**
@@ -502,15 +521,15 @@ function getMyMPDuri(proto) {
 
 /**
  * Parses a string to seconds
- * @param {string} value [hh:]mm:ss value to parse
+ * @param {string} value [hh:][mm:]ss value to parse
  * @returns {number} value in seconds
  */
 function parseToSeconds(value) {
     let match = value.match(/(\d+):(\d+):(\d+)/);
     if (match) {
         return Number(match[1]) * 60 * 60 +
-            Number(match[1]) * 60 +
-            Number(match[2]);
+            Number(match[2]) * 60 +
+            Number(match[3]);
     }
     match = value.match(/(\d+):(\d+)/);
     if (match) {
@@ -547,7 +566,7 @@ function initLinks(root) {
 }
 
 /**
- * Tries to convert a strint to number or bool
+ * Tries to convert a string to number or bool
  * @param {string} str string to convert
  * @returns {string|number|boolean} parsed string
  */
@@ -562,4 +581,25 @@ function convertType(str) {
         return Number(str);
     }
     return str;
+}
+
+/**
+ * Gets a unix timestamp
+ * @returns {number} the unix timestamp
+ */
+function getTimestamp() {
+    return Math.floor(Date.now() / 1000);
+}
+
+/**
+ * Parses a YYYY-MM-DD string to unix timestamp
+ * @param {string} value string to parses
+ * @returns {number} unix timestamp
+ */
+function parseDateFromText(value) {
+    const m = value.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (m !== null) {
+        return Date.parse(value) / 1000;
+    }
+    return NaN;
 }

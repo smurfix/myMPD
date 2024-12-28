@@ -1,9 +1,11 @@
 "use strict";
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+const subdir = window.location.pathname.replace('/test/apitest.html', '').replace(/\/$/, '');
 
 const cmds = Object.keys(APImethods);
 let i = 0;
@@ -51,7 +53,7 @@ async function sendAPI(method) {
     const request = {"jsonrpc": "2.0", "id": 0, "method": method, "params": apiParamsToObject(APImethods[method].params)};
     document.getElementsByTagName('h5')[0].textContent = 'Running ' + JSON.stringify(request);
     time_start = new Date().getTime();
-    const uri = '/api/default';
+    const uri = subdir + '/api/default';
     const response = await fetch(uri, {
         method: 'POST',
         mode: 'same-origin',

@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module contextMenuOffcanvas_js */
@@ -34,25 +34,22 @@ function showContextMenuOffcanvas(target, contextMenuType) {
     const contextMenu = BSN.Offcanvas.getInstance(contextMenuEl);
 
     switch (contextMenuType) {
-        case 'columns':
-            //column select in table header
-            createContextMenuOffcanvas(target, contextMenuEl, 'cols', createMenuColumns, undefined);
+        case 'viewSettings':
+            //view settings
+            createContextMenuOffcanvas(target, contextMenuEl, contextMenuType, createMenuViewSettings, undefined);
             break;
         case 'disc':
-            //disc actions in album details view
-            createContextMenuOffcanvas(target, contextMenuEl, 'disc', addMenuItemsDiscActions, undefined);
+        case 'work':
+            //disc and work actions in album details view
+            createContextMenuOffcanvas(target, contextMenuEl, contextMenuType, addMenuItemsAlbumTagActions, undefined);
             break;
-        case 'home':
-            //home card actions
-            createContextMenuOffcanvas(target, contextMenuEl, '', createMenuHome, createMenuHomeSecondary);
+        case 'homeIcon':
+            //home card icon actions
+            createContextMenuOffcanvas(target, contextMenuEl, '', createMenuHomeIcon, createMenuHomeIconSecondary);
             break;
-        case 'webradio':
-            //webradio favorite actions
-            createContextMenuOffcanvas(target, contextMenuEl, 'webradio', addMenuItemsWebradioFavoritesActions, undefined);
-            break;
-        case 'album':
-            //album action in album list
-            createContextMenuOffcanvas(target, contextMenuEl, 'album', addMenuItemsAlbumActions, undefined);
+        case 'homeWidget':
+            //home card widgets actions
+            createContextMenuOffcanvas(target, contextMenuEl, '', createMenuHomeWidget, undefined);
             break;
         default:
             createContextMenuOffcanvas(target, contextMenuEl, '', createMenuLists, createMenuListsSecondary);
@@ -71,6 +68,7 @@ function createContextMenuOffcanvasInit(contextMenuEl, type) {
     const contextMenuBody = contextMenuEl.querySelector('.offcanvas-body');
     contextMenuBody.removeAttribute('id');
     contextMenuBody.classList.remove('px-3');
+    contextMenuBody.scrollTop = 0;
     elClear(contextMenuHeader);
     elClear(contextMenuBody);
     //title

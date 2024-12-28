@@ -1,7 +1,7 @@
 "use strict";
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -10,6 +10,8 @@ let j = 0;
 let t = 0;
 const blns_len = blns.length;
 let cmds;
+
+const subdir = window.location.pathname.replace('/test/fuzzer.html', '').replace(/\/$/, '');
 
 function defineCmds() {
     let newCmds = [];
@@ -64,7 +66,7 @@ function apiParamsToObject(p) {
 
 function setTest(cmd, response) {
     var tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + e(JSON.stringify(cmd)) + '</td><td>' + response + '</td>';
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + e(JSON.stringify(cmd)) + '</td><td>' + e(response) + '</td>';
     const tbody = document.getElementsByTagName('tbody')[0];
     tbody.appendChild(tr);
     t++;
@@ -99,7 +101,7 @@ async function sendAPI(id) {
     }
     const request = cmds[id];
     let sleep = 0;
-    const uri = '/api/default';
+    const uri = subdir + '/api/default';
     const response = await fetch(uri, {
         method: 'POST',
         mode: 'same-origin',

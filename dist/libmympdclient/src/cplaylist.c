@@ -1,38 +1,17 @@
-/* libmpdclient
-   (c) 2003-2019 The Music Player Daemon Project
-   This project's homepage is: http://www.musicpd.org
-
-   Redistribution and use in source and binary forms, with or without
-   modification, are permitted provided that the following conditions
-   are met:
-
-   - Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
-
-   - Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
-
-   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-   ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-   A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR
-   CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-   EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-   PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-   PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright The Music Player Daemon Project
 
 #include <mpd/playlist.h>
+#include <mpd/connection.h>
 #include <mpd/position.h>
 #include <mpd/send.h>
 #include <mpd/response.h>
+#include "internal.h"
 #include "isend.h"
+#include "request.h"
 #include "run.h"
 
+#include <assert.h>
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
@@ -55,9 +34,23 @@ mpd_send_list_playlist(struct mpd_connection *connection, const char *name)
 }
 
 bool
+mpd_send_list_playlist_range(struct mpd_connection *connection, const char *name,
+			     unsigned start, unsigned end)
+{
+	return mpd_send_s_range_command(connection, "listplaylist", name, start, end);
+}
+
+bool
 mpd_send_list_playlist_meta(struct mpd_connection *connection, const char *name)
 {
 	return mpd_send_command(connection, "listplaylistinfo", name, NULL);
+}
+
+bool
+mpd_send_list_playlist_range_meta(struct mpd_connection *connection, const char *name,
+				  unsigned start, unsigned end)
+{
+	return mpd_send_s_range_command(connection, "listplaylistinfo", name, start, end);
 }
 
 bool
@@ -323,4 +316,69 @@ mpd_run_rm(struct mpd_connection *connection, const char *name)
 	return mpd_run_check(connection) &&
 		mpd_send_rm(connection, name) &&
 		mpd_response_finish(connection);
+}
+
+bool
+mpd_send_playlistlength(struct mpd_connection *connection, const char *name)
+{
+	return mpd_send_command(connection, "playlistlength", name, NULL);
+}
+
+bool
+mpd_playlist_search_begin(struct mpd_connection *connection, const char *name,
+			  const char *expression)
+{
+	assert(name != NULL);
+	assert(expression != NULL);
+
+	if (!mpd_request_begin(connection))
+		return false;
+
+	char *arg_name = mpd_sanitize_arg(name);
+	if (arg_name == NULL) {
+		mpd_error_code(&connection->error, MPD_ERROR_OOM);
+		return false;
+	}
+
+	char *arg_expression = mpd_sanitize_arg(expression);
+	if (arg_expression == NULL) {
+		mpd_error_code(&connection->error, MPD_ERROR_OOM);
+		free(arg_name);
+		return false;
+	}
+
+	const size_t size = 17 + strlen(arg_name) + 3 + strlen(arg_expression) + 2;
+	connection->request = malloc(size);
+	if (connection->request == NULL) {
+		mpd_error_code(&connection->error, MPD_ERROR_OOM);
+		free(arg_name);
+		free(arg_expression);
+		return false;
+	}
+
+	snprintf(connection->request, size, "searchplaylist \"%s\" \"%s\"",
+		arg_name, arg_expression);
+
+	free(arg_name);
+	free(arg_expression);
+	return true;
+}
+
+bool
+mpd_playlist_search_add_window(struct mpd_connection *connection,
+			       unsigned start, unsigned end)
+{
+	return mpd_request_add_window(connection, start, end);
+}
+
+bool
+mpd_playlist_search_commit(struct mpd_connection *connection)
+{
+	return mpd_request_commit(connection);
+}
+
+void
+mpd_playlist_search_cancel(struct mpd_connection *connection)
+{
+	mpd_request_cancel(connection);
 }

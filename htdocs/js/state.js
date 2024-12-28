@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module state_js */
@@ -11,6 +11,16 @@
  */
 function clearMPDerror() {
     sendAPI('MYMPD_API_PLAYER_CLEARERROR',{}, function() {
+        getState();
+    }, false);
+}
+
+/**
+ * Clears the jukebox error
+ * @returns {void}
+ */
+function clearJukeboxError() {
+    sendAPI('MYMPD_API_JUKEBOX_CLEARERROR',{}, function() {
         getState();
     }, false);
 }
@@ -58,7 +68,7 @@ function setCounter() {
 
     //synced lyrics
     if (showSyncedLyrics === true &&
-        settings.colsPlayback.includes('Lyrics'))
+        settings.viewPlayback.fields.includes('Lyrics'))
     {
         const sl = elGetById('currentLyrics');
         const toHighlight = sl.querySelector('[data-sec="' + currentState.elapsedTime + '"]');
@@ -144,19 +154,21 @@ function parseState(obj) {
     //clear playback card if no current song
     if (obj.result.songPos === -1) {
         document.title = 'myMPD';
-        elGetById('PlaybackTitle').textContent = tn('Not playing');
+        const playbackTitleEl = elGetById('PlaybackTitle');
         const footerTitleEl = elGetById('footerTitle');
+        playbackTitleEl.textContent = tn('Not playing');
         footerTitleEl.textContent = tn('Not playing');
         footerTitleEl.removeAttribute('title');
         footerTitleEl.classList.remove('clickable');
+        playbackTitleEl.classList.remove('clickable');
         elGetById('footerCover').classList.remove('clickable');
-        elGetById('PlaybackTitle').classList.remove('clickable');
         elGetById('PlaybackCover').classList.remove('clickable');
         clearCurrentCover();
         const pb = document.querySelectorAll('#PlaybackListTags p');
         for (let i = 0, j = pb.length; i < j; i++) {
             elClear(pb[i]);
         }
+        elClearId('footerAudioFormat');
     }
     else {
         const cff = elGetById('currentAudioFormat');
@@ -166,10 +178,13 @@ function parseState(obj) {
                 printValue('AudioFormat', obj.result.AudioFormat)
             );
         }
+        elReplaceChildId('footerAudioFormat', printValue('AudioFormat', obj.result.AudioFormat));
     }
 
     //handle error from mpd status response
     toggleAlert('alertMpdStatusError', (obj.result.lastError === '' ? false : true), obj.result.lastError);
+    //handle jukebox error status
+    toggleAlert('alertJukeboxStatusError', (obj.result.lastJukeboxError === '' ? false : true), obj.result.lastJukeboxError);
 
     //handle mpd update status
     toggleAlert('alertUpdateDBState', (obj.result.updateState === 0 ? false : true), tn('Updating MPD database'));
@@ -294,7 +309,7 @@ function setBackgroundImage(el, url) {
     const old = el.parentNode.querySelectorAll(el.tagName + '> div.albumartbg');
     //do not update if url is the same
     if (old[0] &&
-        getData(old[0], 'uri') === bgImageUrl)
+        getData(old[0], 'uri') === url)
     {
         logDebug('Background image already set for: ' + el.tagName);
         return;
@@ -316,7 +331,7 @@ function setBackgroundImage(el, url) {
     }
     div.style.backgroundImage = 'url("' + bgImageUrl + '")';
     div.style.opacity = 0;
-    setData(div, 'uri', bgImageUrl);
+    setData(div, 'uri', url);
     el.insertBefore(div, el.firstChild);
     //create dummy img element for preloading and fade-in
     const img = new Image();

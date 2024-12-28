@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module clickActions_js */
@@ -11,26 +11,30 @@
  * @returns {void}
  */
 function clickQuickRemove(target) {
+    let dataNode = target.parentNode.parentNode;
+    if (dataNode.classList.contains('row')) {
+        dataNode = dataNode.parentNode;
+    }
     switch(app.id) {
         case 'QueueCurrent': {
-            const songId = getData(target.parentNode.parentNode, 'songid');
+            const songId = getData(dataNode, 'songid');
             removeFromQueueIDs([songId]);
             break;
         }
         case 'BrowsePlaylistList': {
-            const plist = getData(target.parentNode.parentNode, 'uri');
+            const plist = getData(dataNode, 'uri');
             showDelPlaylist([plist]);
             break;
         }
         case 'BrowsePlaylistDetail': {
-            const pos = getData(target.parentNode.parentNode, 'pos');
+            const pos = getData(dataNode, 'pos');
             const plist = getDataId('BrowsePlaylistDetailList', 'uri');
             removeFromPlaylistPositions(plist, [pos]);
             break;
         }
         case 'QueueJukeboxSong':
         case 'QueueJukeboxAlbum': {
-            const pos = getData(target.parentNode.parentNode, 'pos');
+            const pos = getData(dataNode, 'pos');
             delQueueJukeboxEntries([pos]);
             break;
         }
@@ -45,17 +49,32 @@ function clickQuickRemove(target) {
  * @returns {void}
  */
 function clickQuickPlay(target) {
-    const type = getData(target.parentNode.parentNode, 'type');
-    const uri = type === 'album'
-        ? getData(target.parentNode.parentNode, 'AlbumId')
-        : getData(target.parentNode.parentNode, 'uri');
+    let dataNode = target.parentNode.parentNode;
+    if (dataNode.classList.contains('row')) {
+        dataNode = dataNode.parentNode;
+    }
+    const type = getData(dataNode, 'type');
+    const uri = [];
+    switch(type) {
+        case 'album':
+            uri.push(getData(dataNode, 'AlbumId'));
+            break;
+        case 'disc':
+            uri.push(getData(dataNode, 'AlbumId'), getData(dataNode, 'Disc'));
+            break;
+        case 'work':
+            uri.push(getData(dataNode, 'AlbumId'), getData(dataNode, 'Work'));
+            break;
+        default:
+            uri.push(getData(dataNode, 'uri'));
+    }
     switch (settings.webuiSettings.clickQuickPlay) {
-        case 'append': return appendQueue(type, [uri]);
-        case 'appendPlay': return appendPlayQueue(type, [uri]);
-        case 'insertAfterCurrent': return insertAfterCurrentQueue(type, [uri]);
-        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue(type, [uri]);
-        case 'replace': return replaceQueue(type, [uri]);
-        case 'replacePlay': return replacePlayQueue(type, [uri]);
+        case 'append': return appendQueue(type, uri);
+        case 'appendPlay': return appendPlayQueue(type, uri);
+        case 'insertAfterCurrent': return insertAfterCurrentQueue(type, uri);
+        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue(type, uri);
+        case 'replace': return replaceQueue(type, uri);
+        case 'replacePlay': return replacePlayQueue(type, uri);
         default: logError('Invalid action: ' + settings.webuiSettings.clickQuickPlay);
     }
 }
@@ -81,35 +100,13 @@ function clickSong(uri, event) {
 }
 
 /**
- * Handler for radiobrowser links
- * @param {string} uri stream uri
- * @param {string} uuid radiobrowser station uuid
- * @param {event} event the event
- * @returns {void}
- */
-function clickRadiobrowser(uri, uuid, event) {
-    switch (settings.webuiSettings.clickRadiobrowser) {
-        case 'append': return appendQueue('song', [uri]);
-        case 'appendPlay': return appendPlayQueue('song', [uri]);
-        case 'insertAfterCurrent': return insertAfterCurrentQueue('song', [uri]);
-        case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('song', [uri]);
-        case 'replace': return replaceQueue('song', [uri]);
-        case 'replacePlay': return replacePlayQueue('song', [uri]);
-        case 'view': return showRadiobrowserDetails(uuid);
-        case 'context': return showContextMenu(event);
-        default: logError('Invalid action: ' + settings.webuiSettings.clickRadiobrowser);
-    }
-    countClickRadiobrowser(uuid);
-}
-
-/**
  * Handler for webradioDB links
  * @param {string} uri stream uri
  * @param {event} event the event
  * @returns {void}
  */
 function clickWebradiodb(uri, event) {
-    switch (settings.webuiSettings.clickRadiobrowser) {
+    switch (settings.webuiSettings.clickWebradiodb) {
         case 'append': return appendQueue('song', [uri]);
         case 'appendPlay': return appendPlayQueue('song', [uri]);
         case 'insertAfterCurrent': return insertAfterCurrentQueue('song', [uri]);
@@ -118,7 +115,7 @@ function clickWebradiodb(uri, event) {
         case 'replacePlay': return replacePlayQueue('song', [uri]);
         case 'view': return showWebradiodbDetails(uri);
         case 'context': return showContextMenu(event);
-        default: logError('Invalid action: ' + settings.webuiSettings.clickRadiobrowser);
+        default: logError('Invalid action: ' + settings.webuiSettings.clickWebradiodb);
     }
 }
 
@@ -186,7 +183,7 @@ function clickPlaylist(uri, event) {
         case 'insertPlayAfterCurrent': return insertPlayAfterCurrentQueue('plist', [uri]);
         case 'replace': return replaceQueue('plist', [uri]);
         case 'replacePlay': return replacePlayQueue('plist', [uri]);
-        case 'view': return playlistDetails(uri);
+        case 'view': return gotoPlaylist(uri);
         case 'context': return showContextMenu(event);
         default: logError('Invalid action: ' + settings.webuiSettings.clickPlaylist);
     }
@@ -208,12 +205,12 @@ function clickFilesystemPlaylist(uri, event) {
         case 'replacePlay': return replacePlayQueue('plist', [uri]);
         case 'view':
             //remember offset for current browse uri
-            browseFilesystemHistory[app.current.search] = {
+            browseFilesystemHistory[app.current.filter] = {
                 "offset": app.current.offset,
                 "scrollPos": document.body.scrollTop ? document.body.scrollTop : document.documentElement.scrollTop
             };
-            //reset filter and show playlist
-            app.current.filter = '-';
+            //reset search and show playlist
+            app.current.search = '';
             appGoto('Browse', 'Filesystem', undefined, 0, app.current.limit, uri, app.current.sort, 'plist', '', 0);
             break;
         case 'context': return showContextMenu(event);
@@ -228,11 +225,12 @@ function clickFilesystemPlaylist(uri, event) {
  */
 function clickFolder(uri) {
     //remember offset for current browse uri
-    browseFilesystemHistory[app.current.search] = {
+    browseFilesystemHistory[app.current.filter] = {
         "offset": app.current.offset,
         "scrollPos": getScrollPosY()
     };
-    //reset filter and open folder
+    //reset search and open folder
+    app.current.search = '';
     appGoto('Browse', 'Filesystem', undefined, 0, app.current.limit, uri, app.current.sort, 'dir', '', 0);
 }
 
@@ -272,10 +270,7 @@ function seekRelative(offset) {
 function clickPlay() {
     switch(currentState.state) {
         case 'play':
-            if (settings.webuiSettings.footerPlaybackControls === 'stop' ||
-                isStreamUri(currentSongObj.uri) === true)
-            {
-                //always stop streams
+            if (settings.webuiSettings.footerPlaybackControls === 'stop') {
                 sendAPI("MYMPD_API_PLAYER_STOP", {}, null, false);
             }
             else {
@@ -372,7 +367,6 @@ function clickGotoPos() {
  * @returns {void}
  */
 function toggleAdvPlaycontrolsPopover(event) {
-    console.log(event.target.closest('.dropdown'));
     if (event.target.closest('.dropdown-menu') !== null) {
         return;
     }
@@ -421,4 +415,64 @@ function clickConsume(mode) {
     sendAPI("MYMPD_API_PLAYER_OPTIONS_SET", {
         "consume": mode
     }, null, false);
+}
+
+/**
+ * Handler for resume song dropdown actions
+ * @param {Event} event Click event
+ * @returns {void}
+ */
+function clickResumeSong(event) {
+    event.preventDefault();
+    if (event.target.nodeName !== 'BUTTON') {
+        return;
+    }
+    const dataNode = event.target.closest('.btn-group');
+    const uri = getData(dataNode, 'uri');
+    const action = event.target.getAttribute('data-action');
+    resumeSong(uri, action);
+}
+
+/**
+ * Handler for song resume - click on resume indicator
+ * @param {EventTarget} target event target
+ * @returns {void}
+ */
+function clickQuickResumeSong(target) {
+    const uri = getData(target, 'uri');
+    resumeSong(uri, settings.webuiSettings.clickQuickPlay);
+}
+
+/**
+ * Handler for resume playlist dropdown actions
+ * @param {Event} event Click event
+ * @returns {void}
+ */
+function clickResumePlist(event) {
+    event.preventDefault();
+    if (event.target.nodeName !== 'BUTTON') {
+        return;
+    }
+    const dataNode = event.target.closest('.btn-group');
+    const pos = getData(dataNode, 'pos');
+    const uri = getDataId('BrowsePlaylistDetailList', 'uri');
+    const action = event.target.getAttribute('data-action');
+    resumePlist(uri, pos, action);
+}
+
+/**
+ * Handler for resume album dropdown actions
+ * @param {Event} event Click event
+ * @returns {void}
+ */
+function clickResumeAlbum(event) {
+    event.preventDefault();
+    if (event.target.nodeName !== 'BUTTON') {
+        return;
+    }
+    const dataNode = event.target.closest('.btn-group');
+    const pos = getData(dataNode, 'pos');
+    const albumId = getDataId('viewDatabaseAlbumDetailCover', 'AlbumId');
+    const action = event.target.getAttribute('data-action');
+    resumeAlbum(albumId, pos, action);
 }

@@ -1,8 +1,12 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief MPD connection handling
+ */
 
 #include "compile_time.h"
 #include "src/mpd_client/connection.h"
@@ -13,17 +17,16 @@
 #include "src/lib/log.h"
 #include "src/lib/sds_extras.h"
 #include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/features.h"
+#include "src/mpd_client/shortcuts.h"
 #include "src/mpd_client/tags.h"
-#include "src/mympd_api/trigger.h"
+#include "src/mympd_api/requests.h"
 
 /**
  * Connects to mpd and sets initial connection settings
  * @param partition_state pointer to partition state
- * @param detect_feat true = run feature detection, else not
  * @return true on success, else false
  */
-bool mpd_client_connect(struct t_partition_state *partition_state, bool detect_feat) {
+bool mpd_client_connect(struct t_partition_state *partition_state) {
     if (partition_state->mpd_state->mpd_host[0] == '/') {
         MYMPD_LOG_NOTICE(partition_state->name, "Connecting to socket \"%s\"", partition_state->mpd_state->mpd_host);
     }
@@ -71,15 +74,8 @@ bool mpd_client_connect(struct t_partition_state *partition_state, bool detect_f
 
     MYMPD_LOG_NOTICE(partition_state->name, "Connected to MPD");
     partition_state->conn_state = MPD_CONNECTED;
-    //get mpd features
-    if (detect_feat == true) {
-        mpd_client_mpd_features(partition_state);
-    }
     //set connection options
     mpd_client_set_connection_options(partition_state);
-    //reset reconnection intervals
-    partition_state->reconnect_interval = 0;
-    partition_state->reconnect_time = 0;
     return true;
 }
 
@@ -88,7 +84,7 @@ bool mpd_client_connect(struct t_partition_state *partition_state, bool detect_f
  * @param partition_state pointer to partition state
  * @return true on success, else false
  */
-bool mpd_client_set_keepalive(struct t_partition_state *partition_state) {
+static bool mpd_client_set_keepalive(struct t_partition_state *partition_state) {
     if (partition_state->mpd_state->mpd_keepalive == true) {
         MYMPD_LOG_INFO(partition_state->name, "Enabling keepalive");
     }
@@ -103,78 +99,84 @@ bool mpd_client_set_keepalive(struct t_partition_state *partition_state) {
  * @param partition_state pointer to partition state
  * @return true on success, else false
  */
-bool mpd_client_set_timeout(struct t_partition_state *partition_state) {
+static bool mpd_client_set_timeout(struct t_partition_state *partition_state) {
     MYMPD_LOG_INFO(partition_state->name, "Setting timeout to %u ms", partition_state->mpd_state->mpd_timeout);
     mpd_connection_set_timeout(partition_state->conn, partition_state->mpd_state->mpd_timeout);
     return true;
 }
 
 /**
- * Sets the binary limit
+ * Sets mpd connection options binarylimit and protocol features
  * @param partition_state pointer to partition state
  * @return true on success, else false
  */
-bool mpd_client_set_binarylimit(struct t_partition_state *partition_state) {
-    bool rc = true;
-    if (partition_state->mpd_state->feat_binarylimit == true) {
-        MYMPD_LOG_INFO(partition_state->name, "Setting binarylimit to %u kB", partition_state->mpd_state->mpd_binarylimit);
-        mpd_run_binarylimit(partition_state->conn, partition_state->mpd_state->mpd_binarylimit);
-        sds message = sdsempty();
-        if (mympd_check_error_and_recover_notify(partition_state, &message, "mpd_run_binarylimit") == false) {
-            ws_notify(message, partition_state->name);
-            rc = false;
+static bool mpd_client_set_protocol_options(struct t_partition_state *partition_state) {
+    if (mpd_command_list_begin(partition_state->conn, false)) {
+        if (mpd_connection_cmp_server_version(partition_state->conn, 0, 22, 4) >= 0 ) {
+            MYMPD_LOG_INFO(partition_state->name, "Setting binarylimit to %u kB", partition_state->mpd_state->mpd_binarylimit);
+            if (mpd_send_binarylimit(partition_state->conn, partition_state->mpd_state->mpd_binarylimit) == false) {
+                mympd_set_mpd_failure(partition_state, "Failure adding command to command list mpd_send_binarylimit");
+            }
         }
-        FREE_SDS(message);
+        if (mpd_connection_cmp_server_version(partition_state->conn, 0, 24, 0) >= 0 ) {
+            MYMPD_LOG_INFO(partition_state->name, "Enabling all protocol features");
+            if (mpd_send_all_protocol_features(partition_state->conn) == false) {
+                mympd_set_mpd_failure(partition_state, "Failure adding command to command list mpd_send_all_protocol_features");
+            }
+        }
+        if (mpd_client_command_list_end_check(partition_state) == false) {
+            sds message = sdsnew("Failure setting protocol options");
+            ws_notify(message, partition_state->name);
+            FREE_SDS(message);
+        }
     }
-    return rc;
+    mpd_response_finish(partition_state->conn);
+    return mympd_check_error_and_recover(partition_state, NULL, "protocol options");
 }
 
 /**
- * Sets mpd connection options binarylimit, keepalive and timeout
+ * Sets mpd connection settings and features
  * @param partition_state pointer to partition state
  * @return true on success, else false
  */
 bool mpd_client_set_connection_options(struct t_partition_state *partition_state) {
-    return mpd_client_set_binarylimit(partition_state) &&
-        mpd_client_set_keepalive(partition_state) &&
+    return mpd_client_set_keepalive(partition_state) &&
         mpd_client_set_timeout(partition_state) &&
-        enable_mpd_tags(partition_state, &partition_state->mpd_state->tags_mympd);;
+        mpd_client_set_protocol_options(partition_state) &&
+        enable_mpd_tags(partition_state, &partition_state->mpd_state->tags_mympd);
 }
 
 /**
  * Disconnects from MPD, sends a notification and execute triggers
  * @param partition_state pointer to partition state
- * @param new_conn_state new connection state
  */
-void mpd_client_disconnect(struct t_partition_state *partition_state, enum mpd_conn_states new_conn_state) {
-    mpd_client_disconnect_silent(partition_state, new_conn_state);
+void mpd_client_disconnect(struct t_partition_state *partition_state) {
+    mpd_client_disconnect_silent(partition_state);
     send_jsonrpc_event(JSONRPC_EVENT_MPD_DISCONNECTED, partition_state->name);
-    mympd_api_trigger_execute(&partition_state->mympd_state->trigger_list, TRIGGER_MYMPD_DISCONNECTED, partition_state->name);
+    mympd_api_request_trigger_event_emit(TRIGGER_MYMPD_DISCONNECTED, partition_state->name);
 }
 
 /**
  * Disconnects from MPD silently
  * @param partition_state pointer to partition state
- * @param new_conn_state new connection state
  */
-void mpd_client_disconnect_silent(struct t_partition_state *partition_state, enum mpd_conn_states new_conn_state) {
+void mpd_client_disconnect_silent(struct t_partition_state *partition_state) {
     if (partition_state->conn != NULL) {
         MYMPD_LOG_INFO(partition_state->name, "Disconnecting from mpd");
         mpd_connection_free(partition_state->conn);
     }
     partition_state->conn = NULL;
-    partition_state->conn_state = new_conn_state;
+    partition_state->conn_state = MPD_DISCONNECTED;
 }
 
 /**
  * Disconnects all MPD partitions
  * @param mympd_state pointer to central myMPD state
- * @param new_conn_state new connection state
  */
-void mpd_client_disconnect_all(struct t_mympd_state *mympd_state, enum mpd_conn_states new_conn_state) {
+void mpd_client_disconnect_all(struct t_mympd_state *mympd_state) {
     struct t_partition_state *partition_state = mympd_state->partition_state;
     while (partition_state != NULL) {
-        mpd_client_disconnect(partition_state, new_conn_state);
+        mpd_client_disconnect(partition_state);
         partition_state = partition_state->next;
     }
 }

@@ -1,8 +1,12 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief Utility functions
+ */
 
 #include "compile_time.h"
 #include "src/lib/utility.h"
@@ -34,7 +38,7 @@ static sds get_local_ip(void);
  * Sleep function that is interuptable
  * @param msec milliseconds to sleep
  */
-void my_msleep(long msec) {
+void my_msleep(int msec) {
     struct timespec ts = {
         .tv_sec = (time_t)(msec / 1000),
         .tv_nsec = (msec % 1000L) * 1000000L
@@ -185,7 +189,10 @@ sds replace_file_extension(sds filename, const char *ext) {
     return newname;
 }
 
-static const char *invalid_filename_chars = "<>/.:?&$!#=;\a\b\f\n\r\t\v\\|";
+/**
+ * Invalid and uncommen characters for filenames.
+ */
+static const char *invalid_filename_chars = "<>/.:?&$%!#=;\a\b\f\n\r\t\v\\|";
 
 /**
  * Replaces invalid and uncommon filename characters with "_"
@@ -202,6 +209,9 @@ void sanitize_filename(sds filename) {
     }
 }
 
+/**
+ * Invalid characters for filenames.
+ */
 static const char *invalid_filename_chars2 = "\a\b\f\n\r\t\v/\\";
 
 /**
@@ -228,9 +238,12 @@ struct t_mympd_uris {
     const char *resolved;  //!< resolved path
 };
 
+/**
+ * Struct for mapping the special mympd:// uris
+ */
 const struct t_mympd_uris mympd_uris[] = {
-    {"mympd://webradio/", "/browse/"DIR_WORK_WEBRADIOS"/"},
-    {"mympd://", "/"},
+    {"mympd://webradio/", "/webradio?uri=" },
+    {"mympd://",          "/"},
     {NULL,                NULL}
 };
 
@@ -239,9 +252,10 @@ const struct t_mympd_uris mympd_uris[] = {
  * @param uri uri to resolv
  * @param mpd_host mpd host
  * @param config pointer to config struct
+ * @param prefer_ssl Prefer https over http
  * @return resolved uri
  */
-sds resolv_mympd_uri(sds uri, sds mpd_host, struct t_config *config) {
+sds resolv_mympd_uri(sds uri, sds mpd_host, struct t_config *config, bool prefer_ssl) {
     const struct t_mympd_uris *p = NULL;
     for (p = mympd_uris; p->uri != NULL; p++) {
         size_t len = strlen(p->uri);
@@ -255,9 +269,12 @@ sds resolv_mympd_uri(sds uri, sds mpd_host, struct t_config *config) {
                 return new_uri;
             }
             //calculate uri
+            //we prefer http only to avoid the complex ssl trust configuration
+            //use ssl only if there is no http listener
             sds host = get_mympd_host(mpd_host, config->http_host);
-            if (config->http == false) {
-                //use ssl port
+            if (config->http == false ||
+                (prefer_ssl == true && config->ssl == true))
+            {
                 new_uri = sdscatfmt(new_uri, "https://%S:%i%s%S", host, config->ssl_port, p->resolved, uri);
             }
             else {

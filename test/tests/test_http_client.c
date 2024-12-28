@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -19,15 +19,9 @@ UTEST(http_client, test_http_client) {
         .post_data = ""
     };
 
-    struct mg_client_response_t response = {
-        .rc = -1,
-        .response_code = 0,
-        .header = sdsempty(),
-        .body = sdsempty()
-    };
-
+    struct mg_client_response_t response;
+    http_client_response_init(&response);
     http_client_request(&request, &response);
-    sdsfree(response.header);
-    sdsfree(response.body);
+    http_client_response_clear(&response);
     ASSERT_EQ(0, response.rc);
 }

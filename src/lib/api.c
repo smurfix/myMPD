@@ -1,13 +1,16 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief myMPD API handling
+ */
 
 #include "compile_time.h"
 #include "src/lib/api.h"
 
-#include "dist/libmympdclient/include/mpd/client.h"
 #include "src/lib/log.h"
 #include "src/lib/mem.h"
 #include "src/lib/msg_queue.h"
@@ -15,6 +18,9 @@
 
 #include <string.h>
 
+/**
+ * myMPD API methods as strings
+ */
 static const char *mympd_cmd_strs[] = { MYMPD_CMDS(GEN_STR) };
 
 /**
@@ -51,8 +57,8 @@ const char *get_cmd_id_method_name(enum mympd_cmd_ids cmd_id) {
 bool is_protected_api_method(enum mympd_cmd_ids cmd_id) {
     switch(cmd_id) {
         case MYMPD_API_CONNECTION_SAVE:
-        case MYMPD_API_COVERCACHE_CLEAR:
-        case MYMPD_API_COVERCACHE_CROP:
+        case MYMPD_API_CACHE_DISK_CLEAR:
+        case MYMPD_API_CACHE_DISK_CROP:
         case MYMPD_API_MOUNT_MOUNT:
         case MYMPD_API_MOUNT_UNMOUNT:
         case MYMPD_API_PARTITION_NEW:
@@ -72,6 +78,9 @@ bool is_protected_api_method(enum mympd_cmd_ids cmd_id) {
         case MYMPD_API_TRIGGER_RM:
         case MYMPD_API_TRIGGER_SAVE:
         case MYMPD_API_LOGLEVEL:
+        case MYMPD_API_SCRIPT_VAR_DELETE:
+        case MYMPD_API_SCRIPT_VAR_LIST:
+        case MYMPD_API_SCRIPT_VAR_SET:
             return true;
         default:
             return false;
@@ -79,7 +88,7 @@ bool is_protected_api_method(enum mympd_cmd_ids cmd_id) {
 }
 
 /**
- * Defines methods that are internal
+ * Defines methods that are public
  * @param cmd_id myMPD API method
  * @return true if public else false
  */
@@ -93,17 +102,109 @@ bool is_public_api_method(enum mympd_cmd_ids cmd_id) {
 }
 
 /**
- * Defines methods that should work with no mpd connection,
- * this is necessary for correct startup and changing mpd connection settings.
+ * Defines methods that are accessible by scripts
  * @param cmd_id myMPD API method
- * @return true if method works with no mpd connection else false
+ * @return true if public else false
+ */
+bool is_script_api_method(enum mympd_cmd_ids cmd_id) {
+    switch(cmd_id) {
+        case INTERNAL_API_SCRIPT_INIT:
+        case INTERNAL_API_JUKEBOX_CREATED:
+        case INTERNAL_API_JUKEBOX_ERROR:
+            return true;
+        default:
+        if (cmd_id <= INTERNAL_API_COUNT ||
+            cmd_id >= TOTAL_API_COUNT)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * Defines methods that should be handled if MPD is disconnected.
+ * @param cmd_id myMPD API method
+ * @return true if method works with no mpd connection, else false
+ */
+bool is_mpd_disconnected_api_method(enum mympd_cmd_ids cmd_id) {
+    switch(cmd_id) {
+        case MYMPD_API_SETTINGS_GET:
+        case MYMPD_API_CONNECTION_SAVE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+/**
+ * Defines methods that do not require mpd features in the mympd_api thread.
+ * @param cmd_id myMPD API method
+ * @return true if method works with no mpd connection, else false
  */
 bool is_mympd_only_api_method(enum mympd_cmd_ids cmd_id) {
     switch(cmd_id) {
-        case MYMPD_API_CONNECTION_SAVE:
+        case INTERNAL_API_ALBUMCACHE_SKIPPED:
+        case INTERNAL_API_ALBUMCACHE_ERROR:
+        case INTERNAL_API_JUKEBOX_REFILL:
+        case INTERNAL_API_JUKEBOX_REFILL_ADD:
+        case INTERNAL_API_WEBRADIODB_CREATED:
+        case MYMPD_API_CACHES_CREATE:
+        case MYMPD_API_CACHE_DISK_CLEAR:
+        case MYMPD_API_CACHE_DISK_CROP:
+        case MYMPD_API_DATABASE_ALBUM_LIST:
+        case MYMPD_API_DATABASE_LIST_RANDOM:
+        case MYMPD_API_HOME_ICON_GET:
         case MYMPD_API_HOME_ICON_LIST:
-        case MYMPD_API_SCRIPT_LIST:
-        case MYMPD_API_SETTINGS_GET:
+        case MYMPD_API_HOME_ICON_MOVE:
+        case MYMPD_API_HOME_ICON_RM:
+        case MYMPD_API_HOME_ICON_SAVE:
+        case MYMPD_API_HOME_WIDGET_SAVE:
+        case MYMPD_API_LIKE:
+        case MYMPD_API_LOGLEVEL:
+        case MYMPD_API_PLAYLIST_CONTENT_ENUMERATE:
+        case MYMPD_API_PLAYLIST_CONTENT_DEDUP:
+        case MYMPD_API_PLAYLIST_CONTENT_DEDUP_ALL:
+        case MYMPD_API_PLAYLIST_CONTENT_SHUFFLE:
+        case MYMPD_API_PLAYLIST_CONTENT_SORT:
+        case MYMPD_API_PLAYLIST_CONTENT_VALIDATE:
+        case MYMPD_API_PLAYLIST_CONTENT_VALIDATE_ALL:
+        case MYMPD_API_PLAYLIST_CONTENT_VALIDATE_DEDUP:
+        case MYMPD_API_PLAYLIST_CONTENT_VALIDATE_DEDUP_ALL:
+        case MYMPD_API_QUEUE_ADD_RANDOM:
+        case MYMPD_API_RATING:
+        case MYMPD_API_SMARTPLS_UPDATE:
+        case MYMPD_API_SMARTPLS_UPDATE_ALL:
+        case MYMPD_API_SONG_FINGERPRINT:
+        case MYMPD_API_STICKER_DELETE:
+        case MYMPD_API_STICKER_GET:
+        case MYMPD_API_STICKER_LIST:
+        case MYMPD_API_STICKER_SET:
+        case MYMPD_API_WEBRADIO_FAVORITE_GET_BY_NAME:
+        case MYMPD_API_WEBRADIO_FAVORITE_GET_BY_URI:
+        case MYMPD_API_WEBRADIO_FAVORITE_RM:
+        case MYMPD_API_WEBRADIO_FAVORITE_SAVE:
+        case MYMPD_API_WEBRADIO_FAVORITE_SEARCH:
+        case MYMPD_API_WEBRADIODB_RADIO_GET_BY_NAME:
+        case MYMPD_API_WEBRADIODB_RADIO_GET_BY_URI:
+        case MYMPD_API_WEBRADIODB_SEARCH:
+        case MYMPD_API_WEBRADIODB_UPDATE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+/**
+ * Defines methods that do not require mpd features in the mpdworker thread.
+ * @param cmd_id myMPD API method
+ * @return true if method works with no mpd connection, else false
+ */
+bool is_mpdworker_only_api_method(enum mympd_cmd_ids cmd_id) {
+    switch(cmd_id) {
+        case MYMPD_API_CACHE_DISK_CLEAR:
+        case MYMPD_API_CACHE_DISK_CROP:
+        case MYMPD_API_WEBRADIODB_UPDATE:
             return true;
         default:
             return false;
@@ -117,7 +218,7 @@ bool is_mympd_only_api_method(enum mympd_cmd_ids cmd_id) {
  */
 void ws_notify(sds message, const char *partition) {
     MYMPD_LOG_DEBUG(partition, "Push websocket notify to queue: \"%s\"", message);
-    struct t_work_response *response = create_response_new(CONN_ID_NOTIFY_ALL, 0, INTERNAL_API_WEBSERVER_NOTIFY, partition);
+    struct t_work_response *response = create_response_new(RESPONSE_TYPE_NOTIFY_PARTITION, 0, 0, INTERNAL_API_WEBSERVER_NOTIFY, partition);
     response->data = sds_replace(response->data, message);
     mympd_queue_push(web_server_queue, response, 0);
 }
@@ -127,33 +228,54 @@ void ws_notify(sds message, const char *partition) {
  * @param message the message to send
  * @param request_id the jsonrpc id of the client
  */
-void ws_notify_client(sds message, long request_id) {
+void ws_notify_client(sds message, unsigned request_id) {
     MYMPD_LOG_DEBUG(NULL, "Push websocket notify to queue: \"%s\"", message);
-    struct t_work_response *response = create_response_new(CONN_ID_NOTIFY_CLIENT, request_id, INTERNAL_API_WEBSERVER_NOTIFY, MPD_PARTITION_ALL);
+    struct t_work_response *response = create_response_new(RESPONSE_TYPE_NOTIFY_CLIENT, 0, request_id, INTERNAL_API_WEBSERVER_NOTIFY, MPD_PARTITION_ALL);
     response->data = sds_replace(response->data, message);
     mympd_queue_push(web_server_queue, response, 0);
 }
 
 /**
- * Mallocs and initializes a t_work_response struct, copies the ids from the request struct
+ * Sends a websocket message to a client to display a dialog.
+ * @param message The message to send
+ * @param request_id the jsonrpc id of the client
+ */
+void ws_script_dialog(sds message, unsigned request_id) {
+    MYMPD_LOG_DEBUG(NULL, "Push websocket notify to queue: \"%s\"", message);
+    struct t_work_response *response = create_response_new(RESPONSE_TYPE_SCRIPT_DIALOG, 0, request_id, INTERNAL_API_WEBSERVER_NOTIFY, MPD_PARTITION_ALL);
+    response->data = sds_replace(response->data, message);
+    mympd_queue_push(web_server_queue, response, 0);
+}
+
+/**
+ * Mallocs and initializes a t_work_response struct, as reply of the provided request
  * @param request the request the ids are copied
  * @return the initialized t_work_response struct
  */
 struct t_work_response *create_response(struct t_work_request *request) {
-    struct t_work_response *response = create_response_new(request->conn_id, request->id, request->cmd_id, request->partition);
+    enum work_response_types type = RESPONSE_TYPE_DEFAULT;
+    switch(request->type) {
+        case REQUEST_TYPE_DEFAULT: type = RESPONSE_TYPE_DEFAULT; break;
+        case REQUEST_TYPE_SCRIPT:  type = RESPONSE_TYPE_SCRIPT; break;
+        case REQUEST_TYPE_NOTIFY_PARTITION: type = RESPONSE_TYPE_NOTIFY_PARTITION; break;
+        case REQUEST_TYPE_DISCARD: type = RESPONSE_TYPE_DISCARD; break;
+    }
+    struct t_work_response *response = create_response_new(type, request->conn_id, request->id, request->cmd_id, request->partition);
     return response;
 }
 
 /**
  * Mallocs and initializes a t_work_response struct
+ * @param type work response type
  * @param conn_id connection id (from webserver)
  * @param request_id id for the request
  * @param cmd_id myMPD API method
  * @param partition mpd partition
  * @return the initialized t_work_response struct
  */
-struct t_work_response *create_response_new(long long conn_id, long request_id, enum mympd_cmd_ids cmd_id, const char *partition) {
+struct t_work_response *create_response_new(enum work_response_types type, unsigned long conn_id, unsigned request_id, enum mympd_cmd_ids cmd_id, const char *partition) {
     struct t_work_response *response = malloc_assert(sizeof(struct t_work_response));
+    response->type = type;
     response->conn_id = conn_id;
     response->id = request_id;
     response->cmd_id = cmd_id;
@@ -166,6 +288,7 @@ struct t_work_response *create_response_new(long long conn_id, long request_id, 
 
 /**
  * Mallocs and initializes a t_work_request struct
+ * @param type work request type
  * @param conn_id connection id (from webserver)
  * @param request_id id for the request
  * @param cmd_id myMPD API method
@@ -173,8 +296,9 @@ struct t_work_response *create_response_new(long long conn_id, long request_id, 
  * @param partition mpd partition
  * @return the initialized t_work_request struct
  */
-struct t_work_request *create_request(long long conn_id, long request_id, enum mympd_cmd_ids cmd_id, const char *data, const char *partition) {
+struct t_work_request *create_request(enum work_request_types type, unsigned long conn_id, unsigned request_id, enum mympd_cmd_ids cmd_id, const char *data, const char *partition) {
     struct t_work_request *request = malloc_assert(sizeof(struct t_work_request));
+    request->type = type;
     request->conn_id = conn_id;
     request->cmd_id = cmd_id;
     request->id = request_id;
@@ -217,19 +341,63 @@ void free_response(struct t_work_response *response) {
 /**
  * Pushes the response to a queue or frees it
  * @param response pointer to response struct to push
- * @param request_id request id
- * @param conn_id connection id
  * @return true on success, else false
  */
-bool push_response(struct t_work_response *response, long request_id, long long conn_id) {
-    if (conn_id == -2) {
-        MYMPD_LOG_DEBUG(NULL, "Push response to mympd_script_queue for thread %ld: %s", request_id, response->data);
-        return mympd_queue_push(mympd_script_queue, response, request_id);
+bool push_response(struct t_work_response *response) {
+    switch(response->type) {
+        case RESPONSE_TYPE_DEFAULT:
+        case RESPONSE_TYPE_NOTIFY_CLIENT:
+        case RESPONSE_TYPE_NOTIFY_PARTITION:
+        case RESPONSE_TYPE_PUSH_CONFIG:
+        case RESPONSE_TYPE_SCRIPT_DIALOG:
+        case RESPONSE_TYPE_REDIRECT:
+            MYMPD_LOG_DEBUG(NULL, "Push response to webserver queue for connection %lu: %s", response->conn_id, response->data);
+            return mympd_queue_push(web_server_queue, response, 0);
+        case RESPONSE_TYPE_RAW:
+            MYMPD_LOG_DEBUG(NULL, "Push raw response to webserver queue for connection %lu with %lu bytes", response->conn_id, (unsigned long)sdslen(response->data));
+            return mympd_queue_push(web_server_queue, response, 0);
+        case RESPONSE_TYPE_SCRIPT:
+            #ifdef MYMPD_ENABLE_LUA
+                MYMPD_LOG_DEBUG(NULL, "Push response to script_worker_queue for thread %u: %s", response->id, response->data);
+                return mympd_queue_push(script_worker_queue, response, response->id);
+            #endif
+        case RESPONSE_TYPE_DISCARD:
+            // discard response
+            free_response(response);
+            return true;
     }
-    if (conn_id > -1) {
-        MYMPD_LOG_DEBUG(NULL, "Push response to queue for connection %lld: %s", conn_id, response->data);
-        return mympd_queue_push(web_server_queue, response, 0);
-    }
+    // this should not appear
+    MYMPD_LOG_ERROR(NULL, "Invalid response type for connection %lu: %s", response->conn_id, response->data);
     free_response(response);
-    return true;
+    return false;
+}
+
+/**
+ * Pushes the request to a queue
+ * @param request pointer to request struct to push
+ * @param id request id
+ * @return true on success, else false
+ */
+bool push_request(struct t_work_request *request, unsigned id) {
+    switch(request->cmd_id) {
+        case INTERNAL_API_SCRIPT_EXECUTE:
+        case INTERNAL_API_SCRIPT_POST_EXECUTE:
+        case MYMPD_API_SCRIPT_EXECUTE:
+        case MYMPD_API_SCRIPT_GET:
+        case MYMPD_API_SCRIPT_LIST:
+        case MYMPD_API_SCRIPT_RELOAD:
+        case MYMPD_API_SCRIPT_RM:
+        case MYMPD_API_SCRIPT_SAVE:
+        case MYMPD_API_SCRIPT_VALIDATE:
+        case MYMPD_API_SCRIPT_VAR_DELETE:
+        case MYMPD_API_SCRIPT_VAR_LIST:
+        case MYMPD_API_SCRIPT_VAR_SET:
+            #ifdef MYMPD_ENABLE_LUA
+                //forward API request to script thread
+                return mympd_queue_push(script_queue, request, id);
+            #endif
+        default:
+            //forward API request to mympd_api thread
+            return mympd_queue_push(mympd_api_queue, request, id);
+    }
 }

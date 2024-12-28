@@ -1,4 +1,4 @@
-![image](https://jcorporation.github.io/assets/mympd-logo-schriftzug.svg)
+![image](https://jcorporation.github.io/myMPD/assets/mympd-logo-schriftzug.svg)
 
 [![release](https://github.com/jcorporation/myMPD/actions/workflows/build_release.yml/badge.svg)](https://github.com/jcorporation/myMPD/actions/workflows/build_release.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -22,16 +22,17 @@ myMPD also integrates extended features like an advanced jukebox mode, timers, t
 - MPD option presets
 - Queue and playlist management
 - Browse mpd database by tags or filesystem
-- Webradios: [Webradiodb](https://jcorporation.github.io/webradiodb/) and [RadioBrowser](https://www.radio-browser.info/)
 - Advanced search
 - Jukebox mode
 - MPD mount and neighbors support
-- Customizable home screen and navigation bar
+- Customizable navigation bar and footer
+- Home screen with shortcuts and widgets
+- Webradio Favorites and [WebradioDB](https://jcorporation.github.io/webradiodb/)
 - [Smart playlists and saved searches](https://jcorporation.github.io/myMPD/references/smart-playlists)
-- Centralized playback statistics and song voting through MPD stickers
+- MPD sticker support: playback statistics, voting and user defined stickers
 - [Albumart: embedded and image per folder](https://jcorporation.github.io/myMPD/references/pictures)
 - [Unsynchronized and synchronized Lyrics](https://jcorporation.github.io/myMPD/references/lyrics)
-- Local booklet support (per album folder)
+- Local PDF booklet and info.txt support (per album folder)
 - [Local playback of mpd http stream](https://jcorporation.github.io/myMPD/references/local-playback)
 - Timers and Triggers
 - [Lua scripting](https://jcorporation.github.io/myMPD/scripting/)
@@ -41,20 +42,33 @@ myMPD also integrates extended features like an advanced jukebox mode, timers, t
 - Progressive Web App enabled
 - Support of Media Session API
 - ListenBrainz and MusicBrainz integration
+- [myGPIOd](https://github.com/jcorporation/myGPIOd) integration
 
 To use all myMPD functions you should use the latest stable MPD version.
+
+## Scripts to add functionality
+
+The [mympd-scripts](https://github.com/jcorporation/mympd-scripts) repository provides many script to enhance and add features to myMPD.
+
+- Scrobbling to Last.fm, Maloja or ListenBrainz
+- Fetch albumart or tagart from fanart.tv and OpenOpus
+- Fetch lyrics
+- Import webradios from [RadioBrowser](https://www.radio-browser.info/)
+- and many more
 
 ## Documentation
 
 For information on installation and configuration, see the [myMPD documentation](https://jcorporation.github.io/myMPD/)
 
-- [Installation](https://jcorporation.github.io/myMPD/installation/)
-- [Configuration](https://jcorporation.github.io/myMPD/configuration/)
-- [Running](https://jcorporation.github.io/myMPD/running)
+- [Installation](https://jcorporation.github.io/myMPD/010-installation/)
+- [Configuration](https://jcorporation.github.io/myMPD/020-configuration/)
+- [Running](https://jcorporation.github.io/myMPD/030-running/)
 
 ## Support
 
 Please read the [documentation](https://jcorporation.github.io/myMPD/) before asking for help. Bugs should be reported through [issues](https://github.com/jcorporation/myMPD/issues). For all other question and general feedback use the [discussions](https://github.com/jcorporation/myMPD/discussions).
+
+You can follow me at [mastodon](https://mastodon.social/@jcorporation) to get news about myMPD.
 
 ## Contribution
 
@@ -66,6 +80,6 @@ myMPD is in active development. If you like myMPD, you can help to improve it (n
 
 ## Copyright
 
-2018-2023 Juergen Mang <mail@jcgames.de>
+2018-2024 Juergen Mang <mail@jcgames.de>
 
 myMPD was originally a fork of [ympd](https://github.com/notandy/ympd), but it has evolved into a much more comprehensive MPD client.

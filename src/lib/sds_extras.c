@@ -1,12 +1,17 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief Extra functions for sds strings
+ */
 
 #include "compile_time.h"
 #include "src/lib/sds_extras.h"
 
+#include "dist/mongoose/mongoose.h"
 #include "dist/sds/sds.h"
 #include "dist/utf8/utf8.h"
 
@@ -15,6 +20,9 @@
 #include <openssl/sha.h>
 #include <string.h>
 
+/**
+ * Converts hex to integer
+ */
 #define HEXTOI(x) ((x) >= '0' && (x) <= '9' ? (x) - '0' : (x) - 'W')
 
 /**
@@ -96,6 +104,24 @@ sds *sds_split_comma_trim(sds s, int *count) {
 }
 
 /**
+ * Hashes a string with md5
+ * @param p string to hash
+ * @return the hash as a newly allocated sds string
+ */
+sds sds_hash_md5(const char *p) {
+    mg_md5_ctx ctx;
+    mg_md5_init(&ctx);
+    mg_md5_update(&ctx, (unsigned char *)p, strlen(p));
+    unsigned char hash[16];
+    mg_md5_final(&ctx, hash);
+    sds hex_hash = sdsempty();
+    for (unsigned i = 0; i < 16; i++) {
+        hex_hash = sdscatprintf(hex_hash, "%02x", hash[i]);
+    }
+    return hex_hash;
+}
+
+/**
  * Hashes a string with sha1
  * @param p string to hash
  * @return the hash as a newly allocated sds string
@@ -146,23 +172,6 @@ sds sds_hash_sha256_sds(sds s) {
 }
 
 /**
- * Reads the integer from start of the string, the integer is removed from string
- * @param s sds string to modify in place
- * @return the number at the beginning of the sds string
- */
-int sds_toimax(sds s) {
-    sds nr = sdsempty();
-    while (isdigit(s[0])) {
-        nr = sds_catchar(nr, s[0]);
-        sdsrange(s, 1, -1);
-    }
-    char *crap;
-    int number = (int)strtoimax(nr, &crap, 10);
-    FREE_SDS(nr);
-    return number;
-}
-
-/**
  * Makes the string lower case (utf8 aware)
  * @param s sds string to modify in place
  */
@@ -185,6 +194,24 @@ void sds_utf8_tolower(sds s) {
 }
 
 /**
+ * JSON escapes special chars
+ * @param c char to escape
+ * @return escaped char
+ */
+static const char *escape_char(char c) {
+    switch(c) {
+        case '\\': return "\\\\";
+        case '"':  return "\\\"";
+        case '\b': return "\\b";
+        case '\f': return "\\f";
+        case '\n': return "\\n";
+        case '\r': return "\\r";
+        case '\t': return "\\t";
+    }
+    return NULL;
+}
+
+/**
  * Append to the sds string "s" a json escaped string
  * After the call, the modified sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call.
@@ -197,10 +224,42 @@ sds sds_catjson_plain(sds s, const char *p, size_t len) {
     /* To avoid continuous reallocations, let's start with a buffer that
      * can hold at least stringlength + 10 chars. */
     s = sdsMakeRoomFor(s, len + 10);
+    size_t i = sdslen(s);
     while (len--) {
-        s = sds_catjsonchar(s, *p);
+        switch(*p) {
+            case '\\':
+            case '"':
+            case '\b':
+            case '\f':
+            case '\n':
+            case '\r':
+            case '\t': {
+                if (sdsavail(s) == 0) {
+                    s = sdsMakeRoomFor(s, 2);
+                }
+                const char *escape = escape_char(*p);
+                s[i++] = escape[0];
+                s[i++] = escape[1];
+                sdsinclen(s, 2);
+                break;
+            }
+            //ignore vertical tabulator and alert
+            case '\v':
+            case '\a':
+                //this escapes are not accepted in the unescape function
+                break;
+            default:
+                if (sdsavail(s) == 0) {
+                    s = sdsMakeRoomFor(s, 1);
+                }
+                s[i++] = *p;
+                sdsinclen(s, 1);
+                break;
+        }
         p++;
     }
+    // Add null-term
+    s[i] = '\0';
     return s;
 }
 
@@ -217,12 +276,8 @@ sds sds_catjson(sds s, const char *p, size_t len) {
     /* To avoid continuous reallocations, let's start with a buffer that
      * can hold at least stringlength + 10 chars. */
     s = sdsMakeRoomFor(s, len + 10);
-
     s = sdscatlen(s, "\"", 1);
-    while (len--) {
-        s = sds_catjsonchar(s, *p);
-        p++;
-    }
+    s = sds_catjson_plain(s, p, len);
     return sdscatlen(s, "\"", 1);
 }
 
@@ -236,13 +291,15 @@ sds sds_catjson(sds s, const char *p, size_t len) {
  */
 sds sds_catjsonchar(sds s, const char c) {
     switch(c) {
-        case '\\': s = sdscatlen(s, "\\\\", 2); break;
-        case '"':  s = sdscatlen(s, "\\\"", 2); break;
-        case '\b': s = sdscatlen(s, "\\b", 2); break;
-        case '\f': s = sdscatlen(s, "\\f", 2); break;
-        case '\n': s = sdscatlen(s, "\\n", 2); break;
-        case '\r': s = sdscatlen(s, "\\r", 2); break;
-        case '\t': s = sdscatlen(s, "\\t", 2); break;
+        case '\\':
+        case '"':
+        case '\b':
+        case '\f':
+        case '\n':
+        case '\r':
+        case '\t':
+            s = sdscatlen(s, escape_char(c), 2);
+            break;
         //ignore vertical tabulator and alert
         case '\v':
         case '\a':
@@ -263,8 +320,9 @@ sds sds_catjsonchar(sds s, const char c) {
  */
 sds sds_catchar(sds s, const char c) {
     // Make sure there is always space for at least 1 char.
-    if (sdsavail(s) == 0) {
-        s = sdsMakeRoomFor(s, 1);
+    s = sdsMakeRoomFor(s, 1);
+    if (s == NULL) {
+        return NULL;
     }
     size_t i = sdslen(s);
     s[i++] = c;
@@ -326,7 +384,7 @@ bool sds_json_unescape(const char *src, size_t slen, sds *dst) {
 /**
  * Checks for url safe characters
  * @param c char to check
- * @return true if string is url safe else false
+ * @return true if char is url safe else false
  */
 static bool is_url_safe(char c) {
     if (isalnum(c) ||
@@ -441,5 +499,17 @@ sds sds_replace(sds s, const char *p) {
  * @return modified sds string
  */
 sds sds_catbool(sds s, bool v) {
-    return v == true ? sdscatlen(s, "true", 4) : sdscatlen(s, "false", 5);
+    return v == true
+        ? sdscatlen(s, "true", 4)
+        : sdscatlen(s, "false", 5);
+}
+
+/**
+ * Prints a zero padded value
+ * @param value mpd song struct
+ * @param buffer already allocated sds string to append
+ * @return pointer to buffer
+ */
+sds sds_pad_int(int64_t value, sds buffer) {
+    return sdscatprintf(buffer, "%020" PRId64, value);
 }

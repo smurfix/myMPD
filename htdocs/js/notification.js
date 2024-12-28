@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module notifications_js */
@@ -54,14 +54,35 @@ function toggleAlert(alertBoxId, state, msg) {
                 alertBoxEl.classList.add('alert-danger', 'top-alert-dismissible');
                 const clBtn = elCreateEmpty('button', {"class": ["btn-close"]});
                 alertBoxEl.appendChild(clBtn);
-                clBtn.addEventListener('click', function() {
+                clBtn.addEventListener('click', function(event) {
+                    event.preventDefault();
                     clearMPDerror();
+                }, false);
+                break;
+            }
+            case 'alertJukeboxStatusError': {
+                alertBoxEl.classList.add('alert-danger', 'top-alert-dismissible');
+                const clBtn = elCreateEmpty('button', {"class": ["btn-close"]});
+                alertBoxEl.appendChild(clBtn);
+                clBtn.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    clearJukeboxError();
                 }, false);
                 break;
             }
             case 'alertUpdateDBState':
             case 'alertUpdateCacheState': {
                 alertBoxEl.classList.add('alert-success');
+                break;
+            }
+            case 'alertMympdState': {
+                alertBoxEl.classList.add('alert-danger', 'top-alert-dismissible');
+                const clBtn = elCreateText('button', {"class": ["alwaysEnabled", "btn-retry", "mi"], "title": tn('Reconnect'), "data-title-phrase": "Reconnect"}, "refresh");
+                alertBoxEl.appendChild(clBtn);
+                clBtn.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    onShow();
+                }, false);
                 break;
             }
             default:
@@ -168,6 +189,13 @@ function showNotification(message, facility, severity) {
         if (show === false) {
             return;
         }
+    }
+
+    if (facility === 'jukebox' &&
+        severity === 'error')
+    {
+        toggleAlert('alertJukeboxStatusError', true, message);
+        return;
     }
 
     if (settings.webuiSettings.notifyWeb === true) {

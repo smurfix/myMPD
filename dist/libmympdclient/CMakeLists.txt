@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+# myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 # https://github.com/jcorporation/mympd
 
-add_library(libmympdclient "")
+add_library(mympdclient "")
 
-target_include_directories(libmympdclient PUBLIC include)
+target_include_directories(mympdclient PUBLIC include)
 
-target_sources(libmympdclient
+target_sources(mympdclient
   PRIVATE
     src/albumart.c
     src/async.c
@@ -27,6 +27,7 @@ target_sources(libmympdclient
     src/entity.c
     src/error.c
     src/fd_util.c
+    src/feature.c
     src/fingerprint.c
     src/idle.c
     src/ierror.c
@@ -55,6 +56,7 @@ target_sources(libmympdclient
     src/response.c
     src/rplaylist.c
     src/run.c
+    src/request.c
     src/search.c
     src/send.c
     src/settings.c

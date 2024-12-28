@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalOutputAttributes_js */
@@ -23,11 +23,16 @@ function showModalOutputAttributes(outputName) {
  */
 function parseOutputAttributes(obj) {
     setDataId('modalOutputAttributes', 'outputId', obj.result.id);
-    const tbody = elGetById('modalOutputAttributesList');
+    const table = elGetById('modalOutputAttributesList');
+    const tbody = table.querySelector('tbody');
     elClear(tbody);
-    for (const n of ['name', 'state', 'plugin']) {
-        if (n === 'state') {
-            obj.result[n] = obj.result[n] === 1
+    if (checkResult(obj, table, 'table') === false) {
+        return;
+    }
+
+    for (const n of ['name', 'enabled', 'plugin']) {
+        if (n === 'enabled') {
+            obj.result[n] = obj.result[n] === true
                 ? tn('Enabled')
                 : tn('Disabled');
         }

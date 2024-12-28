@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module Playback_js */
@@ -18,20 +18,10 @@ function handlePlayback() {
  * @returns {void}
  */
  function initViewPlayback() {
-    elGetById('PlaybackColsDropdown').addEventListener('click', function(event) {
-        if (event.target.nodeName === 'BUTTON' &&
-            event.target.classList.contains('mi'))
-        {
-            event.stopPropagation();
-            event.preventDefault();
-            toggleBtnChk(event.target, undefined);
-        }
-    }, false);
-
     elGetById('PlaybackListTags').addEventListener('click', function(event) {
-        if (event.target.nodeName === 'P' ||
-            event.target.nodeName === 'SPAN')
-        {
+        if ((event.target.nodeName === 'P' && event.target.classList.contains('clickable') === true) ||
+            (event.target.nodeName === 'SPAN' && event.target.parentNode.classList.contains('clickable') === true)
+        ) {
             gotoBrowse(event);
         }
     }, false);
@@ -139,7 +129,7 @@ function parseCurrentSong(obj) {
     }
 
     if (obj.result.uri !== undefined) {
-        obj.result['Filetype'] = filetype(obj.result.uri);
+        obj.result['Filetype'] = filetype(obj.result.uri, true);
         elEnableId('PlaybackAddToPlaylist');
     }
     else {
@@ -148,23 +138,48 @@ function parseCurrentSong(obj) {
     }
 
     if (features.featStickers === true) {
-        setVoteSongBtns(obj.result.like, obj.result.uri);
+        const PlaybackSongFeedbackEl = elGetById('PlaybackSongFeedback').firstElementChild;
+        const PlaybackSongStickerEl = elGetById('PlaybackSongSticker');
+        setData(PlaybackSongFeedbackEl, 'uri', obj.result.uri);
+        if (isValidUri(obj.result.uri) === false ||
+            isStreamUri(obj.result.uri) === true)
+        {
+            elDisableBtnGroup(PlaybackSongFeedbackEl);
+            elDisableBtnGroup(PlaybackSongStickerEl);
+        }
+        else {
+            elEnableBtnGroup(PlaybackSongFeedbackEl);
+            elEnableBtnGroup(PlaybackSongStickerEl);
+        }
+        setFeedback(PlaybackSongFeedbackEl, obj.result.like, obj.result.rating);
     }
 
     setPlaybackCardTags(obj.result);
 
     const bookletEl = elGetById('PlaybackBooklet');
     elClear(bookletEl);
-    if (obj.result.bookletPath !== '' &&
-        obj.result.bookletPath !== undefined &&
-        features.featLibrary === true)
-    {
+    if (isEmptyTag(obj.result.bookletPath) === false) {
         bookletEl.appendChild(
             elCreateText('span', {"class": ["mi", "me-2"]}, 'description')
         );
         bookletEl.appendChild(
-            elCreateTextTn('a', {"target": "_blank", "href": myEncodeURI(subdir + obj.result.bookletPath)}, 'Download booklet')
+            elCreateTextTn('a', {"target": "_blank", "href": myEncodeURI(subdir + obj.result.bookletPath)}, 'Booklet')
         );
+    }
+
+    const infoTxtEl = elGetById('PlaybackInfoTxt');
+    elClear(infoTxtEl);
+    if (isEmptyTag(obj.result.infoTxtPath) === false) {
+        infoTxtEl.appendChild(
+            elCreateText('span', {"class": ["mi", "me-2"]}, 'article')
+        );
+        infoTxtEl.appendChild(
+            elCreateTextTn('span', {"href": myEncodeURI(subdir + obj.result.infoTxtPath)}, 'Album info')
+        );
+        setData(infoTxtEl, 'uri', obj.result.infoTxtPath);
+    }
+    else {
+        rmData(infoTxtEl, 'uri');
     }
 
     //update queue card
@@ -205,7 +220,7 @@ function setPlaybackCardTags(songObj) {
     if (songObj.webradio === undefined) {
         elHideId('PlaybackListWebradio');
         elShowId('PlaybackListTags');
-        for (const col of settings.colsPlayback) {
+        for (const col of settings.viewPlayback.fields) {
             const c = elGetById('current' + col);
             if (c === null) {
                 continue;
@@ -221,7 +236,7 @@ function setPlaybackCardTags(songObj) {
                 default: {
                     const value = songObj[col];
                     const valueEl = c.querySelector('p');
-                    elReplaceChild(valueEl, printValue(col, value));
+                    elReplaceChild(valueEl, printValue(col, value, songObj));
                     if (isEmptyTag(value) === true ||
                         settings.tagListBrowse.includes(col) === false)
                     {
@@ -251,8 +266,13 @@ function setPlaybackCardTags(songObj) {
         elShow(PlaybackListWebradio);
         elHideId('PlaybackListTags');
 
-        const webradioName = elCreateText('p', {"href": "#", "class": ["clickable"]}, songObj.webradio.Name);
-        setData(webradioName, 'href', {"cmd": "editRadioFavorite", "options": [songObj.webradio.filename]});
+        const webradioName = elCreateText('p', {"class": ["clickable"]}, songObj.webradio.Name);
+        if (songObj.webradio.Type === 'webradiodb') {
+            setData(webradioName, 'href', {"cmd": "showWebradiodbDetails", "options": [songObj.webradio.StreamUri]});
+        }
+        else {
+            setData(webradioName, 'href', {"cmd": "editRadioFavorite", "options": [songObj.webradio.StreamUri]});
+        }
         webradioName.addEventListener('click', function(event) {
             parseCmd(event, getData(event.target, 'href'));
         }, false);
@@ -264,14 +284,21 @@ function setPlaybackCardTags(songObj) {
         );
         PlaybackListWebradio.appendChild(
             elCreateNodes('div', {"class": ["col-xl-6"]}, [
-                elCreateTextTn('small', {}, 'Genre'),
-                elCreateText('p', {}, songObj.webradio.Genre)
+                elCreateTextTn('small', {}, 'Genres'),
+                elCreateText('p', {}, joinArray(songObj.webradio.Genres))
             ])
         );
         PlaybackListWebradio.appendChild(
             elCreateNodes('div', {"class": ["col-xl-6"]}, [
                 elCreateTextTn('small', {}, 'Country'),
-                elCreateText('p', {}, songObj.webradio.Country + smallSpace + nDash + smallSpace + songObj.webradio.Language)
+                elCreateText('p', {}, songObj.webradio.Country + 
+                    (songObj.webradio.State !== '' && songObj.webradio.State !== undefined ? smallSpace + nDash + smallSpace + songObj.webradio.State : ''))
+            ])
+        );
+        PlaybackListWebradio.appendChild(
+            elCreateNodes('div', {"class": ["col-xl-6"]}, [
+                elCreateTextTn('small', {}, 'Languages'),
+                elCreateText('p', {}, joinArray(songObj.webradio.Languages))
             ])
         );
         if (songObj.webradio.Homepage !== '') {
@@ -337,46 +364,12 @@ function showAddToPlaylistCurrentSong() {
 }
 
 /**
- * Sets the state of the song vote button group
- * @param {number} vote the vote 0 = hate, 1 = neutral, 2 = love
- * @param {string} uri song uri
+ * Shows the edit sticker modal for the current song
+ * @param {Event} event triggering click event
  * @returns {void}
  */
-function setVoteSongBtns(vote, uri) {
-    if (uri === undefined) {
-        uri = '';
-    }
-
-    const btnLove = elGetById('PlaybackSongLoveBtn');
-    const btnHate = elGetById('PlaybackSongHateBtn');
-
-    if (isValidUri(uri) === false ||
-        isStreamUri(uri) === true)
-    {
-        elDisable(btnLove);
-        elDisable(btnHate);
-        elDisable(btnLove.parentNode);
-        btnLove.classList.remove('active');
-        btnHate.classList.remove('active');
-    }
-    else {
-        elEnable(btnLove);
-        elEnable(btnHate);
-        elEnable(btnLove.parentNode);
-    }
-
-    switch(vote) {
-        case 0:
-            btnLove.classList.remove('active');
-            btnHate.classList.add('active');
-            break;
-        case 2:
-            btnLove.classList.add('active');
-            btnHate.classList.remove('active');
-            break;
-        default:
-            btnLove.classList.remove('active');
-            btnHate.classList.remove('active');
-            break;
-    }
+//eslint-disable-next-line no-unused-vars
+function showCurrentSongSticker(event) {
+    event.preventDefault();
+    showStickerModal(currentSongObj.uri, 'song');
 }

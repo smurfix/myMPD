@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module home_js */
@@ -135,7 +135,7 @@ function addSongToHome(uri, type, name) {
  */
 //eslint-disable-next-line no-unused-vars
 function addSearchToHome() {
-    _addHomeIcon('replaceQueue', tn('Current search'), 'saved_search', '', ['search', app.current.search]);
+    _addHomeIcon('replaceQueue', tn('Current search'), 'saved_search', '', ['search', app.current.search, app.current.sort.tag, app.current.sort.desc]);
 }
 
 /**
@@ -197,6 +197,28 @@ function deleteHomeIcon(pos) {
 }
 
 /**
+ * Executes the home icon action
+ * @param {number} pos home icon position
+ * @returns {void}
+ */
+//eslint-disable-next-line no-unused-vars
+function executeHomeIcon(pos) {
+    const el = elGetById('HomeList').children[pos].firstChild;
+    parseCmd(null, getData(el, 'href'));
+}
+
+/**
+ * Executes the home icon action
+ * @param {number} pos home icon position
+ * @returns {void}
+ */
+//eslint-disable-next-line no-unused-vars
+function refreshHomeWidget(pos) {
+    const el = elGetById('HomeList').children[pos].firstChild;
+    updateHomeWidget(el);
+}
+
+/**
  * Opens the link in a new window
  * @param {string} link uri to open
  * @returns {void}
@@ -230,7 +252,7 @@ function homeIconGoto(type, options) {
             break;
         case 'plist':
         case 'smartpls':
-            playlistDetails(options[0]);
+            gotoPlaylist(options[0]);
             break;
         default:
             logError('Invalid type: ' + type);

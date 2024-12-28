@@ -1,8 +1,12 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief File handling
+ */
 
 #ifndef MYMPD_FILEHANDLER_H
 #define MYMPD_FILEHANDLER_H
@@ -12,6 +16,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+/**
+ * Status for a directory
+ */
 enum testdir_status {
     DIR_EXISTS = 0,
     DIR_CREATED = 1,
@@ -19,25 +26,30 @@ enum testdir_status {
     DIR_NOT_EXISTS = 3
 };
 
+/**
+ * Status of file remove function
+ */
 enum try_rm_file_status {
     RM_FILE_OK = 0,
     RM_FILE_ENOENT = 1,
     RM_FILE_ERROR = 2
 };
 
-
+bool update_mtime(const char *filename);
 bool do_chown(const char *file_path, const char *username);
 time_t get_mtime(const char *filepath);
 
-int sds_getline(sds *s, FILE *fp, size_t max);
-int sds_getfile(sds *s, const char *file_path, size_t max, bool remove_newline, bool warn);
-int sds_getfile_from_fp(sds *s, FILE *fp, size_t max, bool remove_newline);
+sds sds_getline(sds s, FILE *fp, size_t max, int *nread);
+sds sds_getfile(sds s, const char *file_path, size_t max, bool remove_newline, bool warn, int *nread);
+sds sds_getfile_from_fp(sds s, FILE *fp, size_t max, bool remove_newline, int *nread);
 
 FILE *open_tmp_file(sds filepath);
 bool rename_tmp_file(FILE *fp, sds tmp_file, bool write_rc);
-bool write_data_to_file(sds filepath, const char *data, size_t data_len);
+bool write_data_to_file(const char *filepath, const char *data, size_t data_len);
 bool rm_file(sds filepath);
 int try_rm_file(sds filepath);
+
+bool rename_file(const char *src, const char *dst);
 
 bool testfile_read(const char *filename);
 int testdir(const char *desc, const char *dir_name, bool create, bool silent);

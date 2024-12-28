@@ -1,10 +1,10 @@
 #
 # spec file for package myMPD
 #
-# (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+# (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 
 Name:           mympd
-Version:        13.0.6
+Version:        19.0.2
 Release:        0
 License:        GPL-3.0-or-later
 Group:          Productivity/Multimedia/Sound/Players
@@ -24,17 +24,13 @@ BuildRequires:  pkgconfig
 BuildRequires:  unzip
 BuildRequires:  gzip
 BuildRequires:  jq
+Requires: newt
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
 %description
 myMPD is a standalone and lightweight web-based MPD client.
 It's tuned for minimal resource usage and requires only very few dependencies.
 Therefore myMPD is ideal for raspberry pis and similar devices.
-
-%if 0%{?disturl:1}
-  # build debug package in obs
-  %debug_package
-%endif
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -55,9 +51,12 @@ fi
 %defattr(-,root,root,-)
 %doc README.md
 /usr/bin/mympd
+/usr/bin/mympd-config
 /usr/bin/mympd-script
 /usr/lib/systemd/system/mympd.service
+/usr/lib/systemd/user/mympd.service
 %{_mandir}/man1/mympd.1.gz
+%{_mandir}/man1/mympd-config.1.gz
 %{_mandir}/man1/mympd-script.1.gz
 %{_defaultdocdir}/mympd/CHANGELOG.md
 %{_defaultdocdir}/mympd/LICENSE.md
@@ -66,5 +65,5 @@ fi
 %license LICENSE.md
 
 %changelog
-* Wed Dec 20 2023 Juergen Mang <mail@jcgames.de> 13.0.6-0
+* Thu Dec 26 2024 Juergen Mang <mail@jcgames.de> 19.0.2-0
 - Version from master

@@ -1,8 +1,12 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief Certificate handling
+ */
 
 #include "compile_time.h"
 #include "src/lib/cert.h"
@@ -19,16 +23,21 @@
 #include <netinet/in.h>
 #include <openssl/bn.h>
 #include <openssl/conf.h>
+#include <openssl/ec.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/opensslv.h>
 #include <openssl/pem.h>
 #include <openssl/rand.h>
+#include <openssl/rsa.h>
 #include <openssl/x509v3.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 //private definitions
+static sds print_asn1_time(sds buffer, const ASN1_TIME *time);
+static sds print_x509_subject(sds buffer, X509 *cert);
 static bool certificates_create(sds dir, sds custom_san);
 static void push_san(struct t_list *san_list, const char *san);
 static sds get_san(sds buffer);
@@ -36,7 +45,7 @@ static bool generate_set_random_serial(X509 *cert);
 static X509_REQ *generate_request(EVP_PKEY *pkey);
 static void add_extension(X509V3_CTX *ctx, X509 *cert, int nid, const char *value);
 static X509 *sign_certificate_request(EVP_PKEY *ca_key, X509 *ca_cert, X509_REQ *req, sds san);
-static EVP_PKEY *generate_keypair(int rsa_key_bits);
+static EVP_PKEY *generate_keypair(int key_type, unsigned key_bits);
 static X509 *generate_selfsigned_cert(EVP_PKEY *pkey);
 static bool write_to_disk(sds key_file, EVP_PKEY *pkey, sds cert_file, X509 *cert);
 static bool load_certificate(sds key_file, EVP_PKEY **key, sds cert_file, X509 **cert);
@@ -47,10 +56,13 @@ static bool create_server_certificate(sds serverkey_file, EVP_PKEY **server_key,
 static int check_expiration(X509 *cert, sds cert_file, int min_days, int max_days);
 static bool certificates_cleanup(sds dir, const char *name);
 
+/**
+ * Expiration state of certificates
+ */
 enum expire_check_rcs {
-    CERT_EXPIRE_ERROR = -1,
-    CERT_EXPIRE_OK = 0,
-    CERT_EXPIRE_RENEW = 1
+    CERT_EXPIRE_ERROR = -1,  //!< Error condition
+    CERT_EXPIRE_OK = 0,      //!< Certificate is valid
+    CERT_EXPIRE_RENEW = 1    //!< Certificate should be renewed
 };
 
 /**
@@ -85,8 +97,79 @@ bool certificates_check(sds workdir, sds ssl_san) {
 }
 
 /**
+ * Returns the certificate details
+ * @param cert_content the certificate as pem encoded sds
+ * @return certificate details as newly allocated sds
+ */
+sds certificate_get_detail(sds cert_content) {
+    BIO *bio = BIO_new(BIO_s_mem());
+    BIO_puts(bio, cert_content);
+    X509 *cert = PEM_read_bio_X509(bio, NULL, NULL, NULL);
+    sds details = sdsempty();
+    if (cert == NULL) {
+        MYMPD_LOG_ERROR(NULL, "Failure parsing the x509 certificate");
+    }
+    else {
+        details = print_x509_subject(details, cert);
+        const ASN1_TIME *not_after = X509_get0_notAfter(cert);
+        const ASN1_TIME *not_before = X509_get0_notBefore(cert);
+        details = sdscat(details, ", valid from ");
+        details = print_asn1_time(details, not_before);
+        details = sdscat(details, " to ");
+        details = print_asn1_time(details, not_after);
+        X509_free(cert);
+    }
+    BIO_free_all(bio);
+    return details;
+}
+
+/**
  * Private functions
  */
+
+/**
+ * Prints an asn1 time struct to buffer
+ * @param buffer already allocated sds string
+ * @param time asn1 time struct to print
+ * @return pointer to buffer
+ */
+static sds print_asn1_time(sds buffer, const ASN1_TIME *time) {
+    BIO *out = BIO_new(BIO_s_mem());
+    if (ASN1_TIME_print(out, time) == 1) {
+        unsigned char *string;
+        long n = BIO_get_mem_data(out, &string);
+        if (n > 0) {
+            buffer = sdscatlen(buffer, string, (size_t)n);
+        }
+    }
+    else {
+        MYMPD_LOG_ERROR(NULL, "Failure reading time");
+    }
+    BIO_free(out);
+    return buffer;
+}
+
+/**
+ * Prints x509 subject to buffer
+ * @param buffer already allocated sds string
+ * @param cert x509 certificate
+ * @return pointer to buffer
+ */
+static sds print_x509_subject(sds buffer, X509 *cert) {
+    BIO *out = BIO_new(BIO_s_mem());
+    if (X509_NAME_print_ex(out, X509_get_subject_name(cert), 0, XN_FLAG_RFC2253) > -1) {
+        unsigned char *subject;
+        long n = BIO_get_mem_data(out, &subject);
+        if (n > 0) {
+            buffer = sdscatlen(buffer, subject, (size_t)n);
+        }
+    }
+    else {
+        MYMPD_LOG_ERROR(NULL, "Failure reading subject name");
+    }
+    BIO_free(out);
+    return buffer;
+}
 
 /**
  * Creates the ca and cert and renews before expired
@@ -202,7 +285,7 @@ static bool certificates_cleanup(sds dir, const char *name) {
  *         CERT_EXPIRE_RENEW cert must be renewed
  */
 static int check_expiration(X509 *cert, sds cert_file, int min_days, int max_days) {
-    ASN1_TIME *not_after = X509_get_notAfter(cert);
+    const ASN1_TIME *not_after = X509_get0_notAfter(cert);
     int pday = 0;
     int psec = 0;
     int rc = ASN1_TIME_diff(&pday, &psec, NULL, not_after);
@@ -232,7 +315,7 @@ static int check_expiration(X509 *cert, sds cert_file, int min_days, int max_day
  */
 static bool create_ca_certificate(sds cakey_file, EVP_PKEY **ca_key, sds cacert_file, X509 **ca_cert) {
     MYMPD_LOG_NOTICE(NULL, "Creating self signed ca certificate");
-    *ca_key = generate_keypair(CA_KEY_LENGTH);
+    *ca_key = generate_keypair(CA_KEY_TYPE, CA_KEY_LENGTH);
     if (*ca_key == NULL) {
         return false;
     }
@@ -261,7 +344,7 @@ static bool create_server_certificate(sds serverkey_file, EVP_PKEY **server_key,
         X509 **ca_cert)
 {
     MYMPD_LOG_NOTICE(NULL, "Creating server certificate");
-    *server_key = generate_keypair(CERT_KEY_LENGTH);
+    *server_key = generate_keypair(CERT_KEY_TYPE, CERT_KEY_LENGTH);
     if (*server_key == NULL) {
         return false;
     }
@@ -294,6 +377,7 @@ static bool create_server_certificate(sds serverkey_file, EVP_PKEY **server_key,
  * @param key pointer to EVP_KEY struct to populate
  * @param cert_file filename for the cert
  * @param cert pointer to X509 struct to populate
+ * @return true on success, else false
  */
 static bool load_certificate(sds key_file, EVP_PKEY **key, sds cert_file, X509 **cert) {
     BIO *bio = NULL;
@@ -466,7 +550,7 @@ static X509_REQ *generate_request(EVP_PKEY *pkey) {
 
     /* Set the DN */
     time_t now = time(NULL);
-    sds cn = sdscatfmt(sdsempty(), "myMPD Server Certificate %U", (unsigned long long)now);
+    sds cn = sdscatfmt(sdsempty(), "myMPD Server Certificate %I", (int64_t)now);
 
     X509_NAME *name = X509_REQ_get_subject_name(req);
     X509_NAME_add_entry_by_txt(name, "C",  MBSTRING_ASC, (unsigned char *)"DE", -1, -1, 0);
@@ -526,8 +610,8 @@ static X509 *sign_certificate_request(EVP_PKEY *ca_key, X509 *ca_cert, X509_REQ 
 
     /* This certificate is valid from now until one year from now. */
     int lifetime = CERT_LIFETIME * 24 * 60 * 60;
-    X509_gmtime_adj(X509_get_notBefore(cert), 0);
-    X509_gmtime_adj(X509_get_notAfter(cert), lifetime);
+    X509_gmtime_adj(X509_getm_notBefore(cert), 0);
+    X509_gmtime_adj(X509_getm_notAfter(cert), lifetime);
 
     /* Get the request's subject and just use it (we don't bother checking it since we generated
      * it ourself). Also take the request's public key. */
@@ -556,31 +640,50 @@ static X509 *sign_certificate_request(EVP_PKEY *ca_key, X509 *ca_cert, X509_REQ 
 
 /**
  * Generates a private/public key pair
- * @param rsa_key_bits number of bits for the key
+ * @param key_type key type: EVP_PKEY_RSA or EVP_PKEY_EC
+ * @param key_bits number of bits for the key
  * @return newly allocated key or NULL on error
  */
-static EVP_PKEY *generate_keypair(int rsa_key_bits) {
-    EVP_PKEY_CTX *ctx;
-    EVP_PKEY *pkey = NULL;
-
-    ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
-    if (!ctx) {
-        return NULL;
-    }
-    if (EVP_PKEY_keygen_init(ctx) <= 0) {
+static EVP_PKEY *generate_keypair(int key_type, unsigned key_bits) {
+    #ifdef OPENSSL_VERSION_MAJOR
+        if (key_type == EVP_PKEY_RSA) {
+            return EVP_RSA_gen(key_bits);
+        }
+        if (key_type == EVP_PKEY_EC) {
+            switch (key_bits) {
+                case 256: return EVP_EC_gen("P-256");
+                case 384: return EVP_EC_gen("P-384");
+                default:
+                    MYMPD_LOG_ERROR(NULL, "Invalid private key length");
+                    return NULL;
+            }
+        }
+    #else
+        // Support older versions of OpenSSL.
+        // Ignore key type, always use rsa keys.
+        (void)key_type;
+        EVP_PKEY *pkey = NULL;
+        EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+        if (!ctx) {
+            return NULL;
+        }
+        if (EVP_PKEY_keygen_init(ctx) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            return NULL;
+        }
+        if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, (int)key_bits) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            return NULL;
+        }
+        if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            return NULL;
+        }
         EVP_PKEY_CTX_free(ctx);
-        return NULL;
-    }
-    if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, rsa_key_bits) <= 0) {
-        EVP_PKEY_CTX_free(ctx);
-        return NULL;
-    }
-    if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
-        EVP_PKEY_CTX_free(ctx);
-        return NULL;
-    }
-    EVP_PKEY_CTX_free(ctx);
-    return pkey;
+        return pkey;
+    #endif
+    MYMPD_LOG_ERROR(NULL, "Invalid private key type");
+    return NULL;
 }
 
 /**
@@ -608,8 +711,8 @@ static X509 *generate_selfsigned_cert(EVP_PKEY *pkey) {
 
     //This certificate is valid from now until ten years from now.
     int lifetime = CA_LIFETIME * 24 * 60 * 60;
-    X509_gmtime_adj(X509_get_notBefore(cert), 0);
-    X509_gmtime_adj(X509_get_notAfter(cert), lifetime);
+    X509_gmtime_adj(X509_getm_notBefore(cert), 0);
+    X509_gmtime_adj(X509_getm_notAfter(cert), lifetime);
 
     //Set the public key for our certificate.
     X509_set_pubkey(cert, pkey);
@@ -619,7 +722,7 @@ static X509 *generate_selfsigned_cert(EVP_PKEY *pkey) {
 
     //Set the DN
     time_t now = time(NULL);
-    sds cn = sdscatfmt(sdsempty(), "myMPD CA %U", (unsigned long long)now);
+    sds cn = sdscatfmt(sdsempty(), "myMPD CA %I", (int64_t)now);
     X509_NAME_add_entry_by_txt(name, "C",  MBSTRING_ASC, (unsigned char *)"DE", -1, -1, 0);
     X509_NAME_add_entry_by_txt(name, "O",  MBSTRING_ASC, (unsigned char *)"myMPD", -1, -1, 0);
     X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (unsigned char *)cn, -1, -1, 0);

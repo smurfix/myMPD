@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -54,63 +54,33 @@ UTEST(jsonrpc, test_json_get_int_max) {
     FREE_SDS(data);
 }
 
-UTEST(jsonrpc, test_json_get_long) {
-    long result;
+UTEST(jsonrpc, test_json_get_int64) {
+    int64_t result;
     //valid
     sds data = sdsnew("{\"key1\": 10}");
-    ASSERT_TRUE(json_get_long(data, "$.key1", 0, 20, &result, NULL));
+    ASSERT_TRUE(json_get_int64(data, "$.key1", 0, 20, &result, NULL));
     sdsclear(data);
     data = sdscat(data, "{\"key1\": -30}");
-    ASSERT_TRUE(json_get_long(data, "$.key1", -50, 20, &result, NULL));
+    ASSERT_TRUE(json_get_int64(data, "$.key1", -50, 20, &result, NULL));
     sdsclear(data);
     //invalid
     data = sdscat(data, "{\"key1\": 30}");
-    ASSERT_FALSE(json_get_long(data, "$.key1", 0, 20, &result, NULL));
+    ASSERT_FALSE(json_get_int64(data, "$.key1", 0, 20, &result, NULL));
     sdsclear(data);
     data = sdscat(data, "{\"key2\": 10}");
-    ASSERT_FALSE(json_get_long(data, "$.key1", 0, 20, &result, NULL));
+    ASSERT_FALSE(json_get_int64(data, "$.key1", 0, 20, &result, NULL));
     FREE_SDS(data);
 }
 
-UTEST(jsonrpc, test_json_get_long_max) {
-    long result;
+UTEST(jsonrpc, test_json_get_int64_max) {
+    int64_t result;
     //valid
     sds data = sdsnew("{\"key1\": 10}");
-    ASSERT_TRUE(json_get_long_max(data, "$.key1", &result, NULL));
+    ASSERT_TRUE(json_get_int64_max(data, "$.key1", &result, NULL));
     sdsclear(data);
     //invalid
     data = sdscat(data, "{\"key2\": 10}");
-    ASSERT_FALSE(json_get_long_max(data, "$.key1", &result, NULL));
-    FREE_SDS(data);
-}
-
-UTEST(jsonrpc, test_json_get_llong) {
-    long long result;
-    //valid
-    sds data = sdsnew("{\"key1\": 10}");
-    ASSERT_TRUE(json_get_llong(data, "$.key1", 0, 20, &result, NULL));
-    sdsclear(data);
-    data = sdscat(data, "{\"key1\": -30}");
-    ASSERT_TRUE(json_get_llong(data, "$.key1", -50, 20, &result, NULL));
-    sdsclear(data);
-    //invalid
-    data = sdscat(data, "{\"key1\": 30}");
-    ASSERT_FALSE(json_get_llong(data, "$.key1", 0, 20, &result, NULL));
-    sdsclear(data);
-    data = sdscat(data, "{\"key2\": 10}");
-    ASSERT_FALSE(json_get_llong(data, "$.key1", 0, 20, &result, NULL));
-    FREE_SDS(data);
-}
-
-UTEST(jsonrpc, test_json_get_llong_max) {
-    long long result;
-    //valid
-    sds data = sdsnew("{\"key1\": 10}");
-    ASSERT_TRUE(json_get_llong_max(data, "$.key1", &result, NULL));
-    sdsclear(data);
-    //invalid
-    data = sdscat(data, "{\"key2\": 10}");
-    ASSERT_FALSE(json_get_llong_max(data, "$.key1", &result, NULL));
+    ASSERT_FALSE(json_get_int64_max(data, "$.key1", &result, NULL));
     FREE_SDS(data);
 }
 
@@ -208,7 +178,7 @@ UTEST(jsonrpc, test_json_get_array_string) {
     list_clear(&l);
     //invalid - too many array elements
     ASSERT_TRUE(json_get_array_string(data, "$.key1", &l, vcb_isname, 1, NULL));
-    ASSERT_EQ(1, l.length);
+    ASSERT_EQ(1U, l.length);
     FREE_SDS(data);
     list_clear(&l);
 }
@@ -218,15 +188,15 @@ UTEST(jsonrpc, test_json_get_array_llong) {
     list_init(&l);
     sds data = sdsnew("{\"key1\": [123, 789]}");
     //valid
-    ASSERT_TRUE(json_get_array_llong(data, "$.key1", &l, 10, NULL));
+    ASSERT_TRUE(json_get_array_int64(data, "$.key1", &l, 10, NULL));
     list_clear(&l);
     //invalid - no numeric value
     data = sds_replace(data, "{\"key1\": [\"asdf\", \"wer\"]}");
-    ASSERT_FALSE(json_get_array_llong(data, "$.key1", &l, 10, NULL));
+    ASSERT_FALSE(json_get_array_int64(data, "$.key1", &l, 10, NULL));
     list_clear(&l);
     //invalid - too many array elements
-    ASSERT_FALSE(json_get_array_llong(data, "$.key1", &l, 1, NULL));
-    ASSERT_EQ(0, l.length);
+    ASSERT_FALSE(json_get_array_int64(data, "$.key1", &l, 1, NULL));
+    ASSERT_EQ(0U, l.length);
     FREE_SDS(data);
     list_clear(&l);
 }
@@ -236,29 +206,29 @@ UTEST(jsonrpc, test_json_get_object_string) {
     list_init(&l);
     //valid
     sds data = sdsnew("{\"key1\": {\"k1\": \"string1\", \"k2\": \"string2\"}}");
-    ASSERT_TRUE(json_get_object_string(data, "$.key1", &l, vcb_isname, 10, NULL));
+    ASSERT_TRUE(json_get_object_string(data, "$.key1", &l, vcb_isname, vcb_isname,10, NULL));
     list_clear(&l);
     //invalid - validation error
-    ASSERT_FALSE(json_get_object_string(data, "$.key1", &l, vcb_ishexcolor, 10, NULL));
+    ASSERT_FALSE(json_get_object_string(data, "$.key1", &l, vcb_isalnum, vcb_ishexcolor, 10, NULL));
     list_clear(&l);
     //invalid - too many array elements
-    ASSERT_TRUE(json_get_object_string(data, "$.key1", &l, vcb_isname, 1, NULL));
-    ASSERT_EQ(1, l.length);
+    ASSERT_TRUE(json_get_object_string(data, "$.key1", &l, vcb_isname, vcb_isname,1, NULL));
+    ASSERT_EQ(1U, l.length);
     FREE_SDS(data);
     list_clear(&l);
 }
 
 UTEST(jsonrpc, test_json_get_tags) {
-    struct t_tags tagcols;
-    reset_t_tags(&tagcols);
-    sds data = sdsnew("{\"params\": {\"cols\": [\"Artist\", \"Duration\"]}}");
+    struct t_fields tagcols;
+    fields_reset(&tagcols);
+    sds data = sdsnew("{\"params\": {\"fields\": [\"Artist\", \"Duration\"]}}");
     //valid
-    ASSERT_TRUE(json_get_tags(data, "$.params.cols", &tagcols, COLS_MAX, NULL));
+    ASSERT_TRUE(json_get_fields(data, "$.params.fields", &tagcols, FIELDS_MAX, NULL));
     sdsclear(data);
-    reset_t_tags(&tagcols);
-    data = sdscat(data, "{\"params\": {\"cols\": [\"Artist\", \"Invalid column name\"]}}");
-    //invalid column names are ignored
-    ASSERT_TRUE(json_get_tags(data, "$.params.cols", &tagcols, COLS_MAX, NULL));
+    fields_reset(&tagcols);
+    data = sdscat(data, "{\"params\": {\"fields\": [\"Artist\", \"Invalid column name\"]}}");
+    //invalid field names are ignored
+    ASSERT_TRUE(json_get_fields(data, "$.params.fields", &tagcols, FIELDS_MAX, NULL));
     FREE_SDS(data);
 }
 
@@ -274,13 +244,14 @@ UTEST(jsonrpc, test_list_to_json_array) {
     FREE_SDS(s);
 }
 
-UTEST(jsonrpc, test_json_get_cols_as_string) {
+UTEST(jsonrpc, test_json_get_fields_as_string) {
     struct t_list l;
     list_init(&l);
-    bool error;
-    sds data = sdsnew("{\"params\": {\"cols\": [\"Artist\", \"Duration\"]}}");
+    struct t_jsonrpc_parse_error error;
+    sds data = sdsnew("{\"params\": {\"fields\": [\"Artist\", \"Duration\"]}}");
     sds cols = sdsempty();
-    cols = json_get_cols_as_string(data, cols, &error);
+    bool rc = json_get_fields_as_string(data, &cols, &error);
+    ASSERT_TRUE(rc);
     ASSERT_STREQ("[\"Artist\",\"Duration\"]", cols);
     list_clear(&l);
     FREE_SDS(cols);

@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,18 +11,18 @@
 #include "src/lib/api.h"
 
 UTEST(api, test_get_cmd_id) {
-    enum mympd_cmd_ids cmd_id = get_cmd_id("MYMPD_API_COLS_SAVE");
-    const bool rc = cmd_id == MYMPD_API_COLS_SAVE ? true : false;
+    enum mympd_cmd_ids cmd_id = get_cmd_id("MYMPD_API_VIEW_SAVE");
+    const bool rc = cmd_id == MYMPD_API_VIEW_SAVE ? true : false;
     ASSERT_TRUE(rc);
 }
 
 UTEST(api, test_get_cmd_id_method_name) {
-    const char *name = get_cmd_id_method_name(MYMPD_API_COLS_SAVE);
-    ASSERT_STREQ(name, "MYMPD_API_COLS_SAVE");
+    const char *name = get_cmd_id_method_name(MYMPD_API_VIEW_SAVE);
+    ASSERT_STREQ(name, "MYMPD_API_VIEW_SAVE");
 }
 
 UTEST(api, test_is_protected_api_method) {
-    bool rc = is_protected_api_method(MYMPD_API_COLS_SAVE);
+    bool rc = is_protected_api_method(MYMPD_API_VIEW_SAVE);
     ASSERT_FALSE(rc);
 
     rc = is_protected_api_method(MYMPD_API_SETTINGS_SET);
@@ -37,16 +37,16 @@ UTEST(api, test_is_public_api_method) {
     ASSERT_FALSE(rc);
 }
 
-UTEST(api, test_is_mympd_only_api_method) {
-    bool rc = is_mympd_only_api_method(MYMPD_API_CONNECTION_SAVE);
+UTEST(api, test_is_mpd_disconnected_api_method) {
+    bool rc = is_mpd_disconnected_api_method(MYMPD_API_CONNECTION_SAVE);
     ASSERT_TRUE(rc);
 
-    rc = is_mympd_only_api_method(MYMPD_API_SETTINGS_SET);
+    rc = is_mpd_disconnected_api_method(MYMPD_API_SETTINGS_SET);
     ASSERT_FALSE(rc);
 }
 
 UTEST(api, test_request_result) {
-    struct t_work_request *request = create_request(1, 1, MYMPD_API_SETTINGS_SET, "test", MPD_PARTITION_DEFAULT);
+    struct t_work_request *request = create_request(REQUEST_TYPE_DEFAULT, 1, 1, MYMPD_API_SETTINGS_SET, "test", MPD_PARTITION_DEFAULT);
     bool rc = request == NULL ? false : true;
     ASSERT_TRUE(rc);
 

@@ -1,8 +1,12 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief String validation functions
+ */
 
 #include "compile_time.h"
 #include "src/lib/validate.h"
@@ -10,6 +14,9 @@
 #include "dist/libmympdclient/include/mpd/client.h"
 #include "dist/utf8/utf8.h"
 #include "src/lib/log.h"
+#include "src/lib/sticker.h"
+#include "src/lib/webradio.h"
+#include "src/mpd_client/playlists.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -19,21 +26,48 @@
  * Private definitions
  */
 
+/**
+ * Invalid characters for json strings
+ */
 static const char *invalid_json_chars = "\a\b\f\v";
+
+/**
+ * Invalid characters for keys and names
+ */
 static const char *invalid_name_chars = "\a\b\f\n\r\t\v";
+
+/**
+ * Invalid characters for filenmes
+ */
 static const char *invalid_filename_chars = "\a\b\f\n\r\t\v/\\";
+
+/**
+ * Invalid characters for filepaths
+ */
 static const char *invalid_filepath_chars = "\a\b\f\n\r\t\v";
 
-static const char *mympd_cols[]={"Pos", "Duration", "Type", "Priority", "LastPlayed", "Filename", "Filetype", "AudioFormat", "Last-Modified",
-    "Lyrics", "playCount", "skipCount", "lastPlayed", "lastSkipped", "like", "elapsed",
-    "Country", "Description", "Genre", "Homepage", "Language", "Name", "StreamUri", "Codec", "Bitrate", //Columns for webradiodb
-    "clickcount", "country", "homepage", "language", "lastchangetime", "lastcheckok", "tags", "url_resolved", "votes", //Columns for radiobrowser
-    "Discs", "SongCount", //Columns for albums
+/**
+ * Valid fields for views
+ */
+static const char *mympd_fields[]={
+    // Columns for tags
+    "Value",
+    // Columns for songs
+    "Name", "Pos", "Duration", "Type", "Priority", "LastPlayed", "Filename", "Filetype",
+    "AudioFormat", "Last-Modified", "Lyrics", "Added", "Thumbnail",
+    // Columns for stickers
+    "playCount", "skipCount", "lastPlayed", "lastSkipped", "like", "rating", "elapsed", "userDefinedSticker",
+     // Columns for webradiodb
+    "Country", "Region", "Description", "Genres", "Homepage", "Languages", "Name", "StreamUri",
+    "Codec", "Bitrate",
+    // Columns for albums
+    "Discs", "SongCount",
+    // End
     0};
 
 static bool check_for_invalid_chars(sds data, const char *invalid_chars);
 static bool validate_json(sds data, char start, char end);
-static bool is_mympd_col(sds token);
+static bool is_mympd_field(sds token);
 
 /**
  * Public functions
@@ -210,6 +244,22 @@ bool vcb_isfilename(sds data) {
 }
 
 /**
+ * Checks for dir traversal attempts in string
+ * @param str string to check
+ * @return true if filepath is sane, else false
+ */
+bool check_dir_traversal(const char *str) {
+    if (strncmp(str, "../", 3) == 0 ||
+        strncmp(str, "//", 2) == 0 ||
+        strstr(str, "/../") != NULL ||
+        strstr(str, "/./") != NULL)
+    {
+        return false;
+    }
+    return true;
+}
+
+/**
  * Checks if string is a valid filename with path or path only
  * @param data sds string to check
  * @return true on success else false
@@ -222,11 +272,7 @@ bool vcb_isfilepath(sds data) {
         MYMPD_LOG_WARN(NULL, "Illegal file path, found URI notation");
         return false;
     }
-    if (strncmp(data, "../", 3) == 0 ||
-        strncmp(data, "//", 2) == 0 ||
-        strstr(data, "/../") != NULL ||
-        strstr(data, "/./") != NULL)
-    {
+    if (check_dir_traversal(data) == false) {
         //prevent dir traversal
         MYMPD_LOG_WARN(NULL, "Found dir traversal in path \"%s\"", data);
         return false;
@@ -258,9 +304,9 @@ bool vcb_ispathfilename(sds data) {
  * @param data sds string to check
  * @return true on success else false
  */
-bool vcb_iscolumn(sds data) {
+bool vcb_isfield(sds data) {
     if (mpd_tag_name_iparse(data) != MPD_TAG_UNKNOWN ||
-        is_mympd_col(data) == true)
+        is_mympd_field(data) == true)
     {
         return true;
     }
@@ -318,7 +364,19 @@ bool vcb_ismpdtag_or_any(sds data) {
 }
 
 /**
- * Checks if string is a valid sort tag
+ * Checks if string is a valid MPD sticker type
+ * @param data sds string to check
+ * @return true on success, else false
+ */
+bool vcb_ismpdstickertype(sds data) {
+    if (mympd_sticker_type_name_parse(data) == STICKER_TYPE_UNKNOWN) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Checks if string is a valid sort tag for mpd
  * @param data sds string to check
  * @return true on success else false
  */
@@ -328,10 +386,77 @@ bool vcb_ismpdsort(sds data) {
         strcmp(data, "filename") != 0 &&
         strcmp(data, "shuffle") != 0 &&
         strcmp(data, "Last-Modified") != 0 &&
+        strcmp(data, "Added") != 0 &&
         strcmp(data, "Date") != 0 &&
         strcmp(data, "Priority") != 0)
     {
-        MYMPD_LOG_WARN(NULL, "Unknown tag \"%s\"", data);
+        MYMPD_LOG_WARN(NULL, "Unknown sort tag \"%s\"", data);
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Checks if string is a valid sort tag for mpd
+ * @param data sds string to check
+ * @return true on success else false
+ */
+bool vcb_isplaylistsort(sds data) {
+    if (playlist_parse_sort(data) == PLSORT_UNKNOWN) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Checks if string is a valid sort tag for webradios
+ * @param data sds string to check
+ * @return true on success else false
+ */
+bool vcb_iswebradiosort(sds data) {
+    enum webradio_tag_type tag = webradio_tag_name_parse(data);
+    if (tag == WEBRADIO_TAG_UNKNOWN) {
+        MYMPD_LOG_WARN(NULL, "Unknown sort tag \"%s\"", data);
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Checks if string is a valid sticker sort type
+ * @param data sds string to check
+ * @return true on success else false
+ */
+bool vcb_isstickersort(sds data) {
+    if (sticker_sort_parse(data) == MPD_STICKER_SORT_UNKOWN) {
+        MYMPD_LOG_WARN(NULL, "Unknown compare operator: %s", data);
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Checks if string is valid sticker or mpd sort type
+ * @param data sds string to check
+ * @return bool true on success else false
+ */
+bool vcb_ismpd_sticker_sort(sds data) {
+    if (sticker_sort_parse(data) == MPD_STICKER_SORT_UNKOWN &&
+        vcb_ismpdsort(data) == false)
+    {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Checks if string is a compare operator
+ * @param data sds string to check
+ * @return true on success else false
+ */
+bool vcb_isstickerop(sds data) {
+    if (sticker_oper_parse(data) == MPD_STICKER_OP_UNKOWN) {
+        MYMPD_LOG_WARN(NULL, "Unknown compare operator: %s", data);
         return false;
     }
     return true;
@@ -417,12 +542,12 @@ static bool validate_json(sds data, char start, char end) {
 }
 
 /**
- * Helper function that checks if token is a valid column name
+ * Helper function that checks if token is a valid field name
  * @param token string to check
  * @return true on success else false
  */
-static bool is_mympd_col(sds token) {
-    const char** ptr = mympd_cols;
+static bool is_mympd_field(sds token) {
+    const char** ptr = mympd_fields;
     while (*ptr != 0) {
         if (strncmp(token, *ptr, sdslen(token)) == 0) {
             return true;

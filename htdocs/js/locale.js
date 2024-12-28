@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module locale_js */
@@ -43,7 +43,7 @@ function tn(phrase, data) {
 /*debug*/    }
 
     //fallback if phrase is not translated
-    if (result === undefined) {
+    if (result === undefined || result === '') {
         result = phrasesDefault[phrase] !== undefined ? phrasesDefault[phrase] : phrase;
     }
     //check for smartCount
@@ -58,7 +58,6 @@ function tn(phrase, data) {
     }
     //replace variables
     if (data !== undefined) {
-        //eslint-disable-next-line no-useless-escape
         const tnRegex = /%\{(\w+)\}/g;
         result = result.replace(tnRegex, function(m0, m1) {
             return data[m1];
@@ -153,6 +152,7 @@ function setLocale(newLocale) {
     httpGet(subdir + '/assets/i18n/' + locale + '.json', function(obj) {
         phrases = obj;
         i18nHtml(domCache.body);
+        i18nPregenerated();
         setData(domCache.body, 'locale', locale);
     }, true);
 }
@@ -186,6 +186,31 @@ function i18nHtml(root) {
             }
             //translate
             els[k][attributes[i][1]] = tn(els[k].getAttribute(attributes[i][0]), dataObj);
+        }
+    }
+}
+
+/**
+ * Set translations for pregenerated elements
+ * @returns {void}
+ */
+function i18nPregenerated() {
+    for (const el in pEl) {
+        if (pEl[el].nodeName !== undefined) {
+            const titles = pEl[el].querySelectorAll('[data-title-phrase]');
+            for (const tit of titles) {
+                tit.setAttribute('title', tn(tit.getAttribute('data-title-phrase')));
+            }
+            if (pEl[el].getAttribute('data-title-phrase') !== null) {
+                pEl[el].setAttribute('title', tn(pEl[el].getAttribute('data-title-phrase')));
+            }
+            const tcs =  pEl[el].querySelectorAll('[data-phrase]');
+            for (const tc of tcs) {
+                tc.textContent = tn(tc.getAttribute('data-phrase'));
+            }
+            if (pEl[el].getAttribute('data-phrase') !== null) {
+                pEl[el].textContent = tn(pEl[el].getAttribute('data-phrase'));
+            }
         }
     }
 }

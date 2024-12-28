@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalSongDetails_js */
@@ -61,9 +61,10 @@ function initModalSongDetails() {
  * @returns {void}
  */
 function songDetails(uri) {
+    setUpdateViewId('modalSongDetailsTagsList');
     sendAPI("MYMPD_API_SONG_DETAILS", {
         "uri": uri
-    }, parseSongDetails, false);
+    }, parseSongDetails, true);
     uiElements.modalSongDetails.show();
 }
 
@@ -87,7 +88,7 @@ function parseFingerprint(obj) {
 /**
  * Adds a row to the song details modal
  * @param {string} thContent text for th
- * @param {HTMLElement | Node | string} tdContent content element fot td
+ * @param {HTMLElement | Node | string} tdContent content element for td
  * @returns {HTMLElement} created row
  */
 function songDetailsRow(thContent, tdContent) {
@@ -112,14 +113,19 @@ function songDetailsRow(thContent, tdContent) {
  */
 function parseSongDetails(obj) {
     const modal = elGetById('modalSongDetails');
+    setData(modal, 'uri', obj.result.uri);
     modal.querySelector('.album-cover').style.backgroundImage = getCssImageUri('/albumart?offset=0&uri=' + myEncodeURIComponent(obj.result.uri));
 
     const elH1s = modal.querySelectorAll('h1');
     for (let i = 0, j = elH1s.length; i < j; i++) {
         elH1s[i].textContent = obj.result.Title;
     }
-    const tbody = elGetById('modalSongDetailsTagsList');
+    const table = elGetById('modalSongDetailsTagsList');
+    const tbody = table.querySelector('tbody');
     elClear(tbody);
+    if (checkResult(obj, table, 'table') === false) {
+        return;
+    }
     for (let i = 0, j = settings.tagList.length; i < j; i++) {
         if (settings.tagList[i] === 'Title' ||
             isEmptyTag(obj.result[settings.tagList[i]]) === true)
@@ -193,8 +199,11 @@ function parseSongDetails(obj) {
     );
 
     tbody.appendChild(songDetailsRow('AudioFormat', printValue('AudioFormat', obj.result.AudioFormat)));
-    tbody.appendChild(songDetailsRow('Filetype', filetype(rUri)));
-    tbody.appendChild(songDetailsRow('Last-Modified', fmtDate(obj.result['Last-Modified'])));
+    tbody.appendChild(songDetailsRow('Filetype', filetype(rUri, true)));
+    tbody.appendChild(songDetailsRow('Last-Modified', printValue('Last-Modified', obj.result['Last-Modified'])));
+    if (features.featDbAdded === true) {
+        tbody.appendChild(songDetailsRow('Added', printValue('Added', obj.result.Added)));
+    }
     //fingerprint command is not supported for cuesheet virtual tracks
     if (features.featFingerprint === true &&
         isCuesheet === false)
@@ -212,6 +221,16 @@ function parseSongDetails(obj) {
             )
         );
     }
+    if (obj.result.infoTxtPath !== '') {
+        const infoTxtEl = elCreateTextTn('span', {"class": ["text-success", "clickable"]}, 'Show');
+        setData(infoTxtEl, 'uri', obj.result.infoTxtPath);
+        infoTxtEl.addEventListener('click', function(event) {
+            showInfoTxt(event.target);
+        }, false);
+        tbody.appendChild(
+            songDetailsRow('Album info', infoTxtEl)
+        );
+    }
     if (features.featStickers === true) {
         tbody.appendChild(
             elCreateNode('tr', {},
@@ -220,27 +239,56 @@ function parseSongDetails(obj) {
                 )
             )
         );
-        for (const sticker of stickerList) {
-            if (sticker === 'like') {
-                const thDown = elCreateText('button', {"data-vote": "0", "data-title-phrase": "Hate song", "class": ["btn", "btn-sm", "btn-secondary", "mi"]}, 'thumb_down');
-                if (obj.result[sticker] === 0) {
-                    thDown.classList.add('active');
+        for (const sticker of stickerListSongs) {
+            if (sticker === 'like' ||
+                sticker === 'rating')
+            {
+                if (sticker === 'like' &&
+                    features.featLike === true)
+                {
+                    const grp = createLike(obj.result.like, "song");
+                    setData(grp, 'href', {"cmd": "voteLike", "options": ["target"]});
+                    setData(grp, 'uri', obj.result.uri);
+                    tbody.appendChild(
+                        elCreateNodes('tr', {}, [
+                            elCreateTextTn('th', {}, 'Like'),
+                            elCreateNode('td', {}, grp)
+                        ])
+                    );
                 }
-                const thUp = elCreateText('button', {"data-vote": "2", "data-title-phrase": "Love song", "class": ["btn", "btn-sm", "btn-secondary", "mi"]}, 'thumb_up');
-                if (obj.result[sticker] === 2) {
-                    thUp.classList.add('active');
+                else if (sticker === 'rating' &&
+                    features.featRating === true)
+                {
+                    const grp = createStarRating(obj.result.rating, "song");
+                    setData(grp, 'href', {"cmd": "voteRating", "options": ["target"]});
+                    setData(grp, 'uri', obj.result.uri);
+                    tbody.appendChild(
+                        elCreateNodes('tr', {}, [
+                            elCreateTextTn('th', {}, 'Stars'),
+                            elCreateNode('td', {}, grp)
+                        ])
+                    );
                 }
-                const grp = elCreateNodes('div', {"class": ["btn-group", "btn-group-sm"]}, [
-                    thDown,
-                    thUp
+            }
+            else if (sticker === 'elapsed') {
+                const div = elCreateNodes('div', {'class': ['row']}, [
+                    elCreateEmpty('div', {'class': ['col', 'colMaxContent']}),
+                    elCreateNode('div', {'class': ['col']}, printValue(sticker, obj.result[sticker], obj.result))
                 ]);
-                setData(grp, 'href', {"cmd": "voteSong", "options": ["target"]});
-                setData(grp, 'uri', obj.result.uri);
+                if (obj.result[sticker] > 0 &&
+                    obj.result[sticker] < obj.result.Duration)
+                {
+                    const resumeBtn = pEl.resumeBtn.cloneNode(true);
+                    resumeBtn.classList.add("me-3");
+                    div.firstElementChild.appendChild(resumeBtn);
+                    setData(resumeBtn, 'uri', obj.result.uri);
+                    new BSN.Dropdown(resumeBtn.firstElementChild);
+                    resumeBtn.lastElementChild.firstElementChild.addEventListener('click', function(event) {
+                        clickResumeSong(event);
+                    }, false);
+                }
                 tbody.appendChild(
-                    elCreateNodes('tr', {}, [
-                        elCreateTextTn('th', {}, 'Like'),
-                        elCreateNode('td', {}, grp)
-                    ])
+                    songDetailsRow(sticker, div)
                 );
             }
             else {
@@ -249,12 +297,33 @@ function parseSongDetails(obj) {
                 );
             }
         }
+        tbody.appendChild(
+            elCreateNode('tr', {},
+                elCreateText('th', {"colspan": "2", "class": ["pt-3"]}, 'Sticker')
+            )
+        );
+        let i = 0;
+        for (const key in obj.result.sticker) {
+            tbody.appendChild(
+                songDetailsRow(key, obj.result.sticker[key])
+            );
+            i++;
+        }
+        if (i === 0) {
+            tbody.appendChild(
+                elCreateNode('tr', {},
+                    elCreateTextTn('td', {"colspan": "2",}, 'No user defined stickers')
+                )
+            );
+        }
     }
+    unsetUpdateViewId('modalSongDetailsTagsList');
     //populate other tabs
     if (features.featLyrics === true) {
-        getLyrics(obj.result.uri, elGetById('modalSongDetailsTabPicsLyricsText'));
+        elClearId('modalSongDetailsTabLyricsText');
+        getLyrics(obj.result.uri, elGetById('modalSongDetailsTabLyricsText'));
     }
-    getComments(obj.result.uri, elGetById('modalSongDetailsCommentsList'));
+    getComments(obj.result.uri);
     const imgEl = elGetById('modalSongDetailsTabPics');
     createImgCarousel(imgEl, 'modalSongDetailsPicsCarousel', obj.result.uri, obj.result.images, obj.result.embeddedImageCount);
 }
@@ -262,29 +331,79 @@ function parseSongDetails(obj) {
 /**
  * Gets the song comments
  * @param {string} uri song uri
- * @param {HTMLElement} el container to add the comments
  * @returns {void}
  */
-function getComments(uri, el) {
-    setUpdateView(el);
+function getComments(uri) {
+    setUpdateViewId('modalSongDetailsCommentsList');
     sendAPI("MYMPD_API_SONG_COMMENTS", {
         "uri": uri
-    }, function(obj) {
-        elClear(el);
-        if (obj.result.returnedEntities === 0) {
-            el.appendChild(emptyRow(2));
-            unsetUpdateView(el);
-            return false;
-        }
-        for (const key in obj.result.data) {
-            el.appendChild(
-                elCreateNodes('tr', {}, [
-                    elCreateText('td', {}, key),
-                    elCreateText('td', {}, obj.result.data[key])
-                ])
-            );
-        }
-        unsetUpdateView(el);
-    }, false);
+    }, parseComments, true);
 }
 
+/**
+ * Gets the song comments
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
+function parseComments(obj) {
+    const table = elGetById('modalSongDetailsCommentsList');
+    const tbody = table.querySelector('tbody');
+    elClear(tbody);
+    if (checkResult(obj, table, 'table') === false) {
+        return;
+    }
+    for (const key in obj.result.data) {
+        tbody.appendChild(
+            elCreateNodes('tr', {}, [
+                elCreateText('td', {}, key),
+                elCreateText('td', {}, obj.result.data[key])
+            ])
+        );
+    }
+    unsetUpdateView(table);
+}
+
+/**
+ * Adds the song in current song detail modal to the queue
+ * @param {string} action one of appendQueue, appendPlayQueue,
+ *                               insertAfterCurrentQueue, replaceQueue,
+ *                               replacePlayQueue, addToHome
+ * @returns {void}
+ */
+//eslint-disable-next-line no-unused-vars
+function songDetailAddTo(action) {
+    const uri = getDataId('modalSongDetails', 'uri');
+    const type = 'song';
+    switch(action) {
+        case 'appendQueue':
+            appendQueue(type, [uri]);
+            break;
+        case 'appendPlayQueue':
+            appendPlayQueue(type, [uri]);
+            break;
+        case 'insertAfterCurrentQueue':
+            insertAfterCurrentQueue(type, [uri], null);
+            break;
+        case 'replaceQueue':
+            replaceQueue(type, [uri]);
+            break;
+        case 'replacePlayQueue':
+            replacePlayQueue(type, [uri]);
+            break;
+        case 'addToHome':
+            addPlistToHome(uri, type, uri);
+            break;
+        default:
+            logError('Invalid action: ' + action);
+    }
+}
+
+/**
+ * Shows the sticker edit dialog from song details modal
+ * @returns {void}
+ */
+//eslint-disable-next-line no-unused-vars
+function songDetailStickerEdit() {
+    const uri = getDataId('modalSongDetails', 'uri');
+    showStickerModal(uri, 'song');
+}

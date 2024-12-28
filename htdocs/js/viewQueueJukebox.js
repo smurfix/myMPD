@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module viewQueueJukebox_js */
@@ -37,19 +37,25 @@ function handleQueueJukebox(view) {
  * @returns {void}
  */
 function initViewQueueJukebox(view) {
-    elGetById(view + 'List').addEventListener('click', function(event) {
-        const target = tableClickHandler(event);
-        if (target !== null) {
-            if (settings.partition.jukeboxMode === 'song') {
-                clickSong(getData(target, 'uri'), event);
-            }
-            else if (settings.partition.jukeboxMode === 'album') {
-                clickQuickPlay(target);
-            }
-        }
-    }, false);
-
     initSearchExpression(view);
+
+    setView('QueueJukeboxAlbum');
+    setView('QueueJukeboxSong');
+}
+
+/**
+ * Click event handler for jukebox list
+ * @param {MouseEvent} event click event
+ * @param {HTMLElement} target calculated target
+ * @returns {void}
+ */
+function viewQueueJukeboxListClickHandler(event, target) {
+    if (settings.partition.jukeboxMode === 'song') {
+        clickSong(getData(target, 'uri'), event);
+    }
+    else if (settings.partition.jukeboxMode === 'album') {
+        clickQuickPlay(target);
+    }
 }
 
 /**
@@ -58,12 +64,75 @@ function initViewQueueJukebox(view) {
  * @returns {void}
  */
 function getJukeboxList(view) {
+    if (settings.partition.jukeboxMode === 'off') {
+        elHideId(view + 'List');
+        elShowId(view + 'Disabled');
+    }
+    else {
+        elShowId(view + 'List');
+        elHideId(view + 'Disabled');
+    }
     sendAPI("MYMPD_API_JUKEBOX_LIST", {
         "offset": app.current.offset,
         "limit": app.current.limit,
-        "cols": settings['cols' + view + 'Fetch'],
+        "fields": settings['view' + view + 'Fetch'].fields,
         "expression": app.current.search
     }, parseJukeboxList, true);
+}
+
+/**
+ * Parses the response from MYMPD_API_JUKEBOX_LIST
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
+function parseJukeboxList(obj) {
+    const view = settings.partition.jukeboxMode === 'album'
+        ? 'QueueJukeboxAlbum'
+        : 'QueueJukeboxSong';
+    const table = elGetById(view + 'List');
+    if (checkResult(obj, table, undefined) === false) {
+        return;
+    }
+
+    if (settings['view' + app.id].mode === 'table') {
+        const tfoot = table.querySelector('tfoot');
+        elClear(tfoot);
+        updateTable(obj, view, function(row, data) {
+            parseJukeboxListUpdate(row, data);
+        });
+        if (obj.result.totalEntities > 0) {
+            addTblFooter(tfoot,
+                elCreateTextTnNr('span', {}, 'Num entries', obj.result.totalEntities)
+            );
+        }
+        return;
+    }
+    if (settings['view' + app.id].mode === 'grid') {
+        updateGrid(obj, app.id, function(card, data) {
+            parseJukeboxListUpdate(card, data);
+        });
+        return;
+    }
+    updateList(obj, app.id, function(card, data) {
+        parseJukeboxListUpdate(card, data);
+    });
+}
+
+/**
+ * Callback function for row or card
+ * @param {HTMLElement} card Row or card
+ * @param {object} data Data object
+ * @returns {void}
+ */
+function parseJukeboxListUpdate(card, data) {
+    const rowTitle = settings.partition.jukeboxMode === 'song' ?
+        settingsWebuiFields.clickSong.validValues[settings.webuiSettings.clickSong] :
+        settingsWebuiFields.clickQuickPlay.validValues[settings.webuiSettings.clickQuickPlay];
+    setData(card, 'uri', data.uri);
+    setData(card, 'name', data.Title);
+    setData(card, 'type', data.Type);
+    setData(card, 'pos', data.Pos);
+    card.setAttribute('title', tn(rowTitle));
 }
 
 /**
@@ -97,43 +166,4 @@ function delQueueJukeboxEntries(pos) {
     sendAPI("MYMPD_API_JUKEBOX_RM", {
         "positions": pos
     }, null, false);
-}
-
-/**
- * Parses the response from MYMPD_API_JUKEBOX_LIST
- * @param {object} obj jsonrpc response
- * @returns {void}
- */
-function parseJukeboxList(obj) {
-    const view = settings.partition.jukeboxMode === 'album'
-        ? 'QueueJukeboxAlbum'
-        : 'QueueJukeboxSong';
-    if (checkResultId(obj, view + 'List') === false) {
-        if (obj.result !== undefined) {
-            if (obj.result.jukeboxMode === 'off') {
-                elHideId(view + 'List');
-                elShowId(view + 'Disabled');
-            }
-            else {
-                elShowId(view + 'List');
-                elHideId(view + 'Disabled');
-            }
-        }
-        return;
-    }
-
-    elShowId(view + 'List');
-    elHideId(view + 'Disabled');
-
-    const rowTitle = settings.partition.jukeboxMode === 'song' ?
-        settingsWebuiFields.clickSong.validValues[settings.webuiSettings.clickSong] :
-        settingsWebuiFields.clickQuickPlay.validValues[settings.webuiSettings.clickQuickPlay];
-    updateTable(obj, view, function(row, data) {
-        setData(row, 'uri', data.uri);
-        setData(row, 'name', data.Title);
-        setData(row, 'type', data.Type);
-        setData(row, 'pos', data.Pos);
-        row.setAttribute('title', tn(rowTitle));
-        row.setAttribute('tabindex', 0);
-    });
 }

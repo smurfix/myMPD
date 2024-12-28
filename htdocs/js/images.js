@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module images_js */
@@ -10,12 +10,21 @@
  * @param {string} uri image uri
  * @returns {string} absolute image uri
  */
+function getImageUri(uri) {
+    return isHttpUri(uri) === true
+        ? subdir + '/proxy-covercache?uri=' + myEncodeURIComponent(uri)
+        : uri.charAt(0) === '/'
+            ? subdir + uri
+            : subdir + '/browse/pics/thumbs/' + myEncodeURI(uri);
+}
+
+/**
+ * Constructs an absolute image uri for css
+ * @param {string} uri image uri
+ * @returns {string} absolute image uri
+ */
 function getCssImageUri(uri) {
-    return (isHttpUri(uri) === true
-            ? 'url("' + subdir + '/proxy-covercache?uri=' + myEncodeURIComponent(uri) +'")'
-            : uri.charAt(0) === '/'
-                ? 'url("' + subdir + uri + '")'
-                : 'url("' + subdir + '/browse/pics/thumbs/' + myEncodeURI(uri) + '")');
+    return 'url("' + getImageUri(uri) + '")';
 }
 
 /**
@@ -123,7 +132,7 @@ function isThumbnailfile(uri) {
 
 /**
  * Opens the picture modal
- * @param {HTMLElement} el image element
+ * @param {HTMLElement | EventTarget} el image element
  * @returns {void}
  */
 //eslint-disable-next-line no-unused-vars
@@ -133,7 +142,9 @@ function zoomPicture(el) {
         return;
     }
 
-    if (el.classList.contains('carousel')) {
+    if (el.classList.contains('carousel') ||
+        el.parentNode.classList.contains('carousel'))
+    {
         let images;
         let embeddedImageCount;
         const dataImages = getData(el, 'images');

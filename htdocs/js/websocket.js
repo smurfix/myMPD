@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module websocket_js */
@@ -10,8 +10,12 @@
  * @returns {boolean} true if websocket is connected, else false
  */
 function getWebsocketState() {
-    return socket !== null &&
-        socket.readyState === WebSocket.OPEN;
+    if (socket !== null &&
+        socket.readyState === WebSocket.OPEN)
+    {
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -19,8 +23,11 @@ function getWebsocketState() {
  * @returns {void}
  */
 function webSocketConnect() {
-    if (getWebsocketState() === true)
-    {
+    if (websocketKeepAliveTimer === null) {
+        websocketKeepAliveTimer = setInterval(websocketKeepAlive, 5000);
+    }
+
+    if (getWebsocketState() === true) {
         logDebug('Socket already connected');
         return;
     }
@@ -44,10 +51,7 @@ function webSocketConnect() {
     socket.onopen = function() {
         logDebug('Websocket is connected');
         socket.send('id:' + jsonrpcClientId);
-        if (websocketKeepAliveTimer === null) {
-            websocketKeepAliveTimer = setInterval(websocketKeepAlive, 30000);
-            websocketLastPong = getTimestamp();
-        }
+        websocketLastPong = getTimestamp();
     };
 
     socket.onmessage = function(msg) {
@@ -68,6 +72,7 @@ function webSocketConnect() {
         }
         catch(error) {
             logError('Invalid websocket notification received: ' + msg.data);
+            logError(error);
             return;
         }
 
@@ -145,7 +150,10 @@ function webSocketConnect() {
                         "offset": app.current.offset,
                         "limit": app.current.limit,
                         "searchstr": app.current.search,
-                        "type": 0
+                        "type": 0,
+                        "sort": app.current.sort.tag,
+                        "sortdesc": app.current.sort.desc,
+                        "fields": settings.viewBrowsePlaylistList.fields
                     }, parsePlaylistList, false);
                 }
                 else if (app.id === 'BrowsePlaylistDetail') {
@@ -154,7 +162,7 @@ function webSocketConnect() {
                         "limit": app.current.limit,
                         "expression": app.current.search,
                         "plist": app.current.tag,
-                        "cols": settings.colsBrowsePlaylistDetailFetch
+                        "fields": settings.viewBrowsePlaylistDetailFetch.fields
                     }, parsePlaylistDetail, false);
                 }
                 break;
@@ -163,7 +171,7 @@ function webSocketConnect() {
                     sendAPI('MYMPD_API_LAST_PLAYED_LIST', {
                         "offset": app.current.offset,
                         "limit": app.current.limit,
-                        "cols": settings.colsQueueLastPlayedFetch,
+                        "fields": settings.viewQueueLastPlayedFetch.fields,
                         "expression": app.current.search
                     }, parseLastPlayed, false);
                 }
@@ -192,13 +200,16 @@ function webSocketConnect() {
                         "expression": app.current.search,
                         "sort": app.current.sort.tag,
                         "sortdesc": app.current.sort.desc,
-                        "cols": settings.colsBrowseDatabaseAlbumListFetch
+                        "fields": settings.viewBrowseDatabaseAlbumListFetch.fields
                     }, parseDatabaseAlbumList, true);
                 }
                 toggleAlert('alertUpdateCacheState', false, '');
                 break;
             case 'notify':
                 showNotification(tn(obj.params.message, obj.params.data), obj.params.facility, obj.params.severity);
+                break;
+            case 'script_dialog': 
+                showScriptDialog(obj.params);
                 break;
             default:
                 logDebug('Unknown websocket notification: ' + obj.method);
@@ -244,24 +255,25 @@ function webSocketClose() {
     }
     if (socket !== null) {
         //disable onclose handler first
-        socket.onclose = function() {};
         try {
+            socket.onclose = function() {};
             socket.close();
         }
         catch(error) {
             logError(error);
         }
-        socket = null;
     }
+    socket = null;
 }
 
 /**
  * Sends a ping keepalive message to the websocket endpoint
  * or reconnects the socket if the socket is disconnected or stale.
+ * Refreshes the home widgets if the socket is connected.
  * @returns {void}
  */
 function websocketKeepAlive() {
-    const awaitedTime = getTimestamp() - 65;
+    const awaitedTime = getTimestamp() - 7;
     if (websocketLastPong <  awaitedTime) {
         // stale websocket connection
         logError('Stale websocket connection, reconnecting');
@@ -270,19 +282,29 @@ function websocketKeepAlive() {
         webSocketConnect();
     }
     else if (getWebsocketState() === true) {
+        // websocket is connected
         try {
             socket.send('ping');
         }
         catch(error) {
-            showNotification(tn('myMPD connection failed, trying to reconnect'), 'general', 'error');
+            toggleAlert('alertMympdState', true, tn('myMPD connection failed, trying to reconnect'));
             logError(error);
             webSocketClose();
             webSocketConnect();
+            return;
+        }
+        // Check if home widgets should be refreshed
+        if (widgetRefresh.length > 0 &&
+            app.current.card === 'Home')
+        {
+            homeWidgetsRefresh();
         }
     }
     else {
+        // websocket is not connected
         logDebug('Reconnecting websocket');
         toggleAlert('alertMympdState', true, tn('myMPD connection failed, trying to reconnect'));
+        webSocketClose();
         webSocketConnect();
     }
 }

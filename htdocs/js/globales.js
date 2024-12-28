@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module globales_js */
@@ -85,8 +85,13 @@ const ligatures = {
     'more': 'menu',
     'unchecked': 'radio_button_unchecked',
     'partitionSpecific': 'dashboard',
-    'browserSpecific': 'web_asset'
+    'browserSpecific': 'web_asset',
+    'stared': 'star',
+    'star': 'star_border'
 };
+
+/** @type {Array} */
+const widgetRefresh = [];
 
 // pre-generated elements
 /** @type {object} */
@@ -111,6 +116,21 @@ const albumFilters = [
 ];
 
 /** @type {object} */
+const webradioFields = [
+    'StreamUri',
+    'Homepage',
+    'Genres',
+    'Country',
+    'Region',
+    'Languages',
+    'Codec',
+    'Bitrate',
+    'Description',
+    'Added',
+    'Last-Modified'
+];
+
+/** @type {object} */
 const session = {
     "token": "",
     "timeout": 0
@@ -132,8 +152,10 @@ const messagesMax = 100;
 /** @type {boolean} */
 const debugMode = document.querySelector("script").src.replace(/^.*[/]/, '') === 'combined.js' ? false : true;
 
-let webradioDb = null;
-const webradioDbPicsUri = 'https://jcorporation.github.io/webradiodb/db/pics/';
+/** @type {string} */
+const scriptsUri = 'https://github.com/jcorporation/mympd-scripts/tree/main/';
+/** @type {string} */
+const scriptsImportUri = 'https://raw.githubusercontent.com/jcorporation/mympd-scripts/main/';
 
 /** @type {object} */
 const imageExtensions = ['webp', 'png', 'jpg', 'jpeg', 'svg', 'avif'];
@@ -155,11 +177,18 @@ const localeMap = {
     'zh-TW': 'zh-Hant'
 };
 
+/** @type {object} */
 let materialIcons = {};
+/** @type {object} */
 let phrasesDefault = {};
+/** @type {object} */
 let phrases = {};
 
+/** @type {number} */
 let lastSeekStep = 10;
+
+/** @type {number} */
+const maxElementsPerPage = 1000;
 
 /**
  * This settings are saved in the browsers localStorage
@@ -324,19 +353,19 @@ const settingsFields = {
         "form": "modalSettingsStatisticsFrm",
         "help": "helpSettingsLastPlayedCount"
     },
-    "listenbrainzToken": {
-        "defaultValue": "",
-        "inputType": "password",
-        "title": "ListenBrainz Token",
-        "form": "modalSettingsCloudFrm",
-        "help": "helpSettingsListenBrainzToken"
-    },
     "bookletName": {
         "defaultValue": defaults["MYMPD_BOOKLET_NAME"],
         "inputType": "text",
         "title": "Booklet filename",
-        "form": "modalSettingsBookletFrm",
+        "form": "modalSettingsAlbumInfoFrm",
         "help": "helpSettingsBookletName"
+    },
+    "infoTxtName": {
+        "defaultValue": defaults["MYMPD_INFO_TXT_NAME"],
+        "inputType": "text",
+        "title": "Info filename",
+        "form": "modalSettingsAlbumInfoFrm",
+        "help": "helpSettingsInfoTxtName"
     },
     "coverimageNames": {
         "defaultValue": defaults["MYMPD_COVERIMAGE_NAMES"],
@@ -407,7 +436,7 @@ const settingsWebuiFields = {
         "title": "Click song",
         "form": "modalSettingsDefaultActionsFrm"
     },
-    "clickRadiobrowser": {
+    "clickWebradiodb": {
         "defaultValue": "append",
         "validValues": {
             "append": "Append to queue",
@@ -590,6 +619,13 @@ const settingsWebuiFields = {
         "form": "modalSettingsFooterFrm",
         "sort": 1
     },
+    "footerAudioFormat": {
+        "defaultValue": false,
+        "inputType": "checkbox",
+        "title": "AudioFormat",
+        "form": "modalSettingsFooterFrm",
+        "sort": 1
+    },
     "footerVolumeLevel": {
         "defaultValue": false,
         "inputType": "checkbox",
@@ -618,7 +654,8 @@ const settingsWebuiFields = {
             "50": 50,
             "100": 100,
             "250": 250,
-            "500": 500
+            "500": 500,
+            "1000": 1000
         },
         "inputType": "select",
         "contentType": "number",
@@ -634,14 +671,14 @@ const settingsWebuiFields = {
         "help": "helpSettingsSmallWidthTagRows"
     },
     "quickPlayButton": {
-        "defaultValue": false,
+        "defaultValue": true,
         "inputType": "checkbox",
         "title": "Quick play button",
         "form": "modalSettingsListsFrm",
         "help": "helpSettingsQuickPlay"
     },
     "quickRemoveButton": {
-        "defaultValue": false,
+        "defaultValue": true,
         "inputType": "checkbox",
         "title": "Quick remove button",
         "form": "modalSettingsListsFrm",
@@ -653,6 +690,13 @@ const settingsWebuiFields = {
         "title": "Compact grids",
         "form": "modalSettingsListsFrm",
         "help": "helpSettingsCompactGrids"
+    },
+    "viewTitles": {
+        "defaultValue": true,
+        "inputType": "checkbox",
+        "title": "Show view titles",
+        "form": "modalSettingsListsFrm",
+        "help": "helpSettingsViewTitles"
     },
     "showBackButton": {
         "defaultValue": false,
@@ -676,19 +720,11 @@ const settingsWebuiFields = {
         "warn": "Lua is not compiled in",
         "help": "helpSettingsEnableScripting"
     },
-    "enableTrigger": {
-        "defaultValue": true,
-        "inputType": "checkbox",
-        "title": "Trigger",
-        "form": "modalSettingsFurtherFeaturesFrm",
-        "help": "helpSettingsEnableTrigger"
-    },
     "enableTimer": {
         "defaultValue": true,
         "inputType": "checkbox",
         "title": "Timer",
         "form": "modalSettingsFurtherFeaturesFrm",
-        "warn": "Timers are not supported by platform",
         "help": "helpSettingsEnableTimer"
     },
     "enableMounts": {
@@ -728,18 +764,19 @@ const settingsWebuiFields = {
         "onChange": "eventChangeTheme",
         "sort": 0
     },
-    "thumbnailSize": {
+    "gridSize": {
         "defaultValue": 175,
         "inputType": "text",
         "contentType": "number",
-        "title": "Thumbnail size",
-        "form": "modalSettingsAlbumartFrm",
+        "title": "Grid size",
+        "form": "modalSettingsListsFrm",
         "invalid": "Must be a number and greater than zero",
         "validate": {
             "cmd": "validateUintEl",
             "options": []
         },
-        "unit": "Pixel"
+        "unit": "Pixel",
+        "help": "helpSettingsGridSize"
     },
     "bgCover": {
         "defaultValue": true,
@@ -799,7 +836,7 @@ const settingsWebuiFields = {
             "Queue/LastPlayed": "LastPlayed",
             "Queue/Jukebox": "Jukebox Queue",
             "Browse/Database": "Database",
-            "Browse/Playlists": "Playlists",
+            "Browse/Playlist": "Playlists",
             "Browse/Filesystem": "Filesystem",
             "Browse/Radio": "Webradios",
             "Search": "Search"
@@ -813,15 +850,8 @@ const settingsWebuiFields = {
         "defaultValue": true,
         "inputType": "checkbox",
         "title": "Show MusicBrainz links",
-        "form": "modalSettingsCloudFrm",
+        "form": "modalSettingsTagsFrm",
         "help": "helpSettingsMusicBrainzLinks"
-    },
-    "radiobrowserStationclicks": {
-        "defaultValue": false,
-        "inputType": "checkbox",
-        "title": "Submit station clicks to radiobrowser.info",
-        "form": "modalSettingsCloudFrm",
-        "help": "helpSettingsRadiobrowserStationclicks"
     },
     "outputLigatures": {
         "defaultValue": {
@@ -849,6 +879,25 @@ const settingsWebuiFields = {
         },
         "invalid": "Must be a number"
     },
+    "feedback": {
+        "defaultValue": "like",
+        "inputType": "none"
+    },
+    "browseDatabaseAlbumListSort": {
+        "defaultValue": tagAlbumArtist,
+        "validValues": {},
+        "inputType": "select",
+        "title": "Album list sort",
+        "form": "modalSettingsSortFrm",
+        "help": "helpSettingsAlbumListSort"
+    },
+    "showWorkTagAlbumDetail": {
+        "defaultValue": false,
+        "inputType": "checkbox",
+        "title": "Show work in album detail",
+        "form": "modalSettingsTagsFrm",
+        "help": "helpSettingsShowWorkTagAlbumDetail"
+    }
 };
 
 const settingsConnectionFields = {
@@ -1013,9 +1062,9 @@ const settingsPlaybackFields = {
         "help": "helpJukeboxQueueLength",
         "class": ["jukeboxSongOnly"]
     },
-    "jukeboxUniqueTag": {
+    "jukeboxUniqTag": {
         "inputType": "select",
-        "defaultValue": defaults["MYMPD_JUKEBOX_UNIQUE_TAG"],
+        "defaultValue": defaults["MYMPD_JUKEBOX_UNIQ_TAG"],
         "title": "Enforce uniqueness",
         "form": "modalPlaybackJukeboxCollapse",
         "help": "helpJukeboxUniqueTag"
@@ -1045,6 +1094,16 @@ const settingsPlaybackFields = {
         "title": "Min. song duration",
         "form": "modalPlaybackJukeboxCollapse",
         "help": "helpJukeboxMinSongDuration",
+        "class": ["jukeboxSongOnly"],
+        "unit": "Seconds"
+    },
+    "jukeboxMaxSongDuration": {
+        "inputType": "text",
+        "contentType": "number",
+        "defaultValue": defaults["MYMPD_JUKEBOX_MAX_SONG_DURATION"],
+        "title": "Max. song duration",
+        "form": "modalPlaybackJukeboxCollapse",
+        "help": "helpJukeboxMaxSongDuration",
         "class": ["jukeboxSongOnly"],
         "unit": "Seconds"
     },
@@ -1089,7 +1148,6 @@ for (const key in localSettings) {
 }
 
 const userAgentData = {};
-userAgentData.hasIO = 'IntersectionObserver' in window ? true : false;
 
 /**
  * Sets the useragentData object
@@ -1109,6 +1167,8 @@ function setUserAgentData() {
             //Safari does not support this API
             /** @type {boolean} */
             userAgentData.isSafari = false;
+            /** @type {boolean} */
+            userAgentData.isAndroid = /Android/i.test(ua.platform);
         });
     }
     else {
@@ -1120,6 +1180,8 @@ function setUserAgentData() {
                 : /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
         /** @type {boolean} */
         userAgentData.isSafari = /Safari/i.test(navigator.userAgent) && ! /Chrome/i.test(navigator.userAgent);
+        /** @type {boolean} */
+        userAgentData.isAndroid = /Android/i.test(navigator.userAgent);
     }
 }
 setUserAgentData();
@@ -1134,15 +1196,23 @@ const mpdVersion = {
 //remember offset for filesystem browsing uris
 const browseFilesystemHistory = {};
 
-//list of stickers
+//list of stickers for songs
 /** @type {Array} */
-const stickerList = [
+const stickerListSongs = [
     'playCount',
     'skipCount',
     'lastPlayed',
     'lastSkipped',
     'like',
+    'rating',
     'elapsed'
+];
+
+//list of stickers for playlists and filters (albums)
+/** @type {Array} */
+const stickerListAll = [
+    'like',
+    'rating'
 ];
 
 //application state
@@ -1180,7 +1250,7 @@ app.cards = {
                 "limit": 100,
                 "filter": "any",
                 "sort": {
-                    "tag": "Pos",
+                    "tag": "Priority",
                     "desc": false
                 },
                 "tag": "",
@@ -1253,7 +1323,7 @@ app.cards = {
                         "limit": 100,
                         "filter": "",
                         "sort": {
-                            "tag": "",
+                            "tag": "Name",
                             "desc": false
                         },
                         "tag": "",
@@ -1294,7 +1364,7 @@ app.cards = {
                         "limit": 100,
                         "filter": "any",
                         "sort": {
-                            "tag": tagAlbumArtist,
+                            "tag": "",
                             "desc": false
                         },
                         "tag": "Album",
@@ -1321,9 +1391,9 @@ app.cards = {
                     "Favorites": {
                         "offset": 0,
                         "limit": 100,
-                        "filter": "",
+                        "filter": "any",
                         "sort": {
-                            "tag": "",
+                            "tag": "Name",
                             "desc": false
                         },
                         "tag": "",
@@ -1333,32 +1403,9 @@ app.cards = {
                     "Webradiodb": {
                         "offset": 0,
                         "limit": 100,
-                        "filter": {
-                            "genre": "",
-                            "country": "",
-                            "language": "",
-                            "codec": "",
-                            "bitrate": ""
-                        },
+                        "filter": "any",
                         "sort": {
                             "tag": "Name",
-                            "desc": false
-                        },
-                        "tag": "",
-                        "search": "",
-                        "scrollPos": 0
-                    },
-                    "Radiobrowser": {
-                        "offset": 0,
-                        "limit": 100,
-                        "filter": {
-                            "tags": "",
-                            "genre": "",
-                            "country": "",
-                            "language": ""
-                        },
-                        "sort": {
-                            "tag": "",
                             "desc": false
                         },
                         "tag": "",
@@ -1438,8 +1485,7 @@ const features = {
     "featSmartplsAvailable": true,
     "featStickers": false,
     "featTags": true,
-    "featTimer": true,
-    "featTrigger": true
+    "featTimer": true
 };
 
 //keyboard shortcuts
@@ -1456,18 +1502,20 @@ const keymap = {
         "p": {"order": 9, "cmd": "togglePlaymode", "options": ["repeat"], "desc": "Toggle repeat"},
         "i": {"order": 9, "cmd": "togglePlaymode", "options": ["single"], "desc": "Toggle single mode"},
     "modals": {"order": 200, "desc": "Dialogs"},
-        "A": {"order": 201, "cmd": "showAddToPlaylist", "options": ["stream", []], "desc": "Add stream"},
-        "C": {"order": 202, "cmd": "openModal", "options": ["modalConnection"], "desc": "Open MPD connection"},
-        "G": {"order": 207, "cmd": "openModal", "options": ["modalTrigger"], "desc": "Open trigger", "feature": "featTrigger"},
+        "A": {"order": 207, "cmd": "showAddToPlaylist", "options": ["stream", []], "desc": "Add stream"},
+        "C": {"order": 207, "cmd": "openModal", "options": ["modalConnection"], "desc": "Open MPD connection"},
+        "D": {"order": 207, "cmd": "clickTitle", "options": [], "desc": "Open current song details"},
+        "G": {"order": 207, "cmd": "openModal", "options": ["modalTrigger"], "desc": "Open trigger", "feature": "featScripting"},
         "I": {"order": 207, "cmd": "openModal", "options": ["modalTimer"], "desc": "Open timer", "feature": "featTimer"},
         "L": {"order": 207, "cmd": "loginOrLogout", "options": [], "desc": "Login or logout", "feature": "featSession"},
-        "M": {"order": 205, "cmd": "openModal", "options": ["modalMaintenance"], "desc": "Open maintenance"},
-        "N": {"order": 206, "cmd": "openModal", "options": ["modalNotifications"], "desc": "Open notifications"},
+        "M": {"order": 207, "cmd": "openModal", "options": ["modalMaintenance"], "desc": "Open maintenance"},
+        "N": {"order": 207, "cmd": "openModal", "options": ["modalNotifications"], "desc": "Open notifications"},
         "O": {"order": 207, "cmd": "openModal", "options": ["modalMounts"], "desc": "Open mounts", "feature": "featMounts"},
         "P": {"order": 207, "cmd": "openModal", "options": ["modalPartitions"], "desc": "Open partitions", "feature": "featPartitions"},
-        "Q": {"order": 203, "cmd": "openModal", "options": ["modalPlayback"], "desc": "Open playback settings"},
+        "Q": {"order": 207, "cmd": "openModal", "options": ["modalPlayback"], "desc": "Open playback settings"},
         "S": {"order": 207, "cmd": "showListScriptModal", "options": [], "desc": "Open scripts", "feature": "featScripting"},
-        "T": {"order": 204, "cmd": "openModal", "options": ["modalSettings"], "desc": "Open settings"},
+        "T": {"order": 207, "cmd": "openModal", "options": ["modalSettings"], "desc": "Open settings"},
+        "V": {"order": 207, "cmd": "showListVariablesModal", "options": [], "desc": "Open variables", "feature": "featScripting"},
         "?": {"order": 207, "cmd": "openModal", "options": ["modalAbout"], "desc": "Open about"},
         
     "navigation": {"order": 300, "desc": "Navigation"},
@@ -1494,6 +1542,7 @@ domCache.progress = elGetById('footerProgress');
 domCache.progressBar = elGetById('footerProgressBar');
 domCache.progressPos = elGetById('footerProgressPos');
 domCache.volumeBar = elGetById('volumeBar');
+domCache.localPlayerProgress = elGetById('localPlayerProgress');
 
 //Get BSN object references for fast access
 const uiElements = {};
@@ -1509,17 +1558,175 @@ uiElements.modalHomeIconLigatureDropdown = BSN.Dropdown.getInstance(elGetById('m
 uiElements.modalMountsNeighborsDropdown = BSN.Dropdown.getInstance(elGetById('modalMountsNeighborsBtn'));
 
 const LUAfunctions = {
+    "json.decode": {
+        "desc": "Parses a Json string to a Lua table.",
+        "func": "local data = json.decode(str)",
+        "feat": ""
+    },
+    "json.encode": {
+        "desc": "Encodes a Lua table as Json string.",
+        "func": "local str = json.encode(data)",
+        "feat": ""
+    },
+    "mympd.cache_cover_write": {
+        "desc": "Write a file for the cover cache.",
+        "func": "local rc, filename = mympd.cache_cover_write(src, uri)",
+        "feat": ""
+    },
+    "mympd.cache_lyrics_write": {
+        "desc": "Write the lyrics entry object to the lyrics cache.",
+        "func": "local rc, filename = mympd.cache_lyrics_write(json.encode(entry), song_uri)",
+        "feat": ""
+    },
+    "mympd.cache_thumbs_write": {
+        "desc": "Write a file for the thumbs cache.",
+        "func": "local rc, filename =  = mympd.cache_thumbs_write(src, uri)",
+        "feat": ""
+    },
+    "mympd.dialog": {
+        "desc": "Returns an Jsonrpc response for a script dialog.",
+        "func": "return mympd.dialog(title, data, callback)",
+        "feat": ""
+    },
+    "mympd.hash_md5": {
+        "desc": "MD5 hash of string.",
+        "func": "local hash = mympd.hash_md5(string)",
+        "feat": ""
+    },
+    "mympd.hash_sha1": {
+        "desc": "SHA1 hash of string.",
+        "func": "local hash = mympd.hash_sha1(string)",
+        "feat": ""
+    },
+    "mympd.hash_sha256": {
+        "desc": "SHA256 hash of string.",
+        "func": "local hash = mympd.hash_sha256(string)",
+        "feat": ""
+    },
     "mympd.http_client": {
         "desc": "HTTP client",
-        "func": "rc, code, header, body = mympd.http_client(method, uri, headers, payload)"
+        "func": "local rc, code, headers, body = mympd.http_client(method, uri, extra_headers, payload)",
+        "feat": ""
+    },
+    "mympd.http_download": {
+        "desc": "HTTP download",
+        "func": "local rc, code, headers = mympd.http_download(uri, extra_headers, out)",
+        "feat": ""
+    },
+    "mympd.http_jsonrpc_error": {
+        "desc": "Sends a JSONRPC 2.0 error.",
+        "func": "return mympd.http_jsonrpc_error(method, msg)",
+        "feat": ""
+    },
+    "mympd.http_jsonrpc_response": {
+        "desc": "Sends a JSONRPC 2.0 response.",
+        "func": "return mympd.http_jsonrpc_response(obj)",
+        "feat": ""
+    },
+    "mympd.http_jsonrpc_warn": {
+        "desc": "Sends a JSONRPC 2.0 warning.",
+        "func": "return mympd.http_jsonrpc_warn(method, msg)",
+        "feat": ""
+    },
+    "mympd.http_redirect": {
+        "desc": "Sends a HTTP redirect.",
+        "func": "return mympd.http_reply(location)",
+        "feat": ""
+    },
+    "mympd.http_reply": {
+        "desc": "Sends a HTTP reply.",
+        "func": "return mympd.http_reply(status, header, body)",
+        "feat": ""
+    },
+    "mympd.http_serve_file": {
+        "desc": "Serves a file from the filesystem. Only files from the diskcache are allowed.",
+        "func": "return mympd.http_serve_file(file)",
+        "feat": ""
     },
     "mympd.init": {
-        "desc": "Initializes the mympd_state lua table",
-        "func": "mympd.init()"
+        "desc": "Initializes the global lua table mympd_state.",
+        "func": "mympd.init()",
+        "feat": ""
+    },
+    "mympd.log": {
+        "desc": "Logs messages to the myMPD log.",
+        "func": "mympd.log(loglevel, message)",
+        "feat": ""
+    },
+    "mympd.tmp_file": {
+        "desc": "Generates a random tmp filename for the misc cache.",
+        "func": "local tmp_file = mympd.tmp_file()",
+        "feat": ""
+    },
+    "mympd.urldecode": {
+        "desc": "URL decodes a string.",
+        "func": "local decoded = mympd.urlencode(string, false)",
+        "feat": ""
+    },
+    "mympd.update_mtime": {
+        "desc":	"Updates the timestamp of a file.",
+        "func": "local rc = mympd.update_mtime(filename)",
+        "feat": ""
+    },
+    "mympd.urlencode": {
+        "desc":	"URL encodes a string.",
+        "func": "local encoded = mympd.urlencode(string)",
+        "feat": ""
     },
     "mympd.os_capture": {
-        "desc":	"Executes a system command and capture its output.",
-        "func": "output = mympd.os_capture(command)"
+        "desc": "Executes a system command and capture its output.",
+        "func": "local output = mympd.os_capture(command)",
+        "feat": ""
+    },
+    "mympd.gpio_blink": {
+        "desc": "Blinks a GPIO with given timeout and interval.",
+        "func": "local rc = mympd.gpio_blink(gpio, timeout_ms, interval_ms)",
+        "feat": "featMygpiod"
+    },
+    "mympd.gpio_get": {
+        "desc": "Returns the active state of a GPIO.",
+        "func": "local rc = mympd.gpio_get(gpio)",
+        "feat": "featMygpiod"
+    },
+    "mympd.gpio_set": {
+        "desc": "Sets the active state of a GPIO.",
+        "func": "local rc = mygpio_gpio_set(mympd.mygpiod_socket, gpio, value)",
+        "feat": "featMygpiod"
+    },
+    "mympd.gpio_toggle": {
+        "desc": "Toggles the active state of a GPIO.",
+        "func": "local rc = mygpio_gpio_toggle(mympd.mygpiod_socket, gpio)",
+        "feat": "featMygpiod"
+    },
+    "mympd.notify_client": {
+        "desc": "Sends a notification to the client that started this script.",
+        "func": "mympd.notify_client(severity, message)",
+        "feat": ""
+    },
+    "mympd.notify_partition": {
+        "desc": "Sends a notification to all clients in the current partition.",
+        "func": "mympd.notify_partition(severity, message)",
+        "feat": ""
+    },
+    "mympd.splitlines": {
+        "desc": "Split a multiline string in lines.",
+        "func": "local lines = mympd.splitlines(str)",
+        "feat": ""
+    },
+    "mympd.trim": {
+        "desc": "Trims a string.",
+        "func": "local trimed = mympd.trim(str)",
+        "feat": ""
+    },
+    "mympd.sleep": {
+        "desc": "Sleeps number of milliseconds.",
+        "func": "sleep(ms)",
+        "feat": ""
+    },
+    "mympd.read_file": {
+        "desc": "Read an ascii file.",
+        "func": "local content = mympd.read_file(path)",
+        "feat": ""
     }
 };
 
@@ -1540,8 +1747,9 @@ const typeFriendly = {
     'view': 'View',
     'appGoto': 'View',
     'webradio': 'Webradio',
-    'cols': 'Columns',
-    'disc': 'Disc'
+    'viewSettings': 'View settings',
+    'disc': 'Disc',
+    'work': 'Work'
 };
 
 const friendlyActions = {

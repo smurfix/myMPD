@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 const CACHE = 'myMPD-cache-v__VERSION__';
@@ -10,9 +10,13 @@ const urlsToCache = [
     subdir + '/js/combined.js',
     subdir + '/assets/appicon-192.png',
     subdir + '/assets/appicon-512.png',
-    subdir + '/assets/coverimage-stream.svg',
-    subdir + '/assets/coverimage-notavailable.svg',
-    subdir + '/assets/coverimage-mympd.svg',
+    subdir + '/assets/coverimage-booklet',
+    subdir + '/assets/coverimage-folder',
+    subdir + '/assets/coverimage-stream',
+    subdir + '/assets/coverimage-notavailable',
+    subdir + '/assets/coverimage-mympd',
+    subdir + '/assets/coverimage-playlist',
+    subdir + '/assets/coverimage-smartpls',
     __I18NASSETS__
     subdir + '/assets/ligatures.json',
     subdir + '/assets/MaterialIcons-Regular.woff2',
@@ -29,6 +33,9 @@ const ignoreRequests = new RegExp(subdir + '/(' + [
     'stream/.*',
     'albumart.*',
     'tagart.*',
+    'folderart.*',
+    'playlistart.*',
+    'webradio.*',
     'proxy.*',
     'browse/.*'].join('|') + ')$');
 

@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -14,6 +14,7 @@
 #include "src/lib/config.h"
 #include "src/lib/config_def.h"
 #include "src/lib/env.h"
+#include "src/lib/event.h"
 #include "src/lib/filehandler.h"
 #include "src/lib/handle_options.h"
 #include "src/lib/log.h"
@@ -21,8 +22,8 @@
 #include "src/lib/msg_queue.h"
 #include "src/lib/passwd.h"
 #include "src/lib/sds_extras.h"
-#include "src/lib/smartpls.h"
 #include "src/mympd_api/mympd_api.h"
+#include "src/scripts/scripts.h"
 #include "src/web_server/web_server.h"
 
 #ifdef MYMPD_ENABLE_LUA
@@ -64,13 +65,19 @@ const char *__asan_default_options(void) {
 #endif
 
 //global variables
-_Atomic int worker_threads;
+_Atomic int mpd_worker_threads;
+#ifdef MYMPD_ENABLE_LUA
+    _Atomic int script_worker_threads;
+#endif
 //signal handler
 sig_atomic_t s_signal_received;
 //message queues
 struct t_mympd_queue *web_server_queue;
 struct t_mympd_queue *mympd_api_queue;
-struct t_mympd_queue *mympd_script_queue;
+#ifdef MYMPD_ENABLE_LUA
+    struct t_mympd_queue *script_queue;
+    struct t_mympd_queue *script_worker_queue;
+#endif
 
 /**
  * Signal handler that stops myMPD on SIGTERM and SIGINT and saves
@@ -81,20 +88,32 @@ static void mympd_signal_handler(int sig_num) {
     switch(sig_num) {
         case SIGTERM:
         case SIGINT: {
+            MYMPD_LOG_NOTICE(NULL, "Signal \"%s\" received, exiting", (sig_num == SIGTERM ? "SIGTERM" : "SIGINT"));
             //Set loop end condition for threads
             s_signal_received = sig_num;
             //Wakeup queue loops
             pthread_cond_signal(&mympd_api_queue->wakeup);
-            pthread_cond_signal(&mympd_script_queue->wakeup);
+            #ifdef MYMPD_ENABLE_LUA
+                pthread_cond_signal(&script_queue->wakeup);
+                pthread_cond_signal(&script_worker_queue->wakeup);
+            #endif
             pthread_cond_signal(&web_server_queue->wakeup);
-            MYMPD_LOG_NOTICE(NULL, "Signal \"%s\" received, exiting", (sig_num == SIGTERM ? "SIGTERM" : "SIGINT"));
+            event_eventfd_write(mympd_api_queue->event_fd);
+            if (web_server_queue->mg_mgr != NULL) {
+                mg_wakeup(web_server_queue->mg_mgr, web_server_queue->mg_conn_id, "X", 1);
+            }
             break;
         }
         case SIGHUP: {
             MYMPD_LOG_NOTICE(NULL, "Signal SIGHUP received, saving states");
-            struct t_work_request *request = create_request(-1, 0, INTERNAL_API_STATE_SAVE, NULL, MPD_PARTITION_DEFAULT);
-            request->data = sdscatlen(request->data, "}}", 2);
-            mympd_queue_push(mympd_api_queue, request, 0);
+            struct t_work_request *request1 = create_request(REQUEST_TYPE_DISCARD, 0, 0, INTERNAL_API_STATE_SAVE, NULL, MPD_PARTITION_DEFAULT);
+            request1->data = sdscatlen(request1->data, "}}", 2);
+            mympd_queue_push(mympd_api_queue, request1, 0);
+            #ifdef MYMPD_ENABLE_LUA
+                struct t_work_request *request2 = create_request(REQUEST_TYPE_DISCARD, 0, 0, INTERNAL_API_STATE_SAVE, NULL, MPD_PARTITION_DEFAULT);
+                request2->data = sdscatlen(request2->data, "}}", 2);
+                mympd_queue_push(script_queue, request2, 0);
+            #endif
             break;
         }
         default: {
@@ -253,7 +272,6 @@ static const struct t_subdirs_entry workdir_subdirs[] = {
     {DIR_WORK_STATE,            "State dir"},
     {DIR_WORK_STATE_DEFAULT,    "Default partition dir"},
     {DIR_WORK_TAGS,             "Tags cache dir"},
-    {DIR_WORK_WEBRADIOS,        "Webradio dir"},
     {NULL, NULL}
 };
 
@@ -261,8 +279,10 @@ static const struct t_subdirs_entry workdir_subdirs[] = {
  * Subdirs in the cache directory to check
  */
 static const struct t_subdirs_entry cachedir_subdirs[] = {
-    {DIR_CACHE_COVER,         "Covercache dir"},
-    {DIR_CACHE_WEBRADIODB,    "Webradiodb cache dir"},
+    {DIR_CACHE_COVER,         "Cover cache dir"},
+    {DIR_CACHE_LYRICS,        "Lyrics cache dir"},
+    {DIR_CACHE_MISC,          "Misc cache dir"},
+    {DIR_CACHE_THUMBS, "Thumbs cache dir"},
     {NULL, NULL}
 };
 
@@ -350,7 +370,10 @@ int main(int argc, char **argv) {
     #endif
 
     //set initial states
-    worker_threads = 0;
+    mpd_worker_threads = 0;
+    #ifdef MYMPD_ENABLE_LUA
+        script_worker_threads = 0;
+    #endif
     s_signal_received = 0;
     struct t_config *config = NULL;
     struct t_mg_user_data *mg_user_data = NULL;
@@ -358,6 +381,9 @@ int main(int argc, char **argv) {
     int rc = EXIT_FAILURE;
     pthread_t web_server_thread = 0;
     pthread_t mympd_api_thread = 0;
+    #ifdef MYMPD_ENABLE_LUA
+        pthread_t script_thread = 0;
+    #endif
     int thread_rc = 0;
 
     //goto root directory
@@ -371,17 +397,20 @@ int main(int argc, char **argv) {
     //only owner should have rw access
     umask(0077);
 
-    mympd_api_queue = mympd_queue_create("mympd_api_queue", QUEUE_TYPE_REQUEST);
-    web_server_queue = mympd_queue_create("web_server_queue", QUEUE_TYPE_RESPONSE);
-    mympd_script_queue = mympd_queue_create("mympd_script_queue", QUEUE_TYPE_RESPONSE);
+    mympd_api_queue = mympd_queue_create("mympd_api_queue", QUEUE_TYPE_REQUEST, true);
+    web_server_queue = mympd_queue_create("web_server_queue", QUEUE_TYPE_RESPONSE, false);
+    #ifdef MYMPD_ENABLE_LUA
+        script_queue = mympd_queue_create("script_queue", QUEUE_TYPE_REQUEST, false);
+        script_worker_queue = mympd_queue_create("script_worker_queue", QUEUE_TYPE_RESPONSE, false);
+    #endif
 
     //mympd config defaults
     config = malloc_assert(sizeof(struct t_config));
     mympd_config_defaults_initial(config);
 
     //command line option
-    int handle_options_rc = handle_options(config, argc, argv);
-    switch(handle_options_rc) {
+    enum handle_options_rc options_rc = handle_options(config, argc, argv);
+    switch(options_rc) {
         case OPTIONS_RC_INVALID:
             //invalid option or error
             loglevel = LOG_ERR;
@@ -391,6 +420,9 @@ int main(int argc, char **argv) {
             loglevel = LOG_ERR;
             rc = EXIT_SUCCESS;
             goto cleanup;
+        case OPTIONS_RC_OK:
+            //continue
+            break;
     }
 
     //get startup uid
@@ -417,6 +449,7 @@ int main(int argc, char **argv) {
     //bootstrap - write config files and exit
     if (config->bootstrap == true) {
         if (drop_privileges(config->user, startup_uid) == true &&
+            mympd_config_rm(config) == true &&
             mympd_config_rw(config, true) == true &&
             create_certificates(config) == true)
         {
@@ -474,6 +507,9 @@ int main(int argc, char **argv) {
     #ifdef MYMPD_ENABLE_FLAC
         MYMPD_LOG_INFO(NULL, "FLAC %d.%d.%d", FLAC_API_VERSION_CURRENT, FLAC_API_VERSION_REVISION, FLAC_API_VERSION_AGE);
     #endif
+    #ifdef MYMPD_ENABLE_EXPERIMENTAL
+        MYMPD_LOG_INFO(NULL, "Experimental features are enabled");
+    #endif
 
     //set signal handler
     if (set_signal_handler(SIGTERM) == false ||
@@ -527,11 +563,6 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
 
-    //default smart playlists
-    if (config->first_startup == true) {
-        smartpls_default(config->workdir);
-    }
-
     //Create working threads
     //mympd api
     MYMPD_LOG_NOTICE(NULL, "Starting mympd api thread");
@@ -541,6 +572,17 @@ int main(int argc, char **argv) {
         mympd_api_thread = 0;
         s_signal_received = SIGTERM;
     }
+
+    #ifdef MYMPD_ENABLE_LUA
+        //scripts
+        MYMPD_LOG_NOTICE(NULL, "Starting script thread");
+        if ((thread_rc = pthread_create(&script_thread, NULL, scripts_loop, config)) != 0) {
+            MYMPD_LOG_ERROR(NULL, "Can't create script thread");
+            MYMPD_LOG_ERRNO(NULL, thread_rc);
+            web_server_thread = 0;
+            s_signal_received = SIGTERM;
+        }
+    #endif
 
     //webserver
     MYMPD_LOG_NOTICE(NULL, "Starting webserver thread");
@@ -577,11 +619,25 @@ int main(int argc, char **argv) {
             MYMPD_LOG_NOTICE(NULL, "Finished mympd api thread");
         }
     }
+    #ifdef MYMPD_ENABLE_LUA
+        if (script_thread > (pthread_t)0) {
+            if ((thread_rc = pthread_join(script_thread, NULL)) != 0) {
+                MYMPD_LOG_ERROR(NULL, "Error stopping script thread");
+                MYMPD_LOG_ERRNO(NULL, thread_rc);
+            }
+            else {
+                MYMPD_LOG_NOTICE(NULL, "Finished script thread");
+            }
+        }
+    #endif
 
     //free queues
     mympd_queue_free(web_server_queue);
     mympd_queue_free(mympd_api_queue);
-    mympd_queue_free(mympd_script_queue);
+    #ifdef MYMPD_ENABLE_LUA
+        mympd_queue_free(script_queue);
+        mympd_queue_free(script_worker_queue);
+    #endif
 
     //free config
     mympd_config_free(config);

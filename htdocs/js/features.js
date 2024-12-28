@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module features_js */
@@ -23,11 +23,15 @@ function setFeatures() {
     features.featScripting = settings.webuiSettings.enableScripting
         ? settings.features.featScripting
         : false;
-    features.featTimer = settings.features.featTimer && settings.webuiSettings.enableTimer;
-    features.featTrigger = settings.webuiSettings.enableTrigger;
+    features.featTimer = settings.webuiSettings.enableTimer;
     features.featMediaSession = checkMediaSessionSupport();
     features.featFooterNotifications = settings.webuiSettings.footerNotifications;
     features.featSession = settings.pin;
+    features.featFooterAudioFormat = settings.webuiSettings.footerAudioFormat;
+    features.featMygpiod = settings.features.featMygpiod;
+    features.featWebradioDB = settings.features.featWebradioDB;
+    features.viewTitle = settings.webuiSettings.viewTitles;
+    //stickers config value
     features.featStickersEnabled = settings.features.featStickersEnabled;
 
     //mpd features
@@ -62,6 +66,10 @@ function setFeatures() {
         features.featStartsWith = settings.features.featStartsWith;
         features.featPcre = settings.features.featPcre;
         features.featPcreOrStartsWith = settings.features.featPcre || settings.features.featStartsWith;
+        features.featLike = features.featStickers && settings.webuiSettings.feedback === 'like';
+        features.featRating = features.featStickers && settings.webuiSettings.feedback === 'rating';
+        features.featDbAdded = settings.features.featDbAdded;
+        features.featStickerAdv  = features.featStickers && settings.features.featStickerAdv;
     }
 }
 
@@ -88,4 +96,3 @@ function applyFeatures() {
         }
     }
 }
-

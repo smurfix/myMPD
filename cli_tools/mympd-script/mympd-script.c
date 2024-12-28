@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-2.0fd-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -8,9 +8,11 @@
 
 #include "dist/sds/sds.h"
 #include "src/lib/http_client.h"
+#include "src/lib/list.h"
 #include "src/lib/sds_extras.h"
 #include "cli_tools/log.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -70,17 +72,16 @@ int main(int argc, char **argv) {
         post_data = sds_catjson(post_data, script_data, sdslen(script_data));
         post_data = sdscat(post_data, ",\"arguments\":{");
         post_data = parse_arguments(post_data, argv, argc);
-        post_data = sdscat(post_data, "}}}");
+        post_data = sdscat(post_data, "},\"event\":\"extern\"}");
         sdsfree(script_data);
     }
     else {
         uri = sdscatfmt(uri, "%s/api/%s", argv[1], argv[2]);
-
         post_data = sdscat(post_data, "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"MYMPD_API_SCRIPT_EXECUTE\",\"params\":{\"script\":");
         post_data = sds_catjson(post_data, argv[3], strlen(argv[3]));
         post_data = sdscat(post_data, ",\"arguments\":{");
         post_data = parse_arguments(post_data, argv, argc);
-        post_data = sdscat(post_data, "}}}");
+        post_data = sdscat(post_data, "},\"event\":\"user\"}");
     }
 
     struct mg_client_request_t request = {
@@ -90,18 +91,13 @@ int main(int argc, char **argv) {
         .post_data = post_data
     };
 
-    struct mg_client_response_t response = {
-        .rc = -1,
-        .response_code = 0,
-        .header = sdsempty(),
-        .body = sdsempty()
-    };
+    struct mg_client_response_t response;
+    http_client_response_init(&response);
 
     http_client_request(&request, &response);
     puts(response.body);
 
-    sdsfree(response.header);
-    sdsfree(response.body);
+    http_client_response_clear(&response);
     sdsfree(uri);
     sdsfree(post_data);
 

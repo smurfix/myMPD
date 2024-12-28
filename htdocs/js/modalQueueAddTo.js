@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalQueueAddTo_js */
@@ -58,6 +58,7 @@ function addRandomToQueue(target) {
     sendAPI("MYMPD_API_QUEUE_ADD_RANDOM", {
         "mode": Number(getSelectValueId('modalQueueAddToModeInput')),
         "plist": getDataId('modalQueueAddToPlaylistInput', 'value'),
-        "quantity": Number(elGetById('modalQueueAddToQuantityInput').value)
+        "quantity": Number(elGetById('modalQueueAddToQuantityInput').value),
+        "play": false
     }, modalClose, true);
 }

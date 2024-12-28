@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module elements_js */
@@ -198,7 +198,7 @@ function elShow(el) {
 
 /**
  * Clears the element
- * @param {Element} el element to clear
+ * @param {Element | ChildNode} el element to clear
  * @returns {void}
  */
 function elClear(el) {
@@ -785,5 +785,29 @@ function scrollToPosY(container, pos) {
     }
     else {
         container.scrollTop = pos;
+    }
+}
+
+/**
+ * Enables all button in a btn-group
+ * @param {Element} el Button group
+ * @returns {void}
+ */
+function elEnableBtnGroup(el) {
+    const btns = el.querySelectorAll('button');
+    for (const btn of btns) {
+        btn.removeAttribute('disabled');
+    }
+}
+
+/**
+ * Disables all button in a btn-group
+ * @param {Element} el Button group
+ * @returns {void}
+ */
+function elDisableBtnGroup(el) {
+    const btns = el.querySelectorAll('button');
+    for (const btn of btns) {
+        btn.setAttribute('disabled', 'disabled');
     }
 }

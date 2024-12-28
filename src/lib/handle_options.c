@@ -1,8 +1,12 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief Command line options handling
+ */
 
 #include "compile_time.h"
 #include "src/lib/handle_options.h"
@@ -14,6 +18,9 @@
 
 #include <getopt.h>
 
+/**
+ * Options definitions
+ */
 static struct option long_options[] = {
     {"cachedir",  required_argument, 0, 'a'},
     {"config",    no_argument,       0, 'c'},
@@ -31,9 +38,9 @@ static struct option long_options[] = {
  * @param cmd argv[0] from main function
  */
 static void print_usage(struct t_config *config, const char *cmd) {
-    fprintf(stderr, "\nUsage: %s [OPTION]...\n\n"
+    (void)fprintf(stderr, "\nUsage: %s [OPTION]...\n\n"
                     "myMPD %s\n"
-                    "(c) 2018-2023 Juergen Mang <mail@jcgames.de>\n"
+                    "(c) 2018-2024 Juergen Mang <mail@jcgames.de>\n"
                     "https://github.com/jcorporation/myMPD\n\n"
                     "Options:\n"
                     "  -c, --config           creates config and exits\n"
@@ -56,7 +63,7 @@ static void print_usage(struct t_config *config, const char *cmd) {
  *         OPTIONS_RC_EXIT if myMPD should exit
  *         OPTIONS_RC_OK if arguments are parsed successfully
  */
-int handle_options(struct t_config *config, int argc, char **argv) {
+enum handle_options_rc handle_options(struct t_config *config, int argc, char **argv) {
     int n = 0;
     int option_index = 0;
     while ((n = getopt_long(argc, argv, "a:chpsu:vw:", long_options, &option_index)) != -1) { /* Flawfinder: ignore */

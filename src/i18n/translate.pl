@@ -38,7 +38,7 @@ while (my $line = <$file>) {
 close $file;
 
 #phrases from src
-my @dirs = ("src/", "src/mpd_client/", "src/mpd_worker/", "src/mympd_api/", "src/web_server/", "htdocs/js/");
+my @dirs = ("src/", "src/mpd_client/", "src/mpd_worker/", "src/mympd_api/", "src/scripts/", "src/web_server/", "htdocs/js/");
 my @files = ("htdocs/index.html");
 for my $dirname (@dirs) {
     opendir my $dir, $dirname or die "Can't open directory \"$dirname\": $!";
@@ -149,7 +149,7 @@ while (my $line = <$descfile>) {
 close $descfile;
 
 #Write i18n.json
-open my $docfile, ">docs/references/translating_status.md" or die "Can not open \"docs/references/translating_status.md\": $!";
+open my $docfile, ">docs/_includes/translating_status.md" or die "Can not open \"docs/_includes/translating_status.md\": $!";
 open my $i18nfile, ">src/i18n/json/i18n.json" or die "Can not open \"src/i18n/json/i18n.json\": $!";
 print $i18nfile "{\n";
 print $i18nfile "    \"default\": {\"desc\":\"Browser default\", \"missingPhrases\": 0},\n";

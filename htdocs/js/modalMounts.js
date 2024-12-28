@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalMounts_js */
@@ -70,7 +70,18 @@ function unmountMount(mountPoint, target) {
     btnWaiting(target, true);
     sendAPI("MYMPD_API_MOUNT_UNMOUNT", {
         "mountPoint": mountPoint
-    }, mountMountCheckError, true);
+    }, mountUnmountCheckError, true);
+}
+
+/**
+ * Response handler for MYMPD_API_MOUNT_UNMOUNT
+ * @param {object} obj jsonrpc response
+ * @returns {void}
+ */
+function mountUnmountCheckError(obj) {
+    if (modalListApply(obj) === true) {
+        showListMounts();
+    }
 }
 
 /**
@@ -150,10 +161,11 @@ function showListMounts() {
  * @returns {void}
  */
 function parseListMounts(obj) {
-    const tbody = document.querySelector('#modalMountsList');
+    const table = document.querySelector('#modalMountsList');
+    const tbody = table.querySelector('tbody');
     elClear(tbody);
 
-    if (checkResult(obj, tbody) === false) {
+    if (checkResult(obj, table, 'table') === false) {
         return;
     }
 

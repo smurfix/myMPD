@@ -1,8 +1,12 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
+
+/*! \file
+ * \brief Extra functions for sds strings
+ */
 
 #ifndef MYMPD_SDS_EXTRAS_H
 #define MYMPD_SDS_EXTRAS_H
@@ -12,6 +16,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+/**
+ * Frees an sds string and sets it to NULL
+ */
 #define FREE_SDS(SDS_PTR) do { \
     sdsfree(SDS_PTR); \
     SDS_PTR = NULL; \
@@ -20,7 +27,6 @@
 sds sds_basename(sds s);
 sds sds_dirname(sds s);
 sds *sds_split_comma_trim(sds s, int *count);
-int sds_toimax(sds s);
 void sds_utf8_tolower(sds s);
 sds sds_catjson_plain(sds s, const char *p, size_t len);
 sds sds_catjson(sds s, const char *p, size_t len);
@@ -32,9 +38,11 @@ sds sds_urlencode(sds s, const char *p, size_t len);
 sds sds_replacelen(sds s, const char *p, size_t len);
 sds sds_replace(sds s, const char *p);
 sds sds_catbool(sds s, bool v);
+sds sds_hash_md5(const char *p);
 sds sds_hash_sha1(const char *p);
 sds sds_hash_sha1_sds(sds s);
 sds sds_hash_sha256(const char *p);
 sds sds_hash_sha256_sds(sds s);
+sds sds_pad_int(int64_t value, sds buffer);
 
 #endif

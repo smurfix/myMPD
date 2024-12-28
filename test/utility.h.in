@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -9,7 +9,14 @@
 
 #include "dist/sds/sds.h"
 
+#include <stdbool.h>
+
 #define MYMPD_BUILD_DIR "${PROJECT_BINARY_DIR}"
+
+#define TESTFILE_CONTENT "asdfjlkasdfjklsafd\nasfdsdfawaerwer"
+#define TESTFILE_CONTENT_LEN 34
+#define TESTFILE_CONTENT_NW "asdfjlkasdfjklsafdasfdsdfawaerwer"
+#define TESTFILE_CONTENT_NW_LEN 33
 
 extern sds workdir;
 
@@ -20,5 +27,7 @@ struct t_input_result {
 
 void init_testenv(void);
 void clean_testenv(void);
+bool create_testfile(void);
+struct mpd_song *new_song(void);
 
 #endif

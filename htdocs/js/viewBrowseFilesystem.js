@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2023 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module viewBrowseFilesystem_js */
@@ -21,11 +21,11 @@ function handleBrowseFilesystem() {
         "path": app.current.filter,
         "searchstr": app.current.search,
         "type": app.current.tag,
-        "cols": settings.colsBrowseFilesystemFetch
+        "fields": settings.viewBrowseFilesystemFetch.fields
     }, parseFilesystem, true);
 
     //Create breadcrumb
-    const crumbEl = elGetById('BrowseBreadcrumb');
+    const crumbEl = elGetById('BrowseFilesystemBreadcrumb');
     elClear(crumbEl);
     const home = elCreateText('a', {"class": ["mi"], "href": "#"}, 'home');
     setData(home, 'uri', '/');
@@ -61,39 +61,7 @@ function handleBrowseFilesystem() {
 function initViewBrowseFilesystem() {
     initSearchSimple('BrowseFilesystem');
 
-    elGetById('BrowseFilesystemList').addEventListener('click', function(event) {
-        const target = tableClickHandler(event);
-        if (target !== null) {
-            const uri = getData(target, 'uri');
-            const dataType = getData(target, 'type');
-            switch(dataType) {
-                case 'parentDir': {
-                    const offset = browseFilesystemHistory[uri] !== undefined
-                        ? browseFilesystemHistory[uri].offset
-                        : 0;
-                    const scrollPos = browseFilesystemHistory[uri] !== undefined
-                        ? browseFilesystemHistory[uri].scrollPos
-                        : 0;
-                    app.current.filter = '-';
-                    appGoto('Browse', 'Filesystem', undefined, offset, app.current.limit, uri, app.current.sort, 'dir', '', scrollPos);
-                    break;
-                }
-                case 'dir':
-                    clickFolder(uri);
-                    break;
-                case 'song':
-                    clickSong(uri, event);
-                    break;
-                case 'plist':
-                    clickFilesystemPlaylist(uri, event);
-                    break;
-                default:
-                    logError('Invalid type: ' + dataType);
-            }
-        }
-    }, false);
-
-    elGetById('BrowseBreadcrumb').addEventListener('click', function(event) {
+    elGetById('BrowseFilesystemBreadcrumb').addEventListener('click', function(event) {
         if (event.target.nodeName === 'A') {
             event.preventDefault();
             const uri = getData(event.target, 'uri');
@@ -106,6 +74,32 @@ function initViewBrowseFilesystem() {
             appGoto('Browse', 'Filesystem', undefined, offset, app.current.limit, uri, app.current.sort, 'dir', '', scrollPos);
         }
     }, false);
+
+    setView('BrowseFilesystem');
+}
+
+/**
+ * Click event handler for filesystem list
+ * @param {MouseEvent} event click event
+ * @param {HTMLElement} target calculated target
+ * @returns {void}
+ */
+function viewBrowseFilesystemListClickHandler(event, target) {
+    const uri = getData(target, 'uri');
+    const dataType = getData(target, 'type');
+    switch(dataType) {
+        case 'dir':
+            clickFolder(uri);
+            break;
+        case 'song':
+            clickSong(uri, event);
+            break;
+        case 'plist':
+            clickFilesystemPlaylist(uri, event);
+            break;
+        default:
+            logError('Invalid type: ' + dataType);
+    }
 }
 
 /**
@@ -119,23 +113,19 @@ function initViewBrowseFilesystem() {
     elClear(imageList);
 
     const table = elGetById('BrowseFilesystemList');
-    const tfoot = table.querySelector('tfoot');
-    elClear(tfoot);
 
-    if (checkResultId(obj, 'BrowseFilesystemList') === false) {
+    if (checkResult(obj, table, undefined) === false) {
         elHide(imageList);
         return;
     }
 
-    if (obj.result.images !== undefined) {
-        if (obj.result.images.length === 0 &&
-            obj.result.bookletPath === '')
-        {
-            elHide(imageList);
-        }
-        else {
-            elShow(imageList);
-        }
+    const showImageBar = settings['view' + app.id].mode === 'table'
+        ? (obj.result.images !== undefined && obj.result.images.length > 0) ||
+          (obj.result.images !== undefined && obj.result.bookletPath !== '')
+        : false;
+
+    if (showImageBar === true) {
+        elShow(imageList);
         if (obj.result.bookletPath !== '') {
             const img = elCreateEmpty('div', {"class": ["booklet"], "title": tn('Booklet')});
             img.style.backgroundImage = 'url("' + subdir + '/assets/coverimage-booklet")';
@@ -154,31 +144,46 @@ function initViewBrowseFilesystem() {
     else {
         //playlist response
         elHide(imageList);
-        obj.result.totalEntities++;
-        obj.result.returnedEntities++;
-        const parentUri = dirname(obj.result.plist);
-        obj.result.data.unshift({"Type": "parentDir", "name": "parentDir", "uri": parentUri});
     }
 
+    if (settings['view' + app.id].mode === 'table') {
+        const tfoot = table.querySelector('tfoot');
+        elClear(tfoot);
+        updateTable(obj, app.id, function(row, data) {
+            parseFilesystemUpdate(row, data);
+        });
+        addTblFooter(tfoot,
+            elCreateTextTnNr('span', {}, 'Num entries', obj.result.totalEntities)
+        );
+        return;
+    }
+    if (settings['view' + app.id].mode === 'table') {
+        updateGrid(obj, app.id, function(card, data) {
+            parseFilesystemUpdate(card, data);
+        });
+        return;
+    }
+    updateList(obj, app.id, function(card, data) {
+        parseFilesystemUpdate(card, data);
+    });
+}
+
+/**
+ * Callback function for row or card
+ * @param {HTMLElement} card Row or card
+ * @param {object} data Data object
+ * @returns {void}
+ */
+function parseFilesystemUpdate(card, data) {
     const rowTitleSong = settingsWebuiFields.clickSong.validValues[settings.webuiSettings.clickSong];
     const rowTitleFolder = 'Open directory';
     const rowTitlePlaylist = settingsWebuiFields.clickFilesystemPlaylist.validValues[settings.webuiSettings.clickFilesystemPlaylist];
-
-    updateTable(obj, 'BrowseFilesystem', function(row, data) {
-        setData(row, 'type', data.Type);
-        setData(row, 'uri', data.uri);
-        //set Title to name if not defined - for folders and playlists
-        setData(row, 'name', data.Title === undefined ? data.name : data.Title);
-        row.setAttribute('title', tn(data.Type === 'song' ? rowTitleSong :
+    setData(card, 'type', data.Type);
+    setData(card, 'uri', data.uri);
+    //set Title to name if not defined - for folders and playlists
+    setData(card, 'name', data.Title === undefined ? data.name : data.Title);
+    card.setAttribute('title', tn(data.Type === 'song' ? rowTitleSong :
             data.Type === 'dir' ? rowTitleFolder : rowTitlePlaylist));
-    });
-
-    const colspan = settings.colsBrowseFilesystem.length + 1;
-    tfoot.appendChild(
-        elCreateNode('tr', {"class": ["not-clickable"]},
-            elCreateTextTnNr('td', {"colspan": colspan}, 'Num entries', obj.result.totalEntities)
-        )
-    );
 }
 
 /**

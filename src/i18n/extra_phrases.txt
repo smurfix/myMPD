@@ -12,6 +12,10 @@ Authentication required
 Browse
 Browser default
 Browser has no MediaSession support
+Can not parse script metadata.
+Can not find script in repository.
+Script is up-to-date.
+Script successfully updated.
 Click album play button
 clickcount
 Click filesystem playlist
@@ -31,6 +35,7 @@ Context menu
 country
 CSS filter
 Dark
+Date
 Default
 Default image
 Default image dark
@@ -38,6 +43,7 @@ Default image light
 Delete home icon
 Delete playlist
 Delete webradio favorite
+Delete widget
 Disable consume mode
 Disable random
 Disable repeat
@@ -47,6 +53,7 @@ Disc
 Discs
 Display tags in rows for small displays
 Duplicate home icon
+Duplicate widget
 Each 1
 Each 3600
 Each 60
@@ -104,6 +111,7 @@ jack
 Jukebox Queue
 Label
 language
+Languages
 lastchangetime
 lastcheckok
 Last-Modified
@@ -150,8 +158,13 @@ mympd_connected
 mympd_disconnected
 mympd_feedback
 mympd_scrobble
+mympd_skipped
 mympd_start
 mympd_stop
+mympd_lyrics
+mympd_albumart
+mympd_tagart
+mympd_jukebox
 name
 newest
 null
@@ -220,6 +233,7 @@ elapsed
 lastPlayed
 lastSkipped
 like
+rating
 playCount
 skipCount
 stop only
@@ -229,7 +243,7 @@ Synced lyrics extension
 Synced lyrics vorbis comment
 Tab
 tags
-Thumbnail size
+Thumbnail
 Title
 Too many results, list is cropped
 Track
@@ -264,3 +278,10 @@ Value length for JSON path \"$.params.plist\" is too short
 Number is out of valid range
 Can not parse script arguments
 Sortdesc
+Value (Number)
+Elapsed
+Last skipped
+Play count
+Rating
+Skip count
+userDefinedSticker
