@@ -1326,7 +1326,7 @@ static bool json_get_string_unescape(sds s, const char *path, size_t min, size_t
     if (vtype != MJSON_TOK_STRING) {
         *result = NULL;
         set_parse_error(error, path, "", "JSON path \"%s\" not found or value is not string type, found type is \"%s\"\n%s",
-            path, get_mjson_toktype_name(vtype), sds);
+            path, get_mjson_toktype_name(vtype), s);
         return false;
     }
     *result = sdsempty();
