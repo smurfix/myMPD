@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,17 +11,11 @@
 #ifndef MYMPD_QUEUE_H
 #define MYMPD_QUEUE_H
 
+#include "src/lib/api.h"
+
 #include <pthread.h>
 #include <stdbool.h>
 #include <time.h>
-
-/**
- * Queue types
- */
-enum mympd_queue_types {
-    QUEUE_TYPE_REQUEST,  //!< queue holds only t_work_request entries
-    QUEUE_TYPE_RESPONSE  //!< queue holds only t_work_response entries
-};
 
 /**
  * A message in the queue
@@ -31,6 +25,14 @@ struct t_mympd_msg {
     unsigned id;               //!< id of the message
     time_t timestamp;          //!< messages added timestamp
     struct t_mympd_msg *next;  //!< pointer to next message
+};
+
+/**
+ * Queue types
+ */
+enum mympd_queue_types {
+    QUEUE_TYPE_REQUEST,  //!< queue holds only t_work_request entries
+    QUEUE_TYPE_RESPONSE  //!< queue holds only t_work_response entries
 };
 
 /**

@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -302,6 +302,23 @@ bool is_dir(const char *dir_name) {
 }
 
 /**
+ * Creates a file in specified path if it does not exists.
+ * @param filepath filepath to create
+ * @return bool true on success, else false
+ */
+bool create_tmp_file(const char *filepath) {
+    errno = 0;
+    int fd = open(filepath, O_CREAT | O_EXCL | O_CLOEXEC, S_IRWXU);
+    if (fd < 0) {
+        MYMPD_LOG_ERROR(NULL, "Can not open file descriptor \"%s\" for write", filepath);
+        MYMPD_LOG_ERRNO(NULL, errno);
+        return false;
+    }
+    close(fd);
+    return true;
+}
+
+/**
  * Opens a temporary file for write using mkstemp
  * @param filepath filepath to open, e.g. /tmp/test.XXXXXX
  *                 XXXXXX is replaced with a random string
@@ -311,14 +328,14 @@ FILE *open_tmp_file(sds filepath) {
     errno = 0;
     int fd = mkstemp(filepath);
     if (fd < 0) {
-        MYMPD_LOG_ERROR(NULL, "Can not open file \"%s\" for write", filepath);
+        MYMPD_LOG_ERROR(NULL, "Can not open tmp file descriptor \"%s\" for write", filepath);
         MYMPD_LOG_ERRNO(NULL, errno);
         return NULL;
     }
     errno = 0;
     FILE *fp = fdopen(fd, "w");
     if (fp == NULL) {
-        MYMPD_LOG_ERROR(NULL, "Can not open file \"%s\" for write", filepath);
+        MYMPD_LOG_ERROR(NULL, "Can not open tmp file \"%s\" for write", filepath);
         MYMPD_LOG_ERRNO(NULL, errno);
     }
     return fp;
@@ -375,7 +392,7 @@ bool rename_file(const char *src, const char *dst) {
  * @param filepath filepath to remove
  * @return true on success else false
  */
-bool rm_file(sds filepath) {
+bool rm_file(const char *filepath) {
     errno = 0;
     if (unlink(filepath) != 0) {
         MYMPD_LOG_ERROR(NULL, "Error removing file \"%s\"", filepath);
@@ -392,7 +409,7 @@ bool rm_file(sds filepath) {
  *         RM_FILE_ERROR error from unlink call
  *         RM_FILE_OK file was removed
  */
-int try_rm_file(sds filepath) {
+int try_rm_file(const char *filepath) {
     errno = 0;
     if (unlink(filepath) != 0) {
         if (errno == ENOENT) {

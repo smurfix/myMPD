@@ -13,6 +13,7 @@ List of myMPD specific Lua functions.
 | [mympd.cache_cover_write](diskcache.md) | Writes a cover cache file. |
 | [mympd.cache_lyrics_write](diskcache.md) | Writes a lyrics cache file. |
 | [mympd.cache_thumbs_write](diskcache.md) | Writes a thumbs cache file. |
+| [mympd.check_arguments](util.md) | Checks arguments from the mympd_arguments global variable. |
 | [mympd.dialog](mympd_dialog.md) | Returns an Jsonrpc response for a script dialog. |
 | [mympd.gpio_blink](gpio.md) | Connects to myGPIOd and blinks a GPIO with given timeout and interval. |
 | [mympd.gpio_get](gpio.md) | Connects to myGPIOd and returns the active state of a GPIO. |
@@ -24,6 +25,7 @@ List of myMPD specific Lua functions.
 | [mympd.htmlencode](util.md) | Simple HTML encoding. |
 | [mympd.http_client](http_client.md) | Simple HTTP client. |
 | [mympd.http_download](http_client.md) | Download a file over http. |
+| [mympd.http_header_get](http_client.md) | Get a http header. |
 | [mympd.http_jsonrpc_error](http_replies.md) | Sends a JSONRPC 2.0 error. |
 | [mympd.http_jsonrpc_response](http_replies.md) | Sends a JSONRPC 2.0 response. |
 | [mympd.http_jsonrpc_warn](http_replies.md) | Sends a JSONRPC 2.0 warning. |
@@ -31,14 +33,20 @@ List of myMPD specific Lua functions.
 | [mympd.http_reply](http_replies.md) | Returns a valid HTTP response message. |
 | [mympd.http_serve_file](http_replies.md) | Serves a file from the filesystem. Only files from the diskcache are allowed. |
 | [mympd.init](mympd_init.md) | Initializes the Lua table mympd_state. |
+| [mympd.isnilorempty](string.md) | Checks for empty string or nil. |
 | [mympd.log](util.md) | Logging to myMPD log. |
 | [mympd.notify_client](util.md) | Sends a notification to the client. |
 | [mympd.notify_partition](util.md) | Sends a notification to all clients in a partition. |
 | [mympd.os_capture](system_command.md) | Executes a system command and capture its output. |
 | [mympd.read_file](util.md) | Read an ascii file. |
+| [mympd.remove_file](util.md) | Deletes a file or empty directory. |
 | [mympd.sleep](util.md) | Sleep ms. |
 | [mympd.splitlines](string.md) | Split string by newline characters and trims the lines. |
 | [mympd.tmp_file](diskcache.md) | Generates a random tmp filename for the misc cache. |
+| [mympd.tmpvar_delete](tmpvar.md) | Deletes a temporary variable. |
+| [mympd.tmpvar_get](tmpvar.md) | Gets a temporary variable. |
+| [mympd.tmpvar_list](tmpvar.md) | Lists all temporary variables. |
+| [mympd.tmpvar_set](tmpvar.md) | Sets a temporary variable. |
 | [mympd.trim](string.md) | Removes beginning and ending whitespaces from a string. |
 | [mympd.update_mtime](diskcache.md) | Updates the timestamp of a file. |
 | [mympd.urldecode](util.md) | Decodes a URL encoded string. |

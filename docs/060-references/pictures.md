@@ -47,7 +47,7 @@ myMPD restricts the size to 5 MB.
 
 ### Scripts
 
-If myMPD does not find local albumart it emmits the `mympd_albumart` trigger. Attach a script to fetch and deliver albumart to this trigger. Only one script is supported for this event.
+If myMPD does not find local albumart it emits the `mympd_albumart` trigger. Attach a script to fetch and deliver albumart to this trigger. Only one script is supported for this event.
 
 A fully working example implementation can be found in the [mympd-scripts repository](https://github.com/jcorporation/mympd-scripts/tree/main/Albumart).
 
@@ -86,6 +86,8 @@ Pictures for playlists must be placed in the directory `/var/lib/mympd/pics/play
 
 Background images must be saved in the `/var/lib/mympd/pics/backgrounds` folder.
 
+Background images can also be provided by a script. Set the background setting to `Trigger` and add a `mympd_bgimage` trigger. An example script is provided in the [mympd-scripts repository](https://github.com/jcorporation/mympd-scripts/Background).
+
 ## Supported file extensions
 
 myMPD recognizes following file extensions:
@@ -103,6 +105,7 @@ You can add custom placeholder images for albumart.
 - `/var/lib/mympd/pics/thumbs/coverimage-playlist.webp`
 - `/var/lib/mympd/pics/thumbs/coverimage-smartpls.webp`
 - `/var/lib/mympd/pics/thumbs/coverimage-stream.webp`
+- `/var/lib/mympd/pics/thumbs/coverimage-transparent.webp`
 
 You can use every supported file extension.
 

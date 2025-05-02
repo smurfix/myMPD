@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module globales_js */
@@ -29,10 +29,10 @@ const jsonRpcError = {
 
 let socket = null;
 
+let websocketReconnectTimer = null;
 let websocketKeepAliveTimer = null;
 let websocketLastPong = null;
 let searchTimer = null;
-let resizeTimer = null;
 let progressTimer = null;
 
 /** @type {number} */
@@ -50,6 +50,72 @@ let settings = {
     "loglevel": 2,
     "partition": {}
 };
+
+/**
+ * Severities
+ * @type {object}
+ */
+const severities = {
+    "emerg": {
+        "icon": "bolt",
+        "class": "text-danger",
+        "bgclass": "bg-danger",
+        "severity": 0,
+        "delay": 5000
+    },
+    "alert": {
+        "icon": "bolt",
+        "class": "text-danger",
+        "bgclass": "bg-danger",
+        "severity": 1,
+        "delay": 5000
+    },
+    "crit": {
+        "icon": "dangerous",
+        "class": "text-danger",
+        "bgclass": "bg-danger",
+        "severity": 2,
+        "delay": 5000
+    },
+    "error": {
+        "icon": "dangerous",
+        "class": "text-danger",
+        "bgclass": "bg-danger",
+        "severity": 3,
+        "delay": 5000
+    },
+    "warn": {
+        "icon": "warning",
+        "class": "text-warning",
+        "bgclass": "bg-warning",
+        "severity": 4,
+        "delay": 5000
+    },
+    "notice": {
+        "icon": "info",
+        "class": "text-success",
+        "bgclass": "bg-success",
+        "severity": 5,
+        "delay": 2500
+    },
+    "info": {
+        "icon": "info",
+        "class": "text-success",
+        "bgclass": "bg-success",
+        "severity": 6,
+        "delay": 2500
+    },
+    "debug": {
+        "icon": "bug_report",
+        "class": "text-info",
+        "bgclass": "bg-secondary",
+        "severity": 7,
+        "delay": 2500
+    }
+};
+
+/** @type {Array} */
+const severityNames = Object.keys(severities);
 
 /** @type {boolean} */
 let myMPDready = false;
@@ -131,6 +197,14 @@ const webradioFields = [
 ];
 
 /** @type {object} */
+const albumFields = [
+    'Discs',
+    'SongCount',
+    'Duration',
+    'Last-Modified'
+];
+
+/** @type {object} */
 const session = {
     "token": "",
     "timeout": 0
@@ -143,6 +217,11 @@ const sessionLifetime = 1780;
 const sessionRenewInterval = sessionLifetime * 500;
 
 let sessionTimer = null;
+
+/** log buffer */
+const logs = [];
+/** @type {number} */
+const logsMax = 1000;
 
 /** log message buffer */
 const messages = [];
@@ -180,9 +259,9 @@ const localeMap = {
 /** @type {object} */
 let materialIcons = {};
 /** @type {object} */
-let phrasesDefault = {};
+let phrasesDefault = null;
 /** @type {object} */
-let phrases = {};
+let phrases = null;
 
 /** @type {number} */
 let lastSeekStep = 10;
@@ -663,6 +742,13 @@ const settingsWebuiFields = {
         "form": "modalSettingsListsFrm",
         "help": "helpSettingsMaxElementsPerPage"
     },
+    "endlessScroll": {
+        "defaultValue": false,
+        "inputType": "checkbox",
+        "title": "Endless scrolling",
+        "form": "modalSettingsListsFrm",
+        "help": "helpEndlessScroll"
+    },
     "smallWidthTagRows": {
         "defaultValue": true,
         "inputType": "checkbox",
@@ -744,7 +830,6 @@ const settingsWebuiFields = {
         "inputType": "checkbox",
         "title": "Partitions",
         "form": "modalSettingsFurtherFeaturesFrm",
-        "warn": "MPD does not support partitions",
         "help": "helpSettingsEnablePartitions"
     },
     "enableLyrics": {
@@ -778,12 +863,9 @@ const settingsWebuiFields = {
         "unit": "Pixel",
         "help": "helpSettingsGridSize"
     },
-    "bgCover": {
-        "defaultValue": true,
-        "inputType": "checkbox",
-        "title": "Albumart",
-        "form": "modalSettingsBgFrm",
-        "sort": 0
+    "dynamicBackground": {
+        "defaultValue": "albumart",
+        "inputType": "none"
     },
     "bgCssFilter": {
         "defaultValue": "grayscale(100%) opacity(20%)",
@@ -1189,31 +1271,38 @@ setUserAgentData();
 //minimum stable mpd version to support all myMPD features
 const mpdVersion = {
     "major": 0,
-    "minor": 23,
-    "patch": 5
+    "minor": 24,
+    "patch": 0
 };
 
 //remember offset for filesystem browsing uris
 const browseFilesystemHistory = {};
 
-//list of stickers for songs
-/** @type {Array} */
-const stickerListSongs = [
-    'playCount',
-    'skipCount',
-    'lastPlayed',
-    'lastSkipped',
-    'like',
-    'rating',
-    'elapsed'
-];
-
-//list of stickers for playlists and filters (albums)
+//list of stickers for tags, playlists and filters (albums)
 /** @type {Array} */
 const stickerListAll = [
     'like',
-    'rating'
+    'rating',
+    'playCount',
+    'lastPlayed'
 ];
+
+//list of stickers for songs
+/** @type {Array} */
+const stickerListSongs = stickerListAll.concat([
+    'skipCount',
+    'lastSkipped',
+    'elapsed'
+]);
+
+//ID's of cards/tabs/views
+const allCards = ['cardHome', 'cardPlayback', 'cardSearch',
+    'cardQueue', 'tabQueueCurrent', 'tabQueueLastPlayed',
+    'tabQueueJukebox', 'viewQueueJukeboxSong', 'viewQueueJukeboxAlbum',
+    'cardBrowse', 'tabBrowseFilesystem',
+    'tabBrowseRadio', 'viewBrowseRadioFavorites', 'viewBrowseRadioWebradiodb',
+    'tabBrowsePlaylist', 'viewBrowsePlaylistDetail', 'viewBrowsePlaylistList',
+    'tabBrowseDatabase', 'viewBrowseDatabaseTagList', 'viewBrowseDatabaseAlbumDetail', 'viewBrowseDatabaseAlbumList'];
 
 //application state
 const app = {};
@@ -1466,7 +1555,6 @@ app.goto = false;
 
 //features
 const features = {
-    "featBinarylimit": true,
     "featCacert": false,
     "featConsumeOneshot": false,
     "featFingerprint": false,
@@ -1578,9 +1666,14 @@ const LUAfunctions = {
         "func": "local rc, filename = mympd.cache_lyrics_write(json.encode(entry), song_uri)",
         "feat": ""
     },
+    "mympd.cache_misc_write": {
+        "desc": "Write a file for the misc cache.",
+        "func": "local rc, filename =  = mympd.cache_thumbs_write(src, name)",
+        "feat": ""
+    },
     "mympd.cache_thumbs_write": {
         "desc": "Write a file for the thumbs cache.",
-        "func": "local rc, filename =  = mympd.cache_thumbs_write(src, uri)",
+        "func": "local rc, filename =  = mympd.cache_thumbs_write(src, tagvalue)",
         "feat": ""
     },
     "mympd.dialog": {
@@ -1605,12 +1698,17 @@ const LUAfunctions = {
     },
     "mympd.http_client": {
         "desc": "HTTP client",
-        "func": "local rc, code, headers, body = mympd.http_client(method, uri, extra_headers, payload)",
+        "func": "local rc, code, headers, body = mympd.http_client(method, uri, extra_headers, payload, cache)",
         "feat": ""
     },
     "mympd.http_download": {
         "desc": "HTTP download",
-        "func": "local rc, code, headers = mympd.http_download(uri, extra_headers, out)",
+        "func": "local rc, code, headers, filename = mympd.http_download(uri, extra_headers, out)",
+        "feat": ""
+    },
+    "mympd.http_header_get": {
+        "desc": "Lookup HTTP header",
+        "func": "local value = mympd.http_header_get(headers, name)",
         "feat": ""
     },
     "mympd.http_jsonrpc_error": {
@@ -1643,6 +1741,16 @@ const LUAfunctions = {
         "func": "return mympd.http_serve_file(file)",
         "feat": ""
     },
+    "mympd.http_serve_file_rm": {
+        "desc": "Serves a file from the filesystem and removes it afterwards. Only files from the diskcache are allowed.",
+        "func": "return mympd.http_serve_file_rm(file)",
+        "feat": ""
+    },
+    "mympd.http_serve_file_from_cache": {
+        "desc": "Serves a file from the http client cache.",
+        "func": "return mympd.http_serve_file_from_cache(file)",
+        "feat": ""
+    },
     "mympd.init": {
         "desc": "Initializes the global lua table mympd_state.",
         "func": "mympd.init()",
@@ -1654,7 +1762,7 @@ const LUAfunctions = {
         "feat": ""
     },
     "mympd.tmp_file": {
-        "desc": "Generates a random tmp filename for the misc cache.",
+        "desc": "Creates a tmp file for the misc cache.",
         "func": "local tmp_file = mympd.tmp_file()",
         "feat": ""
     },
@@ -1718,6 +1826,11 @@ const LUAfunctions = {
         "func": "local trimed = mympd.trim(str)",
         "feat": ""
     },
+    "mympd.isnilorempty": {
+        "desc": "Checks for empty string or nil.",
+        "func": "if mympd.isnilorempty(str) then\n\nend\n",
+        "feat": ""
+    },
     "mympd.sleep": {
         "desc": "Sleeps number of milliseconds.",
         "func": "sleep(ms)",
@@ -1726,6 +1839,36 @@ const LUAfunctions = {
     "mympd.read_file": {
         "desc": "Read an ascii file.",
         "func": "local content = mympd.read_file(path)",
+        "feat": ""
+    },
+    "mympd.remove_file": {
+        "desc": "Deletes a file or empty directory.",
+        "func": "local rc, errorstr = mympd.remove_file(path)",
+        "feat": ""
+    },
+    "mympd.tmpvar_set": {
+        "desc": "Set a tmp variable.",
+        "func": "local rc, result = mympd.tmpvar_set(key, value, lifetime)",
+        "feat": ""
+    },
+    "mympd.tmpvar_get": {
+        "desc": "Get a tmp variable.",
+        "func": "local value, expiration = mympd.tmpvar_get(key)",
+        "feat": ""
+    },
+    "mympd.tmpvar_list": {
+        "desc": "List all tmp variables.",
+        "func": "local vars = mympd.tmpvar_list()",
+        "feat": ""
+    },
+    "mympd.tmpvar_delete": {
+        "desc": "Delete a tmp variable.",
+        "func": "local rc, result = mympd.tmpvar_delete(key)",
+        "feat": ""
+    },
+    "mympd.check_arguments": {
+        "desc": "Checks arguments from the mympd_arguments global variable.",
+        "func": "local rc, msg = mympd.check_arguments({uri = \"notempty\"})\nif rc == false then\n  return msg\nend",
         "feat": ""
     }
 };

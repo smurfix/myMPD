@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -46,6 +46,7 @@ void lua_mympd_state_set_u(struct t_list *lua_mympd_state, const char *k, unsign
 void lua_mympd_state_set_b(struct t_list *lua_mympd_state, const char *k, bool v);
 void lua_mympd_state_set_f(struct t_list *lua_mympd_state, const char *k, double v);
 void lua_mympd_state_set_mpd_song(struct t_list *lua_mympd_state, const char *k, const struct mpd_song *song);
-void *lua_mympd_state_free(struct t_list *lua_mympd_state);
+void lua_mympd_state_free(struct t_list *lua_mympd_state);
+void lua_mympd_state_free_void(void *lua_mympd_state);
 
 #endif

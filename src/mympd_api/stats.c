@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,10 +11,11 @@
 #include "compile_time.h"
 #include "src/mympd_api/stats.h"
 
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/sds_extras.h"
 #include "src/lib/utility.h"
-#include "src/mpd_client/errorhandler.h"
+#include "src/mympd_client/errorhandler.h"
 
 /**
  * Get mpd statistics
@@ -50,7 +51,6 @@ sds mympd_api_stats_get(struct t_partition_state *partition_state, sds buffer, u
         FREE_SDS(mpd_protocol_version);
         mpd_stats_free(stats);
     }
-    mpd_response_finish(partition_state->conn);
     mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_run_stats");
     return buffer;
 }

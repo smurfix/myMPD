@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalScripts_js */
@@ -95,6 +95,148 @@ function initModalScripts() {
             importScript(target);
         }
     }, false);
+
+    initSearchSimpleInput(elGetById('modalScriptsImportSearchStr'), function(value) {
+        const valueLwr = value.toLowerCase();
+        const items = document.querySelectorAll('#modalScriptsImportList > li');
+        for (const item of items) {
+            if (item.textContent.toLowerCase().indexOf(valueLwr) > -1) {
+                item.classList.remove('d-none');
+            }
+            else {
+                item.classList.add('d-none');
+            }
+        }
+    });
+
+    initModalScriptAPItab();
+}
+
+/**
+ * Initialization functions for the script api tab elements
+ * @returns {void}
+ */
+function initModalScriptAPItab() {
+    const modalScriptAPIcmdsInput = elGetById('modalScriptAPIcmdsInput');
+    modalScriptAPIcmdsInput.appendChild(elCreateEmpty('option',{}));
+    const methods = Object.keys(APImethods).sort();
+    for (const method of methods) {
+        modalScriptAPIcmdsInput.appendChild(elCreateText('option',{'value': method}, method));
+    }
+    modalScriptAPIcmdsInput.addEventListener('change', function() {
+        document.getElementById('modalScriptAPIparams').textContent = '';
+        const method = this.options[this.selectedIndex].value;
+        if (method !== '' && APImethods[method].params !== undefined) {
+            elGetById('modalScriptAPIparams').appendChild(exploreAPIparamsToForm(APImethods[method].params, ''));
+            document.getElementById('modalScriptAPIdesc').textContent = APImethods[method].desc;
+        }
+        else {
+            document.getElementById('modalScriptAPIdesc').textContent = '';
+        }
+        document.getElementById('modalScriptAPIresultState').textContent = tn('Result');
+        document.getElementById('modalScriptAPIresultText').textContent = '';
+        elHideId('modalScriptAPIresult');
+    }, false);
+    document.getElementById('modalScriptAPISubmitBtn').addEventListener('click', function(event) {
+        event.preventDefault();
+        exploreAPIsendRequest();
+    }, false);
+}
+
+/**
+ * Creates a HTML form from an jsonrpc param object
+ * @param {object} p Jsonrpc params object
+ * @param {string} k Parent key
+ * @returns {HTMLElement} HTML form
+ */
+function exploreAPIparamsToForm(p, k) {
+    const form = elCreateEmpty('div', {});
+    for (const param in p) {
+        if (p[param].params !== undefined) {
+            form.appendChild(
+                elCreateNodes('div', {'class': ['form-group', 'row']}, [
+                    elCreateText('label', {'class': ['col-sm-4', 'col-form-label']}, param),
+                    elCreateNode('col', {'class': ['col-sm-8']}, exploreAPIparamsToForm(p[param].params, param))
+                ])
+            );
+        }
+        else {
+            form.appendChild(
+                elCreateNodes('div', {'class': ['form-group', 'row']}, [
+                    elCreateNodes('label', {'class': ['col-sm-4', 'col-form-label']}, [
+                        document.createTextNode(param),
+                        elCreateText('small', {}, ' (' + p[param].type + ')')
+                    ]),
+                    elCreateNodes('col', {'class': ['col-sm-8']}, [
+                        elCreateEmpty('input', {'class': ['form-control'], 'id': 'exploreAPIparam' + k + param, 'value': p[param].example}),
+                        elCreateText('small', {}, p[param].desc)
+                    ])
+                ])
+            );
+        }
+    }
+    return form;
+}
+
+/**
+ * Creates an json object with values from a HTML form created by exploreAPIparamsToForm()
+ * @param {object} p Jsonrpc params object
+ * @param {string} k Parent key
+ * @returns {object} JSON object
+ */
+function exploreAPIFormToParams(p, k) {
+    const request = {};
+    for (const param in p) {
+        if (p[param].params !== undefined) {
+            request[param] = exploreAPIFormToParams(p[param].params, param);
+        }
+        else {
+            let value = document.getElementById('exploreAPIparam' + k + param).value;
+            if (value.charAt(0) === '{' ||
+                value.charAt(0) === '[')
+            {
+                request[param] = JSON.parse(value);
+            }
+            else {
+                if (value === '') {
+                    //do nothing
+                }
+                else if (value === 'true') {
+                    value = true;
+                }
+                else if (value === 'false') {
+                    value = false;
+                }
+                else if (!isNaN(value)) {
+                    value = Number(value);
+                }
+                request[param] = value;
+            }
+        }
+    }
+    return request;
+}
+
+/**
+ * Sends the API request and populates the result fields
+ * @returns {void}
+ */
+function exploreAPIsendRequest() {
+    document.getElementById('modalScriptAPIresultState').textContent = tn('Sending');
+    document.getElementById('modalScriptAPIresultText').textContent = '';
+    const method = getSelectValueId('modalScriptAPIcmdsInput');
+    const params = APImethods[method].params !== undefined
+        ? exploreAPIFormToParams(APImethods[method].params, '')
+        : {};
+    elShowId('modalScriptAPIresult');
+    sendAPI(method, params, function(obj) {
+        elGetById('modalScriptAPIresultState').textContent = obj.error
+            ? tn('Error')
+            : tn('OK');
+        elGetById('modalScriptAPIresultText').textContent = JSON.stringify(obj, null, 2);
+        const id = obj.id;
+        elGetById('modalScriptAPIrequestText').textContent = JSON.stringify({"jsonrpc": "2.0", "id": id, "method": method, "params": params}, null, 2);
+    }, true);
 }
 
 /**
@@ -266,8 +408,13 @@ function removeScriptArgument(ev) {
  */
 //eslint-disable-next-line no-unused-vars
 function showEditScriptModal(script) {
-    uiElements.modalScripts.show();
-    showEditScript(script);
+    // Open modal only if script can be opened
+    sendAPI("MYMPD_API_SCRIPT_GET", {"script": script}, function(obj) {
+        if (obj.result) {
+            showEditScript(script, obj);
+            uiElements.modalScripts.show();
+        }
+    }, true);
 }
 
 /**
@@ -283,31 +430,37 @@ function showListScriptModal() {
 /**
  * Shows the edit script tab
  * @param {string} script script name
+ * @param {object} [obj] script object
  * @returns {void}
  */
 //eslint-disable-next-line no-unused-vars
-function showEditScript(script) {
+function showEditScript(script, obj) {
+    elGetById('modalScriptsScriptInput').value = '';
+    elGetById('modalScriptsOrderInput').value = '1';
+    elGetById('modalScriptsAddArgumentInput').value = '';
+    elClearId('modalScriptsArgumentsInput');
+    elGetById('modalScriptsContentInput').value = '';
     cleanupModalId('modalScripts');
     elGetById('modalScripts').firstElementChild.classList.remove('modal-dialog-scrollable');
     elGetById('modalScriptsContentInput').removeAttribute('disabled');
+    elGetById('modalScriptsEditTab').classList.add('active');
+    elGetById('modalScriptAPItab').classList.remove('active');
     elGetById('modalScriptsListTab').classList.remove('active');
     elGetById('modalScriptsImportTab').classList.remove('active');
-    elGetById('modalScriptsEditTab').classList.add('active');
+    elShowId('modalScriptsEditFooter');
+    elHideId('modalScriptAPIfooter');
     elHideId('modalScriptsListFooter');
     elHideId('modalScriptsImportFooter');
-    elShowId('modalScriptsEditFooter');
-    if (script !== '') {
+    if (obj !== undefined) {
+        parseEditScript(obj);
+    }
+    else if (script !== '') {
         sendAPI("MYMPD_API_SCRIPT_GET", {"script": script}, parseEditScript, false);
     }
     else {
         setDataId('modalScriptsEditTab', 'id', '');
         setDataId('modalScriptsEditTab', 'file', '');
         setDataId('modalScriptsEditTab', 'version', 0);
-        elGetById('modalScriptsScriptInput').value = '';
-        elGetById('modalScriptsOrderInput').value = '1';
-        elGetById('modalScriptsAddArgumentInput').value = '';
-        elClearId('modalScriptsArgumentsInput');
-        elGetById('modalScriptsContentInput').value = '';
         elDisableId('modalScriptsUpdateBtn');
         elHideId('modalScriptsEditDescRow');
     }
@@ -349,13 +502,34 @@ function parseEditScript(obj) {
  * Shows the list scripts tab
  * @returns {void}
  */
+//eslint-disable-next-line no-unused-vars
+function showModalScriptAPItab() {
+    cleanupModalId('modalScripts');
+    elGetById('modalScripts').firstElementChild.classList.remove('modal-dialog-scrollable');
+    elGetById('modalScriptAPItab').classList.add('active');
+    elGetById('modalScriptsListTab').classList.remove('active');
+    elGetById('modalScriptsEditTab').classList.remove('active');
+    elGetById('modalScriptsImportTab').classList.remove('active');
+    elShowId('modalScriptAPIfooter');
+    elHideId('modalScriptsListFooter');
+    elHideId('modalScriptsEditFooter');
+    elHideId('modalScriptsImportFooter');
+    getScriptList(true);
+}
+
+/**
+ * Shows the list scripts tab
+ * @returns {void}
+ */
 function showListScripts() {
     cleanupModalId('modalScripts');
     elGetById('modalScripts').firstElementChild.classList.remove('modal-dialog-scrollable');
     elGetById('modalScriptsListTab').classList.add('active');
+    elGetById('modalScriptAPItab').classList.remove('active');
     elGetById('modalScriptsEditTab').classList.remove('active');
     elGetById('modalScriptsImportTab').classList.remove('active');
     elShowId('modalScriptsListFooter');
+    elHideId('modalScriptAPIfooter');
     elHideId('modalScriptsEditFooter');
     elHideId('modalScriptsImportFooter');
     getScriptList(true);
@@ -369,7 +543,7 @@ function showListScripts() {
  */
 function deleteScript(el, script) {
     cleanupModalId('modalScripts');
-    showConfirmInline(el.parentNode.previousSibling, tn('Do you really want to delete the script?'), tn('Yes, delete it'), function() {
+    showConfirmInline(el.parentNode.previousSibling, tn('Do you really want to delete the script?', {"script": script}), tn('Yes, delete it'), function() {
         sendAPI("MYMPD_API_SCRIPT_RM", {
             "script": script
         }, deleteScriptCheckError, true);
@@ -414,7 +588,7 @@ function parseScriptList(obj) {
     const widgetScripts = elGetById('modalHomeWidgetScriptInput');
     elClear(widgetScripts);
 
-    if (checkResult(obj, table, 'table') === false) {
+    if (checkResult(obj, table, 'modalTable') === false) {
         return;
     }
 
@@ -495,15 +669,32 @@ function addOptionToScriptSelect(sel, opt, args) {
 function showImportScript() {
     cleanupModalId('modalScripts');
     elGetById('modalScripts').firstElementChild.classList.add('modal-dialog-scrollable');
+    elGetById('modalScriptsImportTab').classList.add('active');
+    elGetById('modalScriptAPItab').classList.remove('active');
     elGetById('modalScriptsListTab').classList.remove('active');
     elGetById('modalScriptsEditTab').classList.remove('active');
-    elGetById('modalScriptsImportTab').classList.add('active');
+    elShowId('modalScriptsImportFooter');
+    elHideId('modalScriptAPIfooter');
     elHideId('modalScriptsListFooter');
     elHideId('modalScriptsEditFooter');
-    elShowId('modalScriptsImportFooter');
+    if (userAgentData.isMobile === false) {
+        setFocusId('modalScriptsImportSearchStr');
+    }
     const list = elGetById('modalScriptsImportList');
     elClear(list);
+    list.appendChild(
+        elCreateTextTn('li', {"class": ["list-group-item", "not-clickable"]}, 'Loading...')
+    );
     httpGet(subdir + '/proxy?uri=' + myEncodeURI(scriptsImportUri + 'index.json'), function(obj) {
+        elClear(list);
+        if (obj === null) {
+            list.appendChild(
+                elCreateNode('li', {"class": ["list-group-item", "not-clickable"]},
+                    elCreateTextTn('div', {"class": ["alert", "alert-danger"]}, 'Failure loading script list.')
+                )
+            );
+            return;
+        }
         for (const key in obj) {
             const script = obj[key];
             const clickable = elGetById('modalScriptsList').querySelector('[data-file="' + key + '"') === null

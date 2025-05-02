@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,9 +12,9 @@
 #include "src/mympd_api/database.h"
 
 #include "dist/libmympdclient/include/mpd/client.h"
-#include "src/lib/jsonrpc.h"
-#include "src/mpd_client/errorhandler.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/mympd_api/status.h"
+#include "src/mympd_client/errorhandler.h"
 
 /**
  * Starts mpd database update or rescan.

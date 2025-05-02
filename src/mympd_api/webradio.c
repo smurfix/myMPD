@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,7 +11,9 @@
 #include "compile_time.h"
 #include "src/mympd_api/webradio.h"
 
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_query.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/log.h"
 #include "src/lib/rax_extras.h"
 #include "src/lib/sds_extras.h"
@@ -42,6 +44,12 @@ sds mympd_api_webradio_search(struct t_webradios *webradios, sds buffer, unsigne
     struct t_webradio_tags webradio_tags;
     webradio_tags_search(&webradio_tags);
     struct t_list *expr_list = parse_search_expression_to_list(expression, SEARCH_TYPE_WEBRADIO);
+    if (expr_list == NULL) {
+        sdsclear(buffer);
+        buffer = jsonrpc_respond_message(buffer, cmd_id, request_id,
+            JSONRPC_FACILITY_DATABASE, JSONRPC_SEVERITY_ERROR, "Invalid search expression");
+        return buffer;
+    }
 
     enum webradio_tag_type sort_tag = webradio_tag_name_parse(sort);
     switch(sort_tag) {

@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module viewsTables_js */
@@ -89,36 +89,35 @@ function dragAndDropTable(tableId) {
 }
 
 /**
+ * Return the displayname of a header
+ * @param {string} header Header fieldname
+ * @returns {string} Header displayname
+ */
+function getHeaderName(header) {
+    switch (header) {
+        case 'Track':
+        case 'Pos':
+            return '#';
+        case 'Thumbnail':
+            return '';
+        default:
+            return header;
+    }
+}
+
+/**
  * Sets the table header columns
  * @param {string} tableName table name
  * @returns {void}
  */
 function setCols(tableName) {
-    if (tableName === 'Search' &&
-        app.cards.Search.sort.tag === 'Title')
-    {
-        if (settings.tagList.includes('Title')) {
-            app.cards.Search.sort.tag = 'Title';
-        }
-        else if (features.featTags === false) {
-            app.cards.Search.sort.tag = 'Filename';
-        }
-        else {
-            app.cards.Search.sort.tag = '';
-        }
-    }
     const thead = document.querySelector('#' + tableName + 'List > thead > tr');
     elClear(thead);
 
-    for (let i = 0, j = settings['view' + tableName].fields.length; i < j; i++) {
-        let hname = settings['view' + tableName].fields[i];
-        if (hname === 'Track' ||
-            hname === 'Pos')
-        {
-            hname = '#';
-        }
-        const th = elCreateTextTn('th', {"data-col": settings['view' + tableName].fields[i]}, hname);
-        thead.appendChild(th);
+    for (const field of settings['view' + tableName].fields) {
+        thead.appendChild(
+            elCreateTextTn('th', {"data-col": field}, getHeaderName(field))
+        );
     }
     //append action column
     const th = elCreateEmpty('th', {"data-col": "Action"});
@@ -290,8 +289,10 @@ function updateTable(obj, list, perRowCallback, createRowCellsCallback) {
             lastDisc = obj.result.data[i].Disc;
         }
 
-        if (showWorkRow(list) && obj.result.data[0].Work !== undefined &&
-            lastWork !== obj.result.data[i].Work) {
+        if (showWorkRow(list) &&
+            obj.result.data[0].Work !== undefined &&
+            lastWork !== obj.result.data[i].Work)
+        {
             const row = addWorkRow(obj.result.data[i].Work, obj.result.AlbumId, obj.result.Album, colspan);
             if (i + z < tr.length) {
                 replaceTblRow(mode, tr[i + z], row);
@@ -320,27 +321,38 @@ function updateTable(obj, list, perRowCallback, createRowCellsCallback) {
             //default row content
             tableRow(row, obj.result.data[i], list, colspan, smallWidth, actionTd);
         }
-        if (i + z < tr.length) {
-            replaceTblRow(mode, tr[i + z], row);
+        if (features.featPagination === true ||
+            obj.result.offset === 0)
+        {
+            if (i + z < tr.length) {
+                replaceTblRow(mode, tr[i + z], row);
+            }
+            else {
+                tbody.append(row);
+            }
         }
         else {
             tbody.append(row);
         }
     }
-    //remove obsolete lines
-    tr = tbody.querySelectorAll('tr');
-    for (let i = tr.length - 1; i >= obj.result.returnedEntities + z; i --) {
-        tr[i].remove();
+    //remove obsolete rows
+    if (features.featPagination === true ||
+        obj.result.offset === 0)
+    {
+        tr = tbody.querySelectorAll('tr');
+        for (let i = tr.length - 1; i >= obj.result.returnedEntities + z; i --) {
+            tr[i].remove();
+        }
     }
 
     setPagination(obj.result.totalEntities, obj.result.returnedEntities);
-
-    if (obj.result.returnedEntities === 0) {
-        tbody.appendChild(emptyMsgEl(colspan + 1, 'table'));
-    }
     unsetUpdateView(table);
     setScrollViewHeight(table);
-    scrollToPosY(table.parentNode, app.current.scrollPos);
+    if (features.featPagination === true ||
+        obj.result.offset === 0)
+    {
+        scrollToPosY(table.parentNode, app.current.scrollPos);
+    }
 }
 
 /**

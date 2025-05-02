@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module apidoc_js */
@@ -47,6 +47,11 @@ const APIparams = {
     "fields": {
         "type": APItypes.array,
         "example": "[\"Artist\", \"Album\", \"Title\"]",
+        "desc": "Array of fields to return"
+    },
+    "fieldsAlbum": {
+        "type": APItypes.array,
+        "example": "[\"AlbumArtist\", \"Album\"]",
         "desc": "Array of fields to return"
     },
     "expression": {
@@ -96,12 +101,12 @@ const APIparams = {
     },
     "plist": {
         "type": APItypes.string,
-        "example": "test_plist",
+        "example": "test_playlist",
         "desc": "MPD playlist name"
     },
     "plists": {
         "type": APItypes.array,
-        "example": "[\"test_plist\"]",
+        "example": "[\"test_playlist1\",\"test_playlist2\"]",
         "desc": "MPD playlist names"
     },
     "sortShuffle": {
@@ -122,7 +127,7 @@ const APIparams = {
     "timerid": {
         "type": APItypes.uint,
         "example": 101,
-        "desc": "Timer id, must be gt 100"
+        "desc": "Timer id, must be greater than 100"
     },
     "script": {
         "type": APItypes.string,
@@ -171,7 +176,7 @@ const APIparams = {
     },
     "albumid": {
         "type": APItypes.string,
-        "example": "58d80594e8772a61f2f5cf2e96b490c9d10d4bf9",
+        "example": "17515028-bd97-47f5-ba1c-38504141af82",
         "desc": "myMPD album id"
     },
     "disc": {
@@ -207,7 +212,7 @@ const APIparams = {
     "start": {
         "type": APItypes.uint,
         "example": 0,
-        "desc": "Start position (included)",
+        "desc": "Start position (including)",
     },
     "end": {
         "type": APItypes.int,
@@ -232,7 +237,7 @@ const APIparams = {
  */
 const APImethods = {
     "MYMPD_API_CACHES_CREATE": {
-        "desc": "Recreates the myMPD caches for albums and stickers.",
+        "desc": "Updates the myMPD cache for albums.",
         "params": {
             "force": {
                 "type": APItypes.bool,
@@ -242,7 +247,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_DATABASE_SEARCH": {
-        "desc": "Searches for songs in the database.",
+        "desc": "Searches for songs in the MPD database.",
         "params": {
             "offset": APIparams.offset,
             "limit": APIparams.limit,
@@ -253,12 +258,12 @@ const APImethods = {
         }
     },
     "MYMPD_API_DATABASE_UPDATE": {
-        "desc": "Updates the database.",
+        "desc": "Updates the MPD database.",
         "params": {
             "uri": {
                 "type": APItypes.string,
                 "example": "Testfiles",
-                "desc": "Root directory for update"
+                "desc": "Root directory for update."
             }
         }
     },
@@ -268,7 +273,7 @@ const APImethods = {
             "uri": {
                 "type": APItypes.string,
                 "example": "Testfiles",
-                "desc": "Root directory for rescan"
+                "desc": "Root directory for rescan."
             }
         }
     },
@@ -281,7 +286,7 @@ const APImethods = {
             "path": {
                 "type": APItypes.string,
                 "example": "Alben",
-                "desc": "Directory or playlist to list"
+                "desc": "Directory or playlist to list."
             },
             "type": {
                 "type": APItypes.string,
@@ -295,7 +300,7 @@ const APImethods = {
         "desc": "Displays songs of an album.",
         "params": {
             "albumid": APIparams.albumid,
-            "fields": APIparams.fields
+            "fields": APIparams.fieldsAlbum
         }
     },
     "MYMPD_API_DATABASE_ALBUM_LIST": {
@@ -306,7 +311,7 @@ const APImethods = {
             "expression": APIparams.expression,
             "sort": APIparams.sort,
             "sortdesc": APIparams.sortdesc,
-            "fields": APIparams.fields
+            "fields": APIparams.fieldsAlbum
         }
     },
     "MYMPD_API_DATABASE_TAG_LIST": {
@@ -340,7 +345,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_SONG_FINGERPRINT": {
-        "desc": "Calculates the chromaprint fingerprint",
+        "desc": "Calculates the chromaprint fingerprint.",
         "params": {
             "uri": APIparams.uri
         }
@@ -350,11 +355,11 @@ const APImethods = {
         "params": {}
     },
     "MYMPD_API_QUEUE_CROP": {
-        "desc": "Crops the queue (removes all songs except playing one)",
+        "desc": "Crops the queue (removes all songs except playing one).",
         "params": {}
     },
     "MYMPD_API_QUEUE_CROP_OR_CLEAR": {
-        "desc": "Clears (if only one song is in queue) or crops the queue",
+        "desc": "Clears (if only one song is in queue) or crops the queue.",
         "params": {}
     },
     "MYMPD_API_QUEUE_ADD_RANDOM": {
@@ -364,12 +369,12 @@ const APImethods = {
             "plist": {
                 "type": APItypes.string,
                 "example": "Database",
-                "desc": "Name of mpd playlist or \"Database\""
+                "desc": "Name of mpd playlist or \"Database\"."
             },
             "quantity": {
                 "type": APItypes.uint,
                 "example": 10,
-                "desc": "Number of songs or albums to add"
+                "desc": "Number of songs or albums to add."
             },
             "mode": {
                 "type": APItypes.uint,
@@ -385,12 +390,12 @@ const APImethods = {
             "plist": {
                 "type": APItypes.string,
                 "example": "Database",
-                "desc": "Name of mpd playlist or \"Database\""
+                "desc": "Name of MPD playlist or \"Database\"."
             },
             "quantity": {
                 "type": APItypes.uint,
                 "example": 10,
-                "desc": "Number of songs or albums to list"
+                "desc": "Number of songs or albums to list."
             },
             "mode": {
                 "type": APItypes.uint,
@@ -426,7 +431,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_QUEUE_RM_IDS": {
-        "desc": "Removes defined entries from the queue.",
+        "desc": "Removes song ids from the queue.",
         "params": {
             "songIds": APIparams.songIds
         }
@@ -532,7 +537,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_QUEUE_INSERT_ALBUM_RANGE": {
-        "desc": "Inserts a range of song from an album into the queue",
+        "desc": "Inserts a range of song from an album into the queue.",
         "params": {
             "albumid": APIparams.albumid,
             "start": APIparams.start,
@@ -605,7 +610,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_QUEUE_APPEND_ALBUM_RANGE": {
-        "desc": "Appends one disc of an album to the queue",
+        "desc": "Appends a song range of an album to the queue.",
         "params": {
             "albumid": APIparams.albumid,
             "start": APIparams.start,
@@ -676,7 +681,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_QUEUE_REPLACE_ALBUM_RANGE": {
-        "desc": "Replaces the queue with a range of song from an album",
+        "desc": "Replaces the queue with a range of songs from an album.",
         "params": {
             "albumid": APIparams.albumid,
             "start": APIparams.start,
@@ -715,7 +720,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_PLAYLIST_RM": {
-        "desc": "Removes the MPD playlists.",
+        "desc": "Deletes the MPD playlists.",
         "params": {
             "plists": APIparams.plists
         }
@@ -732,12 +737,12 @@ const APImethods = {
             "plist": {
                 "type": APItypes.string,
                 "example": "test_plist",
-                "desc": "MPD playlist to rename"
+                "desc": "MPD playlist to rename."
             },
             "newName": {
                 "type": APItypes.string,
                 "example": "test_plist_renamed",
-                "desc": "New MPD playlist name"
+                "desc": "New MPD playlist name."
             }
         }
     },
@@ -747,12 +752,12 @@ const APImethods = {
             "srcPlists": {
                 "type": APItypes.array,
                 "example": "[\"test_plist\"]",
-                "desc": "Source MPD playlists to copy"
+                "desc": "Source MPD playlists to copy."
             },
             "dstPlist": {
                 "type": APItypes.string,
                 "example": "test_plist_to_copy",
-                "desc": "Destination MPD playlist name"
+                "desc": "Destination MPD playlist name."
             },
             "mode": {
                 "type": APItypes.uint,
@@ -767,12 +772,12 @@ const APImethods = {
             "srcPlist": {
                 "type": APItypes.string,
                 "example": "test_plist",
-                "desc": "Source MPD playlists to copy songs positions from"
+                "desc": "Source MPD playlists to copy songs positions from."
             },
             "dstPlist": {
                 "type": APItypes.string,
                 "example": "test_plist_to_move",
-                "desc": "Destination MPD playlist name"
+                "desc": "Destination MPD playlist name."
             },
             "positions": APIparams.positions,
             "mode": {
@@ -805,7 +810,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_PLAYLIST_CONTENT_APPEND_ALBUM_TAG": {
-        "desc": "Appends one disc from an album to the playlist.",
+        "desc": "Appends songs with specified tag and value from an album to the playlist.",
         "params": {
             "plist": APIparams.plist,
             "albumid": APIparams.albumid,
@@ -830,7 +835,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_PLAYLIST_CONTENT_INSERT_ALBUM_TAG": {
-        "desc": "Inserts one disc from an album to the playlist.",
+        "desc": "Inserts songs with specified tag and value from an album to the playlist.",
         "params": {
             "plist": APIparams.plist,
             "albumid": APIparams.albumid,
@@ -854,7 +859,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_PLAYLIST_CONTENT_REPLACE_ALBUM_TAG": {
-        "desc": "Replaces the playlist content with one disc from an album.",
+        "desc": "Replaces the playlist content with songs with specified tag and value from an album.",
         "params": {
             "plist": APIparams.plist,
             "albumid": APIparams.albumid,
@@ -882,7 +887,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_PLAYLIST_CONTENT_REPLACE_SEARCH": {
-        "desc": "Replaces the playlist content with the search result",
+        "desc": "Replaces the playlist content with the search result.",
         "params": {
             "plist": APIparams.plist,
             "expression": APIparams.expression,
@@ -1106,7 +1111,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_PLAYER_PLAY_SONG": {
-        "desc": "Starts playing the specified song.",
+        "desc": "Starts playing the specified song id.",
         "params": {
             "songId": APIparams.songId
         }
@@ -1157,7 +1162,7 @@ const APImethods = {
             "seek": {
                 "type": APItypes.int,
                 "example": 5,
-                "desc": "seconds to seek"
+                "desc": "Seconds to seek"
             },
             "relative": {
                 "type": APItypes.bool,
@@ -1255,6 +1260,32 @@ const APImethods = {
             "name": APIparams.stickerName
         }
     },
+    "MYMPD_API_STICKER_FIND": {
+        "desc": "Finds uris by sticker values.",
+        "params": {
+            "uri": APIparams.uri,
+            "type": APIparams.stickerType,
+            "name": APIparams.stickerName,
+            "op": {
+                "type": APItypes.string,
+                "example": "contains",
+                "desc": "Compare operator: =, <, >, eq, gt, lt, contains, starts_with"
+            },
+            "value": {
+                "type": APItypes.string,
+                "example": "val1",
+                "desc": "Sticker value"
+            },
+            "sort": {
+                "type": APItypes.string,
+                "example": "uri",
+                "desc": "Sticker sort: uri, value, value_int"
+            },
+            "sortdesc": APIparams.sortdesc,
+            "offset": APIparams.offset,
+            "limit": APIparams.limit
+        }
+    },
     "MYMPD_API_STICKER_LIST": {
         "desc": "Gets all MPD stickers for an uri.",
         "params": {
@@ -1263,7 +1294,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_STICKER_NAMES": {
-        "desc": "Lists all user defined sticker names by type",
+        "desc": "Lists all user defined sticker names by type.",
         "params": {
             "type": APIparams.stickerType,
             "searchstr": APIparams.searchstr
@@ -1283,11 +1314,36 @@ const APImethods = {
         }
     },
     "MYMPD_API_STICKER_INC": {
-        "desc": "Increments a MPD sticker by one.",
+        "desc": "Increments a MPD sticker by value.",
         "params": {
             "uri": APIparams.uri,
             "type": APIparams.stickerType,
-            "name": APIparams.stickerName
+            "name": APIparams.stickerName,
+            "value": {
+                "type": APItypes.uint,
+                "example": 1,
+                "desc": "Increment sticker by this value"
+            }
+        }
+    },
+    "MYMPD_API_STICKER_DEC": {
+        "desc": "Decrements a MPD sticker by value.",
+        "params": {
+            "uri": APIparams.uri,
+            "type": APIparams.stickerType,
+            "name": APIparams.stickerName,
+            "value": {
+                "type": APItypes.uint,
+                "example": 1,
+                "desc": "Decrement sticker by this value"
+            }
+        }
+    },
+    "MYMPD_API_STICKER_PLAYCOUNT": {
+        "desc": "Increments playCount and sets lastPlayed.",
+        "params": {
+            "uri": APIparams.uri,
+            "type": APIparams.stickerType
         }
     },
     "MYMPD_API_MOUNT_LIST": {
@@ -1310,7 +1366,7 @@ const APImethods = {
             "mountPoint": {
                 "type": APItypes.string,
                 "example": "nas",
-                "desc": "Path to mount the URL"
+                "desc": "Path to mount the URL."
             }
         }
     },
@@ -1321,7 +1377,7 @@ const APImethods = {
             "mountPoint": {
                 "type": APItypes.string,
                 "example": "nas",
-                "desc": "Path to unmount"
+                "desc": "Path to unmount."
             }
         }
     },
@@ -1346,7 +1402,7 @@ const APImethods = {
             "mpdPass": {
                 "type": APItypes.string,
                 "example": "dontsetpassword",
-                "desc": "MPD password to use, set it to 'dontsetpassword' to not change the password"
+                "desc": "MPD password to use, set it to 'dontsetpassword' to not change the password."
             },
             "mpdTimeout": {
                 "type": APItypes.uint,
@@ -1392,17 +1448,17 @@ const APImethods = {
             "stickerdbMpdPass": {
                 "type": APItypes.string,
                 "example": "dontsetpassword",
-                "desc": "MPD password to use, set it to 'dontsetpassword' to not change the password (sticker database)"
+                "desc": "MPD password to use, set it to 'dontsetpassword' to not change the password (sticker database)."
             },
             "stickerdbMpdTimeout": {
                 "type": APItypes.uint,
                 "example": 120000,
-                "desc": "MPD timeout in ms (sticker database)"
+                "desc": "MPD timeout in ms (sticker database)."
             },
             "stickerdbMpdKeepalive": {
                 "type": APItypes.bool,
                 "example": true,
-                "desc": "Enables tcp keepalives (sticker database)"
+                "desc": "Enables tcp keepalives (sticker database)."
             }
         }
     },
@@ -1427,22 +1483,22 @@ const APImethods = {
             "lastPlayedCount": {
                 "type": APItypes.uint,
                 "example": 2000,
-                "desc": "Length of the last played list"
+                "desc": "Length of the last played list."
             },
             "smartpls": {
                 "type": APItypes.bool,
                 "example": true,
-                "desc": "Enabled the smart playlists feature"
+                "desc": "Enabled the smart playlists feature."
             },
             "smartplsPrefix": {
                 "type": APItypes.string,
                 "example": "myMPDsmart",
-                "desc": "Prefix for generated smart playlists"
+                "desc": "Prefix for generated smart playlists."
             },
             "smartplsInterval": {
                 "type": APItypes.uint,
                 "example": 14400,
-                "desc": "Interval for smart playlists generation in seconds"
+                "desc": "Interval for smart playlists generation in seconds."
             },
             "smartplsSort": {
                 "type": APItypes.string,
@@ -1452,22 +1508,22 @@ const APImethods = {
             "smartplsGenerateTagList": {
                 "type": APItypes.string,
                 "example": "Genre",
-                "desc": "Generates smart playlists per value of selected taglist"
+                "desc": "Generates smart playlists per value of selected taglist."
             },
             "tagList": {
                 "type": APItypes.string,
                 "example": "Artist,Album,AlbumArtist,Title,Track,Genre,Disc,Date",
-                "desc": "Comma separated list of MPD tags to use"
+                "desc": "Comma separated list of MPD tags to use."
             },
             "tagListSearch": {
                 "type": APItypes.string,
                 "example": "Artist,Album,AlbumArtist,Title,Genre",
-                "desc": "Comma separated list of MPD tags for search"
+                "desc": "Comma separated list of MPD tags for search."
             },
             "tagListBrowse": {
                 "type": APItypes.string,
                 "example": "Artist,Album,AlbumArtist,Genre",
-                "desc": "Comma separated list of MPD tags to browse"
+                "desc": "Comma separated list of MPD tags to browse."
             },
             "bookletName": {
                 "type": APItypes.string,
@@ -1492,22 +1548,22 @@ const APImethods = {
             "lyricsUsltExt": {
                 "type": APItypes.string,
                 "example": "txt",
-                "desc": "File extension for unsynced lyrics"
+                "desc": "File extension for unsynced lyrics."
             },
             "lyricsSyltExt": {
                 "type": APItypes.string,
                 "example": "lrc",
-                "desc": "File extension for synced lyrics"
+                "desc": "File extension for synced lyrics."
             },
             "lyricsVorbisUslt": {
                 "type": APItypes.string,
                 "example": "LYRICS",
-                "desc": "Vorbis tag for unsynced lyrics"
+                "desc": "Vorbis tag for unsynced lyrics."
             },
             "lyricsVorbisSylt": {
                 "type": APItypes.string,
                 "example": "SYNCEDLYRICS",
-                "desc": "Vorbis tag for synced lyrics"
+                "desc": "Vorbis tag for synced lyrics."
             },
             "webuiSettings": {
                 "params": {
@@ -1574,17 +1630,17 @@ const APImethods = {
                     "notifyPage": {
                         "type": APItypes.bool,
                         "example": true,
-                        "desc": "Enable on page notifications"
+                        "desc": "Enable on page notifications."
                     },
                     "notifyWeb": {
                         "type": APItypes.bool,
                         "example": false,
-                        "desc": "Enable web notifications"
+                        "desc": "Enable web notifications."
                     },
                     "mediaSession": {
                         "type": APItypes.bool,
                         "example": true,
-                        "desc": "Enable media session support"
+                        "desc": "Enable media session support."
                     },
                     "footerPlaybackControls": {
                         "type": APItypes.string,
@@ -1614,7 +1670,12 @@ const APImethods = {
                     "maxElementsPerPage": {
                         "type": APItypes.uint,
                         "example": 200,
-                        "desc": "Max. elements for lists: 25, 50, 100, 200 or 0 for unlimited"
+                        "desc": "Max. elements for lists: min. 25, max 1000"
+                    },
+                    "endlessScroll": {
+                        "type": APItypes.bool,
+                        "example": true,
+                        "desc": "true = enables endless scrolling, false = pagination"
                     },
                     "smallWidthTagRows": {
                         "type": APItypes.bool,
@@ -1624,12 +1685,12 @@ const APImethods = {
                     "quickPlayButton": {
                         "type": APItypes.bool,
                         "example": true,
-                        "desc": "Show quick play button"
+                        "desc": "Show quick play button."
                     },
                     "quickRemoveButton": {
                         "type": APItypes.bool,
                         "example": true,
-                        "desc": "Show quick remove button"
+                        "desc": "Show quick remove button."
                     },
                     "compactGrids": {
                         "type": APItypes.bool,
@@ -1644,7 +1705,7 @@ const APImethods = {
                     "enableHome": {
                         "type": APItypes.bool,
                         "example": true,
-                        "desc": "Enables the home screen"
+                        "desc": "Enables the home screen."
                     },
                     "enableScripting": {
                         "type": APItypes.bool,
@@ -1691,10 +1752,10 @@ const APImethods = {
                         "example": 175,
                         "desc": "Width for grids."
                     },
-                    "bgCover": {
-                        "type": APItypes.bool,
-                        "example": true,
-                        "desc": "Display the coverimage as background."
+                    "dynamicBackground": {
+                        "type": APItypes.string,
+                        "example": "albumart",
+                        "desc": "Background mode: \"albumart\", \"trigger\" or \"off\""
                     },
                     "bgCssFilter": {
                         "type": APItypes.string,
@@ -1767,17 +1828,17 @@ const APImethods = {
             "crossfade": {
                 "type": APItypes.uint,
                 "example": 0,
-                "desc": "MPD crossfade in seconds"
+                "desc": "MPD crossfade in seconds."
             },
             "mixrampDb": {
                 "type": APItypes.float,
                 "example": 0,
-                "desc": "Mixramp threshold in dB"
+                "desc": "Mixramp threshold in dB."
             },
             "mixrampDelay": {
                 "type": APItypes.float,
                 "example": 0,
-                "desc": "Mixrampdelay in seconds"
+                "desc": "Mixrampdelay in seconds."
             },
             "jukeboxMode": {
                 "type": APItypes.string,
@@ -1841,12 +1902,12 @@ const APImethods = {
             "view": {
                 "type": APItypes.string,
                 "example": "viewQueueCurrent",
-                "desc": "Valid values: viewQueueCurrent, viewQueueLastPlayed, viewSearch, viewBrowseDatabaseAlbumDetail, viewBrowseDatabaseAlbumList, viewBrowsePlaylistDetail, viewBrowseFilesystem, viewPlayback, viewQueueJukeboxAlbum, viewQueueJukeboxSong, viewBrowseRadioWebradiodb"
+                "desc": "Valid values: viewQueueCurrent, viewQueueLastPlayed, viewSearch, viewBrowseDatabaseAlbumDetail, viewBrowseDatabaseAlbumList, viewBrowsePlaylistDetail, viewBrowseFilesystem, viewPlayback, viewQueueJukeboxAlbum, viewQueueJukeboxSong, viewBrowseRadioFavorites, viewBrowseRadioWebradiodb"
             },
             "mode": {
                 "type": APItypes.string,
                 "example": "table",
-                "desc": "View mode: table or grid"
+                "desc": "View mode: table, grid or list"
             },
             "fields": APIparams.fields
         }
@@ -1888,7 +1949,7 @@ const APImethods = {
             "weekdays": {
                 "type": APItypes.array,
                 "example": "[false,false,false,false,false,true,true]",
-                "desc": "Boolean array for weekdays, starting at monday"
+                "desc": "Boolean array for weekdays, starting with monday."
             },
             "action": {
                 "type": APItypes.string,
@@ -1919,23 +1980,23 @@ const APImethods = {
         }
     },
     "MYMPD_API_TIMER_LIST": {
-        "desc": "Lists all timers"
+        "desc": "Lists all timers."
     },
     "MYMPD_API_TIMER_GET": {
-        "desc": "Gets options from a timer",
+        "desc": "Gets options from a timer.",
         "params": {
             "timerid": APIparams.timerid
         }
     },
     "MYMPD_API_TIMER_RM": {
-        "desc": "Removes a timer",
+        "desc": "Removes a timer.",
         "protected": true,
         "params": {
             "timerid": APIparams.timerid
         }
     },
     "MYMPD_API_TIMER_TOGGLE": {
-        "desc": "Toggles a timers enabled state",
+        "desc": "Toggles a timers enabled state.",
         "protected": true,
         "params": {
             "timerid": APIparams.timerid
@@ -1946,19 +2007,19 @@ const APImethods = {
         "params": {}
     },
     "MYMPD_API_CHANNEL_SUBSCRIBE": {
-        "desc": "Subscribes a channel",
+        "desc": "Subscribes a MPD channel.",
         "params": {
             "channel": APIparams.channel
         }
     },
     "MYMPD_API_CHANNEL_UNSUBSCRIBE": {
-        "desc": "Unsubscribes a channel",
+        "desc": "Unsubscribes to a MPD channel.",
         "params": {
             "channel": APIparams.channel
         }
     },
     "MYMPD_API_CHANNEL_MESSAGE_SEND": {
-        "desc": "Sends a message to a MPD channel",
+        "desc": "Sends a message to a MPD channel.",
         "params": {
             "channel": APIparams.channel,
             "message": {
@@ -1984,19 +2045,19 @@ const APImethods = {
         }
     },
     "MYMPD_API_SCRIPT_SAVE": {
-        "desc": "Saves a script",
+        "desc": "Saves a script.",
         "protected": true,
         "params": {
             "script": APIparams.script,
             "oldscript": {
                 "type": APItypes.string,
                 "example": "testscript",
-                "desc": "Name of the old script to rename"
+                "desc": "Name of the old script to rename."
             },
             "file": {
                 "type": APItypes.string,
                 "example": "",
-                "desc": "Script filename (for imported scripts)"
+                "desc": "Script filename (for imported scripts only)."
             },
             "order": {
                 "type": APItypes.uint,
@@ -2006,7 +2067,7 @@ const APImethods = {
             "version": {
                 "type": APItypes.int,
                 "example": 0,
-                "desc": "Script version (for imported scripts)"
+                "desc": "Script version (for imported scripts only)."
             },
             "content": {
                 "type": APItypes.string,
@@ -2016,7 +2077,7 @@ const APImethods = {
             "arguments": {
                 "type": APItypes.array,
                 "example": "[\"argname1\",\"argname2\"]",
-                "desc": "Array of parameters for this script"
+                "desc": "Array of arguments for this script."
             }
         }
     },
@@ -2031,13 +2092,13 @@ const APImethods = {
         }
     },
     "MYMPD_API_SCRIPT_GET": {
-        "desc": "Gets options from a timer",
+        "desc": "Gets options from a timer.",
         "params": {
             "script": APIparams.script
         }
     },
     "MYMPD_API_SCRIPT_RELOAD": {
-        "desc": "Reload the scripts from disk.",
+        "desc": "Reload all scripts from the disk.",
         "params": {}
     },
     "MYMPD_API_SCRIPT_RM": {
@@ -2060,7 +2121,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_SCRIPT_VAR_DELETE": {
-        "desc": "Deletes a script variable",
+        "desc": "Deletes a script variable.",
         "protected": true,
         "params": {
             "key": {
@@ -2071,12 +2132,12 @@ const APImethods = {
         }
     },
     "MYMPD_API_SCRIPT_VAR_LIST": {
-        "desc": "Lists all script variables",
+        "desc": "Lists all script variables.",
         "protected": true,
         "params": {}
     },
     "MYMPD_API_SCRIPT_VAR_SET": {
-        "desc": "Saves a script variable",
+        "desc": "Saves a script variable.",
         "protected": true,
         "params": {
             "key": {
@@ -2091,30 +2152,74 @@ const APImethods = {
             }
         }
     },
+    "MYMPD_API_SCRIPT_TMP_DELETE": {
+        "desc": "Deletes a temporary variable.",
+        "params": {
+            "key": {
+                "type": APItypes.string,
+                "example": "tmp-var",
+                "desc": "Variable name"
+            }
+        }
+    },
+    "MYMPD_API_SCRIPT_TMP_GET": {
+        "desc": "Gets a temporary variable.",
+        "params": {
+            "key": {
+                "type": APItypes.string,
+                "example": "tmp-var",
+                "desc": "Variable name"
+            }
+        }
+    },
+    "MYMPD_API_SCRIPT_TMP_LIST": {
+        "desc": "Lists all temporary variables.",
+        "params": {}
+    },
+    "MYMPD_API_SCRIPT_TMP_SET": {
+        "desc": "Sets a temporary variable.",
+        "params": {
+            "key": {
+                "type": APItypes.string,
+                "example": "tmp-var",
+                "desc": "Variable name"
+            },
+            "value": {
+                "type": APItypes.string,
+                "example": "tmp-value",
+                "desc": "Variable value"
+            },
+            "lifetime": {
+                "type": APItypes.int,
+                "example": 300,
+                "desc": "Lifetime of variable in seconds."
+            }
+        }
+    },
     "MYMPD_API_PARTITION_LIST": {
-        "desc": "Lists all MPD partitions",
+        "desc": "Lists all MPD partitions.",
         "params": {}
     },
     "MYMPD_API_PARTITION_NEW": {
-        "desc": "Creates a new MPD partition",
+        "desc": "Creates a new MPD partition.",
         "protected": true,
         "params": {
             "name": APIparams.partition
         }
     },
     "MYMPD_API_PARTITION_SAVE": {
-        "desc": "Saves MPD partition settings",
+        "desc": "Saves MPD partition settings.",
         "protected": true,
         "params": {
             "highlightColor": {
                 "type": APItypes.string,
                 "example": "#28a745",
-                "desc": "Highlight color for this partition"
+                "desc": "Highlight color for this partition."
             },
             "mpdStreamPort": {
                 "type": APItypes.uint,
                 "example": 8000,
-                "desc": "Port of MPD http stream for local playback"
+                "desc": "Port of MPD http stream for local playback."
             },
             "streamUri": {
                 "type": APItypes.string,
@@ -2131,21 +2236,21 @@ const APImethods = {
         }
     },
     "MYMPD_API_PARTITION_OUTPUT_MOVE": {
-        "desc": "Moves this output to current MPD partition",
+        "desc": "Moves outputs by name to current MPD partition.",
         "protected": true,
         "params": {
             "outputs": {
                 "type": APItypes.array,
                 "example": "[\"output1\", \"output2\"]",
-                "desc": "Outputs to move to current partition"
+                "desc": "Outputs to move to current partition."
             }
         }
     },
     "MYMPD_API_TRIGGER_LIST": {
-        "desc": "Lists all triggers"
+        "desc": "Lists all triggers."
     },
     "MYMPD_API_TRIGGER_GET": {
-        "desc": "Get the options from a trigger",
+        "desc": "Get the options from a trigger.",
         "params": {
             "id": APIparams.triggerId
         }
@@ -2158,17 +2263,17 @@ const APImethods = {
             "name": {
                 "type": APItypes.string,
                 "example": "test trigger",
-                "desc": "Name of the trigger"
+                "desc": "Name of the trigger."
             },
             "event": {
                 "type": APItypes.int,
                 "example": 1,
-                "desc": "Event id that executes this triggers script"
+                "desc": "Event id that executes this triggers script."
             },
             "script": {
                 "type": APItypes.string,
                 "example": "test script",
-                "desc": "Script to execute"
+                "desc": "Script to execute."
             },
             "partition": APIparams.partition,
             "arguments": APIparams.scriptArguments
@@ -2182,7 +2287,7 @@ const APImethods = {
         }
     },
     "MYMPD_API_PLAYER_OUTPUT_ATTRIBUTES_SET": {
-        "desc": "Sets an MPD output attribute",
+        "desc": "Sets an MPD output attribute.",
         "protected": true,
         "params": {
             "outputId": {
@@ -2193,7 +2298,7 @@ const APImethods = {
             "attributes": {
                 "type" : APItypes.object,
                 "example": "{\"allowed_formats\": \"\"}",
-                "desc": "Key/value pairs to set attributes"
+                "desc": "Key/value pairs to set attributes."
             }
         }
     },
@@ -2207,24 +2312,24 @@ const APImethods = {
             "pos": {
                 "type": APItypes.uint,
                 "example": 0,
-                "desc": "Icon number to delete"
+                "desc": "Icon number to delete."
             }
         }
     },
     "MYMPD_API_HOME_ICON_MOVE": {
-        "desc": "Move home icon position",
+        "desc": "Move home icon from position to another position.",
         "params": {
             "from": APIparams.from,
             "to": APIparams.to
         }
     },
     "MYMPD_API_HOME_ICON_GET": {
-        "desc": "Gets details for a home icon",
+        "desc": "Gets details for a home icon.",
         "params": {
             "pos": {
                 "type": APItypes.uint,
                 "example": 0,
-                "desc": "Icon number to get"
+                "desc": "Icon number to get."
             }
         }
     },
@@ -2234,22 +2339,22 @@ const APImethods = {
             "replace": {
                 "type": APItypes.bool,
                 "example": false,
-                "desc": "Replace icon at pos oldpos"
+                "desc": "Replace icon at pos oldpos."
             },
             "oldpos": {
                 "type": APItypes.uint,
                 "example": 0,
-                "desc": "Position of home icon to replace"
+                "desc": "Position of home icon to replace."
             },
             "name": {
                 "type": APItypes.string,
                 "example": "test home icon",
-                "desc": "Name of the home icon"
+                "desc": "Name of the home icon."
             },
             "ligature": {
                 "type": APItypes.string,
                 "example": "new_releases",
-                "desc": "Ligature to use"
+                "desc": "Ligature to use."
             },
             "bgcolor": {
                 "type": APItypes.string,
@@ -2264,7 +2369,7 @@ const APImethods = {
             "image": {
                 "type": APItypes.string,
                 "example": "home-icon-1.png",
-                "desc": "relative path for an image (/browse/pics/ is the root)"
+                "desc": "Relative path for an image (/browse/pics/ is the root)."
             },
             "cmd": {
                 "type": APItypes.string,
@@ -2287,17 +2392,17 @@ const APImethods = {
             "replace": {
                 "type": APItypes.bool,
                 "example": false,
-                "desc": "Replace icon at pos oldpos"
+                "desc": "Replace widget at pos oldpos."
             },
             "oldpos": {
                 "type": APItypes.uint,
                 "example": 0,
-                "desc": "Position of home icon to replace"
+                "desc": "Position of home widget to replace."
             },
             "name": {
                 "type": APItypes.string,
                 "example": "test home icon",
-                "desc": "Name of the home icon"
+                "desc": "Name of the home widget."
             },
             "refresh": {
                 "type": APItypes.uint,

@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -164,6 +164,22 @@ void http_client_request(struct mg_client_request_t *mg_client_request,
     FREE_SDS(dns_uri);
     FREE_SDS(mg_client_request->connect_uri);
     mg_mgr_free(&mgr_client);
+}
+
+/**
+ * Returns a sds pointer to the content-type header from response
+ * @param response http response
+ * @return sds or NULL if not found
+ */
+sds http_client_get_content_type(struct mg_client_response_t *response) {
+    struct t_list_node *current = response->header.tail;
+    while (current != NULL) {
+        if (strcasecmp(current->key, "content-type") == 0) {
+            return current->value_p;
+        }
+        current = current->next;
+    }
+    return NULL;
 }
 
 /**

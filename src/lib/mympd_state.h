@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -13,7 +13,7 @@
 
 #include "dist/libmympdclient/include/mpd/client.h"
 #include "dist/sds/sds.h"
-#include "src/lib/cache_rax.h"
+#include "src/lib/cache/cache_rax.h"
 #include "src/lib/config_def.h"
 #include "src/lib/event.h"
 #include "src/lib/fields.h"
@@ -46,29 +46,28 @@ enum mpd_conn_states {
  * MPD feature flags
  */
 struct t_mpd_features {
-    bool mpd_0_24_0;               //!< MPD version is ge 0.24.0
-    bool advqueue;                 //!< mpd supports the prio filter / sort for queue and the save modes (MPD 0.24)
-    bool albumart;                 //!< mpd supports the albumart command
-    bool binarylimit;              //!< mpd supports the binarylimit command
     bool fingerprint;              //!< mpd supports the fingerprint command
-    bool library;                  //!< myMPD has access to the mpd music directory
     bool mount;                    //!< mpd supports mounts
     bool neighbor;                 //!< mpd supports neighbors command
-    bool partitions;               //!< mpd supports partitions
+    bool pcre;                     //!< mpd supports pcre for filter expressions
     bool playlists;                //!< mpd supports playlists
-    bool playlist_rm_range;        //!< mpd supports the playlist rm range command
-    bool readpicture;              //!< mpd supports the readpicture command
     bool stickers;                 //!< mpd supports stickers
     bool tags;                     //!< mpd tags are enabled
-    bool whence;                   //!< mpd supports the whence feature (relative position in queue)
-    bool consume_oneshot;          //!< mpd supports consume oneshot mode
-    bool playlist_dir_auto;        //!< mpd supports autodetection of playlist directory
-    bool starts_with;              //!< mpd supports starts_with filter expression
-    bool pcre;                     //!< mpd supports pcre for filter expressions
-    bool db_added;                 //!< mpd supports added attribute for songs
+    bool library;                  //!< myMPD has access to the mpd music directory
+    // MPD 0.25 features
+    bool mpd_0_25_0;               //!< MPD protocol version is ge 0.25.0
+    // MPD 0.24 features
+    bool mpd_0_24_0;               //!< MPD protocol version is ge 0.24.0
     bool advsticker;               //!< mpd supports new sticker commands from MPD 0.24
-    bool search_add_sort_window;   //!< mpd supports search and window for findadd/searchadd/searchaddpl
-    bool listplaylist_range;       //!< mpd supports the listplaylist with range parameter
+    bool db_added;                 //!< mpd supports added attribute for songs (MPD 0.24)
+    bool advqueue;                 //!< mpd supports the prio filter / sort for queue and the save modes (MPD 0.24)
+    bool consume_oneshot;          //!< mpd supports consume oneshot mode (MPD 0.24)
+    bool listplaylist_range;       //!< mpd supports the listplaylist with range parameter (MPD 0.24)
+    bool playlist_dir_auto;        //!< mpd supports autodetection of playlist directory (MPD 0.24)
+    bool starts_with;              //!< mpd supports starts_with filter expression (MPD 0.24)
+    // MPD 0.23 features
+    bool whence;                   //!< mpd supports the whence feature (relative position in queue) (MPD 0.23.5)
+    bool playlist_rm_range;        //!< mpd supports the playlist rm range command (MPD 0.23.3)
 };
 
 /**
@@ -87,11 +86,11 @@ struct t_mpd_state {
     sds playlist_directory_value;       //!< real playlist directory set by feature detection
     //tags
     sds tag_list;                       //!< comma separated string of mpd tags to enable
-    struct t_mpd_tags tags_mympd;       //!< tags enabled by myMPD and mpd
-    struct t_mpd_tags tags_mpd;         //!< all available mpd tags
-    struct t_mpd_tags tags_search;      //!< tags enabled for search
-    struct t_mpd_tags tags_browse;      //!< tags enabled for browse
-    struct t_mpd_tags tags_album;       //!< tags enabled for albums
+    struct t_mympd_mpd_tags tags_mympd;       //!< tags enabled by myMPD and mpd
+    struct t_mympd_mpd_tags tags_mpd;         //!< all available mpd tags
+    struct t_mympd_mpd_tags tags_search;      //!< tags enabled for search
+    struct t_mympd_mpd_tags tags_browse;      //!< tags enabled for browse
+    struct t_mympd_mpd_tags tags_album;       //!< tags enabled for albums
     enum mpd_tag_type tag_albumartist;  //!< tag to use for AlbumArtist
     //Feature flags
     const unsigned *protocol;           //!< mpd protocol version
@@ -107,7 +106,7 @@ struct t_jukebox_state {
     sds playlist;                  //!< playlist from which the jukebox queue is generated
     unsigned queue_length;         //!< how many songs should the mpd queue have
     unsigned last_played;          //!< only add songs with last_played state older than seconds from now
-    struct t_mpd_tags uniq_tag;      //!< single tag for the jukebox uniq constraint
+    struct t_mympd_mpd_tags uniq_tag;      //!< single tag for the jukebox uniq constraint
     struct t_list *queue;          //!< the jukebox queue itself
     bool ignore_hated;             //!< ignores hated songs for the jukebox mode
     sds filter_include;            //!< mpd search filter to include songs / albums
@@ -237,7 +236,7 @@ struct t_mympd_state {
     sds smartpls_sort;                              //!< sort smart playlists by this tag
     sds smartpls_prefix;                            //!< name prefix for smart playlists
     int smartpls_interval;                          //!< interval to refresh smart playlists in seconds
-    struct t_mpd_tags smartpls_generate_tag_types;  //!< generate smart playlists for each value for this tag
+    struct t_mympd_mpd_tags smartpls_generate_tag_types;  //!< generate smart playlists for each value for this tag
     sds smartpls_generate_tag_list;                 //!< generate smart playlists for each value for this tag (string representation)
     sds view_queue_current;                         //!< view settings for the queue view
     sds view_search;                                //!< view settings for the search view
@@ -267,7 +266,7 @@ struct t_mympd_state {
     bool tag_disc_empty_is_first;                   //!< handle empty disc tag as disc one for albums
     sds booklet_name;                               //!< name of the booklet files
     sds info_txt_name;                              //!< name of album info files
-    struct t_cache album_cache;                     //!< the album cache created by the mpd_worker thread
+    struct t_cache album_cache;                     //!< the album cache created by the mympd_worker thread
     unsigned last_played_count;                     //!< number of songs to keep in the last played list (disk + memory)
     struct t_webradios *webradiodb;                 //!< WebradioDB
     struct t_webradios *webradio_favorites;         //!< webradio favorites
@@ -280,12 +279,12 @@ void mympd_state_save(struct t_mympd_state *mympd_state, bool free_data);
 void mympd_state_default(struct t_mympd_state *mympd_state, struct t_config *config);
 void mympd_state_free(struct t_mympd_state *mympd_state);
 
-void mpd_state_features_default(struct t_mpd_features *feat);
-void mpd_state_features_copy(struct t_mpd_features *src, struct t_mpd_features *dst);
+void mympd_mpd_state_features_default(struct t_mpd_features *feat);
+void mympd_mpd_state_features_copy(struct t_mpd_features *src, struct t_mpd_features *dst);
 
-void mpd_state_default(struct t_mpd_state *mpd_state, struct t_config *config);
-void mpd_state_copy(struct t_mpd_state *src, struct t_mpd_state *dst);
-void mpd_state_free(struct t_mpd_state *mpd_state);
+void mympd_mpd_state_default(struct t_mpd_state *mpd_state, struct t_config *config);
+void mympd_mpd_state_copy(struct t_mpd_state *src, struct t_mpd_state *dst);
+void mympd_mpd_state_free(struct t_mpd_state *mpd_state);
 
 void partition_state_default(struct t_partition_state *partition_state, const char *name,
         struct t_mpd_state *mpd_state, struct t_config *config);

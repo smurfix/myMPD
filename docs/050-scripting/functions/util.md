@@ -4,6 +4,34 @@ title: Utility Functions
 
 Some useful utility functions.
 
+## Check arguments
+
+Checks arguments from the mympd_arguments global variable.
+
+```lua
+local tocheck = {
+    uri = "notempty",
+    entries = "number",
+    view = "required"
+}
+local rc, msg = mympd.check_arguments(tocheck)
+if rc == false then
+    return msg
+end
+```
+
+**Parameters:**
+
+| PARAMETER | TYPE | DESCRIPTION |
+| --------- | ---- | ----------- |
+| tocheck | table | Lua table of arguments to check. |
+
+The `tocheck` parameter expects a lua table consisting of arguments to check as key and one of `notempty`, `number` or `required` as value.
+
+- `notempty`: Checks for a not empty string.
+- `number`: Checks if the argument can be converted to a Lua number.
+- `required`: Checks if the argument is there.
+
 ## Hashing functions
 
 ```lua
@@ -108,6 +136,20 @@ local content = mympd.read_file(path)
 | PARAMETER | TYPE | DESCRIPTION |
 | --------- | ---- | ----------- |
 | path | string | Filepath to open and read. |
+
+## Remove a file
+
+Deletes a file or empty directory. It is a wrapper for `os.remove` that logs the error on failure.
+
+```lua
+local rc, errorstr = mympd.remove_file(path)
+```
+
+**Parameters:**
+
+| PARAMETER | TYPE | DESCRIPTION |
+| --------- | ---- | ----------- |
+| path | string | Filepath to delete. |
 
 ## Sleep
 

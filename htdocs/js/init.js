@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module init_js */
@@ -96,18 +96,15 @@ function appInitStart() {
     }
 
     //update table height on window resize
-    window.addEventListener('resize', function() {
-        if (resizeTimer !== null) {
-            clearTimeout(resizeTimer);
-        }
-        resizeTimer = setTimeout(function() {
+    const resizeObserver = new ResizeObserver(function() {
+        requestAnimationFrame(() => {
             const list = elGetById(app.id + 'List');
             if (list) {
                 setScrollViewHeight(list);
             }
-            resizeTimer = null;
-        }, 100);
-    }, false);
+        });
+    });
+    resizeObserver.observe(document.querySelector('body'));
 
     setMobileView();
 
@@ -274,10 +271,13 @@ function appInit() {
     }
     //update state on window focus - browser pauses javascript
     window.addEventListener('focus', function() {
-        onShow();
+        onShow('focus');
     }, false);
     window.addEventListener('pageshow', function() {
-        onShow();
+        onShow('pageshow');
+    }, false);
+    window.addEventListener('visibilitychange', function() {
+        onShow('visibilitychange');
     }, false);
     //global keymap
     document.addEventListener('keydown', function(event) {
@@ -311,15 +311,18 @@ function appInit() {
 
 /**
  * Checks the connection state and reconnects the websocket on demand
+ * @param {string} eventName Name of triggering event
  * @returns {void}
  */
-function onShow() {
-    logDebug('Browser focused, update player state');
-    getState();
-    if (app.id === 'QueueCurrent') {
-        execSearchExpression(elGetById('QueueCurrentSearchStr').value);
+function onShow(eventName) {
+    if (document.visibilityState === 'visible') {
+        logDebug(eventName + ': update player state');
+        websocketKeepAlive();
+        getState();
+        if (app.id === 'QueueCurrent') {
+            execSearchExpression(elGetById('QueueCurrentSearchStr').value);
+        }
     }
-    websocketKeepAlive();
 }
 
 /**

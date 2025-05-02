@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module state_js */
@@ -42,66 +42,71 @@ function getCounterText() {
  * @returns {void}
  */
 function setCounter() {
-    //progressbar in footer
-    //calc percent with two decimals after comma
-    const prct = currentState.totalTime > 0
-        ? Math.ceil((100 / currentState.totalTime) * currentState.elapsedTime * 100) / 100
-        : 0;
-    domCache.progressBar.style.width = `${prct}vw`;
-    domCache.progress.style.cursor = currentState.totalTime <= 0 ? 'default' : 'pointer';
+    requestAnimationFrame(() => {
+        //progressbar in footer
+        //calc percent with two decimals after comma
+        const prct = currentState.totalTime > 0
+            ? Math.ceil((100 / currentState.totalTime) * currentState.elapsedTime * 100) / 100
+            : 0;
+        domCache.progressBar.style.width = `${prct}vw`;
+        domCache.progress.style.cursor = currentState.totalTime <= 0 ? 'default' : 'pointer';
 
-    //counter
-    const counterText = getCounterText();
-    //counter in footer
-    domCache.counter.textContent = counterText;
-    //update queue card
-    const playingRow = elGetById('queueSongId' + currentState.currentSongId);
-    if (playingRow !== null) {
-        //progressbar and counter in queue card
-        if (currentState.state === 'stop') {
-            resetDuration(playingRow);
-        }
-        else {
-            setQueueCounter(playingRow, counterText);
-        }
-    }
-
-    //synced lyrics
-    if (showSyncedLyrics === true &&
-        settings.viewPlayback.fields.includes('Lyrics'))
-    {
-        const sl = elGetById('currentLyrics');
-        const toHighlight = sl.querySelector('[data-sec="' + currentState.elapsedTime + '"]');
-        const highlighted = sl.querySelector('.highlight');
-        if (highlighted !== toHighlight &&
-            toHighlight !== null)
-        {
-            toHighlight.classList.add('highlight');
-            if (scrollSyncedLyrics === true) {
-                toHighlight.scrollIntoView({behavior: "smooth"});
+        //counter
+        const counterText = getCounterText();
+        //counter in footer
+        domCache.counter.textContent = counterText;
+        //update queue card
+        const playingRow = elGetById('queueSongId' + currentState.currentSongId);
+        if (playingRow !== null) {
+            //progressbar and counter in queue card
+            if (currentState.state === 'stop') {
+                resetDuration(playingRow);
             }
-            if (highlighted !== null) {
-                highlighted.classList.remove('highlight');
+            else {
+                setQueueCounter(playingRow, counterText);
             }
         }
-    }
 
-    if (progressTimer) {
-        clearTimeout(progressTimer);
-    }
-    if (currentState.state === 'play') {
-        if (currentState.totalTime > 0 &&
-            currentState.totalTime < currentState.elapsedTime)
+        //synced lyrics
+        if (showSyncedLyrics === true &&
+            settings.viewPlayback.fields.includes('Lyrics'))
         {
-            // this should not appear, update state
-            getState();
-            return;
+            const sl = elGetById('currentLyrics');
+            const toHighlight = sl.querySelector('[data-sec="' + currentState.elapsedTime + '"]');
+            const highlighted = sl.querySelector('.highlight');
+            if (highlighted !== toHighlight &&
+                toHighlight !== null)
+            {
+                toHighlight.classList.add('highlight');
+                if (scrollSyncedLyrics === true) {
+                    toHighlight.scrollIntoView({behavior: "smooth"});
+                }
+                if (highlighted !== null) {
+                    highlighted.classList.remove('highlight');
+                }
+            }
         }
-        progressTimer = setTimeout(function() {
-            currentState.elapsedTime += 1;
-            setCounter();
-        }, 1000);
-    }
+
+        if (currentState.state === 'play') {
+            if (currentState.totalTime > 0 &&
+                currentState.totalTime < currentState.elapsedTime)
+            {
+                // this should not appear, update state
+                getState();
+                return;
+            }
+            if (progressTimer === null) {
+                progressTimer = setInterval(function() {
+                    currentState.elapsedTime += 1;
+                    setCounter();
+                }, 1000);
+            }
+        }
+        else if (progressTimer !== null) {
+            clearInterval(progressTimer);
+            progressTimer = null;
+        }
+    });
 }
 
 /**
@@ -305,7 +310,9 @@ function setBackgroundImage(el, url) {
         clearBackgroundImage(el);
         return;
     }
-    const bgImageUrl = subdir + '/albumart?offset=0&uri=' + myEncodeURIComponent(url);
+    const bgImageUrl = el.tagName === 'BODY' && settings.webuiSettings.dynamicBackground === 'trigger'
+        ? subdir + '/bgimage/' + localSettings.partition + '?uri=' + myEncodeURIComponent(url) + '&hash=' + window.location.hash.substring(1)
+        : subdir + '/albumart?offset=0&uri=' + myEncodeURIComponent(url);
     const old = el.parentNode.querySelectorAll(el.tagName + '> div.albumartbg');
     //do not update if url is the same
     if (old[0] &&
@@ -379,7 +386,7 @@ function clearBackgroundImage(el) {
 function setCurrentCover(url) {
     setBackgroundImage(elGetById('PlaybackCover'), url);
     setBackgroundImage(elGetById('footerCover'), url);
-    if (settings.webuiSettings.bgCover === true) {
+    if (settings.webuiSettings.dynamicBackground !== 'off') {
         setBackgroundImage(domCache.body, url);
     }
 }
@@ -391,7 +398,7 @@ function setCurrentCover(url) {
 function clearCurrentCover() {
     clearBackgroundImage(elGetById('PlaybackCover'));
     clearBackgroundImage(elGetById('footerCover'));
-    if (settings.webuiSettings.bgCover === true) {
+    if (settings.webuiSettings.dynamicBackground !== 'off') {
         clearBackgroundImage(domCache.body);
     }
 }

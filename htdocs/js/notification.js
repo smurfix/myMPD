@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module notifications_js */
@@ -50,6 +50,15 @@ function toggleAlert(alertBoxId, state, msg) {
             elCreateText('span', {}, msg)
         );
         switch(alertBoxId) {
+            case 'alertCrit': {
+                alertBoxEl.classList.add('alert-danger', 'top-alert-dismissible');
+                const clBtn = elCreateEmpty('button', {"class": ["btn-close"]});
+                alertBoxEl.appendChild(clBtn);
+                clBtn.addEventListener('click', function(event) {
+                    event.preventDefault();
+                }, false);
+                break;
+            }
             case 'alertMpdStatusError': {
                 alertBoxEl.classList.add('alert-danger', 'top-alert-dismissible');
                 const clBtn = elCreateEmpty('button', {"class": ["btn-close"]});
@@ -81,7 +90,7 @@ function toggleAlert(alertBoxId, state, msg) {
                 alertBoxEl.appendChild(clBtn);
                 clBtn.addEventListener('click', function(event) {
                     event.preventDefault();
-                    onShow();
+                    onShow('reconnect');
                 }, false);
                 break;
             }
@@ -107,29 +116,7 @@ function toggleAlert(alertBoxId, state, msg) {
 }
 
 /**
- * Notification severities
- * @type {object}
- */
-const severities = {
-    "info": {
-        "text": "Info",
-        "icon": "info",
-        "class": "text-success"
-    },
-    "warn": {
-        "text": "Warning",
-        "icon": "warning",
-        "class": "text-warning"
-    },
-    "error": {
-        "text": "Error",
-        "icon": "error",
-        "class": "text-danger"
-    }
-};
-
-/**
- * Notification facilities
+ * Jsonrpc notification facilities
  * @type {object}
  */
 const facilities = {
@@ -151,39 +138,56 @@ const facilities = {
 
 /**
  * Creates a severity icon
- * @param {string} severity severity
- * @returns {HTMLElement} severity icon
+ * @param {number} severity Syslog severity number
+ * @returns {HTMLElement} Severity icon
  */
 function createSeverityIcon(severity) {
-    return elCreateText('span', {"data-title-phrase": severities[severity].text,
-        "class": ["mi", severities[severity].class, "me-2"]}, severities[severity].icon);
+    const severityName = severityNames[severity];
+    return elCreateText('span', {"data-title-phrase": severityName,
+        "class": ["mi", "text-light", "px-3"]}, severities[severityName].icon);
+}
+
+/**
+ * Creates a severity icon
+ * @param {number} severity Syslog severity number
+ * @returns {HTMLElement} Severity icon
+ */
+function createSeverityIconList(severity) {
+    const severityName = severityNames[severity];
+    return elCreateText('span', {"data-title-phrase": severityName,
+        "class": ["mi", severities[severityName].class, "me-2"]}, severities[severityName].icon);
 }
 
 /**
  * Shows a toast notification or an appinit alert
- * @param {string} message message
- * @param {string} facility facility
- * @param {string} severity one off info, warn, error
+ * @param {string} message Message - already translated
+ * @param {string} facility Facility
+ * @param {string} severityName Syslog severity name
  * @returns {void}
  */
-function showNotification(message, facility, severity) {
+function showNotification(message, facility, severityName) {
     if (appInited === false) {
         showAppInitAlert(message);
         return;
     }
-    logMessage(message, facility, severity);
-    if (severity === 'info') {
-        //notifications with severity info can be hidden
+    const severity = severities[severityName].severity;
+    logNotification(message, facility, severity);
+    if (severity === 7) {
+        // Debug notifications are only logged
+        return;
+    }
+    if (severity > 4) {
+        // Notifications with severity info and notice can be hidden
         if (settings.webuiSettings.notifyPage === false &&
             settings.webuiSettings.notifyWeb === false)
         {
             return;
         }
-        //disabled notification for facility in advanced setting
+        // Disabled notification for facility in advanced setting
         let show = settings.webuiSettings['notification' + facilities[facility]];
         if (show === null ) {
             logDebug('Unknown facility: ' + facility);
-            //fallback to general
+            // Fallback to general
             show = settings.webuiSettings['notificationGeneral'];
         }
         if (show === false) {
@@ -192,7 +196,7 @@ function showNotification(message, facility, severity) {
     }
 
     if (facility === 'jukebox' &&
-        severity === 'error')
+        severity < 5)
     {
         toggleAlert('alertJukeboxStatusError', true, message);
         return;
@@ -204,31 +208,36 @@ function showNotification(message, facility, severity) {
     }
     if (settings.webuiSettings.notifyPage === true) {
         const toast = elCreateNodes('div', {"class": ["toast", "mt-2"]}, [
-            elCreateNodes('div', {"class": ["toast-header"]}, [
+            elCreateNodes('div', {"class": ["toast-header", "p-0", severities[severityName].bgclass, "rounded"]}, [
                 createSeverityIcon(severity),
-                elCreateText('span', {"class": ["me-auto"]}, message),
-                elCreateEmpty('button', {"type": "button", "class": ["btn-close"], "data-bs-dismiss": "toast"}),
+                elCreateText('span', {"class": ["p-2", "ps-3", "bg-dark", "w-100", "rounded-end"]}, message)
             ])
         ]);
         elGetById('alertBox').prepend(toast);
-        const toastInit = new BSN.Toast(toast, {delay: 2500});
+        const toastInit = new BSN.Toast(toast, {delay: severities[severityName].delay});
         toast.addEventListener('hidden.bs.toast', function() {
             this.remove();
         }, false);
         toastInit.show();
     }
+    if (severity < 3) {
+        // Display critical notifications also on the top of the page
+        toggleAlert('alertCrit', true, message);
+    }
 }
 
 /**
- * Appends a log message to the log buffer
- * @param {string} message message
- * @param {string} facility facility
- * @param {string} severity one off info, warn, error
+ * Appends a message to the notification buffer
+ * @param {string} message Message to log - already translated
+ * @param {string} facility Jsonrpc facility
+ * @param {number} severity Syslog severity number
  * @returns {void}
  */
-function logMessage(message, facility, severity) {
-    let messagesLen = messages.length;
-    const lastMessage = messagesLen > 0 ? messages[messagesLen - 1] : null;
+function logNotification(message, facility, severity) {
+    const messagesLen = messages.length;
+    const lastMessage = messagesLen > 0
+        ? messages[messagesLen - 1]
+        : null;
     if (lastMessage !== null &&
         lastMessage.message === message)
     {
@@ -243,14 +252,11 @@ function logMessage(message, facility, severity) {
             "occurrence": 1,
             "timestamp": getTimestamp()
         });
-        if (messagesLen >= messagesMax) {
+        if (messagesLen > messagesMax) {
             messages.shift();
         }
-        else {
-            messagesLen++;
-        }
     }
-    //update log overview if shown
+    //update notification messages overview if shown
     if (elGetById('modalNotifications').classList.contains('show')) {
         showMessages();
     }
@@ -276,7 +282,9 @@ function toggleUI() {
             ? 'enabled'
             : 'disabled';
     /** @type {boolean} */
-    const enabled = state === 'disabled' ? false : true;
+    const enabled = state === 'disabled'
+        ? false
+        : true;
     if (enabled !== uiEnabled) {
         logDebug('Setting ui state to ' + state);
         domCache.body.setAttribute('data-uiState', state);
@@ -296,7 +304,7 @@ function toggleUI() {
     }
     else {
         toggleAlert('alertMpdState', true, tn('MPD disconnected'));
-        logMessage(tn('MPD disconnected'), 'mpd', 'error');
+        logNotification(tn('MPD disconnected'), 'mpd', 3);
     }
 
     if (getWebsocketState() === true) {
@@ -304,7 +312,7 @@ function toggleUI() {
     }
     else if (appInited === true) {
         toggleAlert('alertMympdState', true, tn('Disconnected from myMPD'));
-        logMessage(tn('Websocket is disconnected'), 'general', 'error');
+        logNotification(tn('Websocket is disconnected'), 'general', 3);
     }
 
     setStateIcon();

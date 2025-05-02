@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -84,15 +84,21 @@ void list_clear(struct t_list *l) {
 /**
  * Clears the list, frees all nodes and the list itself, ignores user_data
  * @param l pointer to list
- * @return NULL
  */
-void *list_free(struct t_list *l) {
+void list_free(struct t_list *l) {
     if (l == NULL) {
-        return NULL;
+        return;
     }
     list_clear_user_data(l, list_free_cb_ignore_user_data);
     FREE_PTR(l);
-    return NULL;
+}
+
+/**
+ * Clears the list, frees all nodes and the list itself, ignores user_data
+ * @param l pointer to list
+ */
+void list_free_void(void *l) {
+    list_free((struct t_list *)l);
 }
 
 /**
@@ -117,12 +123,10 @@ void list_clear_user_data(struct t_list *l, user_data_callback free_cb) {
  * set free_cb to NULL, to free a generic pointer.
  * @param l pointer to list
  * @param free_cb Callback to free the user data
- * @return NULL
  */
-void *list_free_user_data(struct t_list *l, user_data_callback free_cb) {
+void list_free_user_data(struct t_list *l, user_data_callback free_cb) {
     list_clear_user_data(l, free_cb);
     FREE_PTR(l);
-    return NULL;
 }
 
 /**

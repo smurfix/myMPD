@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,19 +11,20 @@
 #include "compile_time.h"
 #include "src/mympd_api/queue.h"
 
-#include "src/lib/cache_rax_album.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/cache/cache_rax_album.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/log.h"
 #include "src/lib/sds_extras.h"
 #include "src/lib/utility.h"
-#include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/queue.h"
-#include "src/mpd_client/search.h"
-#include "src/mpd_client/shortcuts.h"
-#include "src/mpd_client/stickerdb.h"
-#include "src/mpd_client/tags.h"
 #include "src/mympd_api/sticker.h"
 #include "src/mympd_api/webradio.h"
+#include "src/mympd_client/errorhandler.h"
+#include "src/mympd_client/queue.h"
+#include "src/mympd_client/search.h"
+#include "src/mympd_client/shortcuts.h"
+#include "src/mympd_client/stickerdb.h"
+#include "src/mympd_client/tags.h"
 
 #include <limits.h>
 #include <string.h>
@@ -85,9 +86,8 @@ bool mympd_api_queue_rm_song_ids(struct t_partition_state *partition_state, stru
                 break;
             }
         }
-        mpd_client_command_list_end_check(partition_state);
+        mympd_client_command_list_end_check(partition_state);
     }
-    mpd_response_finish(partition_state->conn);
     return mympd_check_error_and_recover(partition_state, error, "mpd_send_delete_id");
 }
 
@@ -115,9 +115,8 @@ bool mympd_api_queue_prio_set(struct t_partition_state *partition_state, struct 
                 break;
             }
         }
-        mpd_client_command_list_end_check(partition_state);
+        mympd_client_command_list_end_check(partition_state);
     }
-    mpd_response_finish(partition_state->conn);
     return mympd_check_error_and_recover(partition_state, error, "mpd_send_prio_id");
 }
 
@@ -143,7 +142,6 @@ bool mympd_api_queue_prio_set_highest(struct t_partition_state *partition_state,
         next_song_id = mpd_status_get_next_song_id(status);
         mpd_status_free(status);
     }
-    mpd_response_finish(partition_state->conn);
     if (mympd_check_error_and_recover(partition_state, error, "mpd_run_status") == false) {
         return false;
     }
@@ -158,7 +156,6 @@ bool mympd_api_queue_prio_set_highest(struct t_partition_state *partition_state,
                 mpd_song_free(song);
             }
         }
-        mpd_response_finish(partition_state->conn);
         if (mympd_check_error_and_recover(partition_state, error, "mpd_send_get_queue_song_id") == false) {
             return false;
         }
@@ -200,9 +197,8 @@ bool mympd_api_queue_move_relative(struct t_partition_state *partition_state, st
             current = current->next;
             to++;
         }
-        mpd_client_command_list_end_check(partition_state);
+        mympd_client_command_list_end_check(partition_state);
     }
-    mpd_response_finish(partition_state->conn);
     return mympd_check_error_and_recover(partition_state, error, "mpd_send_move_id_whence");
 }
 
@@ -240,9 +236,8 @@ bool mympd_api_queue_insert_uri_tags(struct t_partition_state *partition_state, 
             current = current->next;
             to++;
         }
-        mpd_client_command_list_end_check(partition_state);
+        mympd_client_command_list_end_check(partition_state);
     }
-    mpd_response_finish(partition_state->conn);
     return mympd_check_error_and_recover(partition_state, error, "mpd_send_add_tag_id");
 }
 
@@ -267,7 +262,7 @@ bool mympd_api_queue_append_uri_tags(struct t_partition_state *partition_state, 
  * @return bool true on success, else false
  */
 bool mympd_api_queue_replace_uri_tags(struct t_partition_state *partition_state, sds uri, struct t_list *tags, sds *error) {
-    return mpd_client_queue_clear(partition_state, error) &&
+    return mympd_client_queue_clear(partition_state, error) &&
         mympd_api_queue_append_uri_tags(partition_state, uri, tags, error);
 }
 
@@ -300,9 +295,8 @@ bool mympd_api_queue_insert_uri_resume(struct t_partition_state *partition_state
         if (elapsed > 0) {
             mpd_send_seek_id(partition_state->conn, (unsigned)id, (unsigned)elapsed);
         }
-        mpd_client_command_list_end_check(partition_state);
+        mympd_client_command_list_end_check(partition_state);
     }
-    mpd_response_finish(partition_state->conn);
     return mympd_check_error_and_recover(partition_state, error, "mpd_send_seek_id");
 }
 
@@ -331,7 +325,7 @@ bool mympd_api_queue_append_uri_resume(struct t_partition_state *partition_state
 bool mympd_api_queue_replace_uri_resume(struct t_partition_state *partition_state, struct t_stickerdb_state *stickerdb,
         sds uri, sds *error)
 {
-    return mpd_client_queue_clear(partition_state, error) &&
+    return mympd_client_queue_clear(partition_state, error) &&
         mympd_api_queue_append_uri_resume(partition_state, stickerdb, uri, error);
 }
 
@@ -345,7 +339,7 @@ bool mympd_api_queue_replace_uri_resume(struct t_partition_state *partition_stat
  * @return true on success, else false
  */
 bool mympd_api_queue_insert(struct t_partition_state *partition_state, struct t_list *uris, unsigned to, unsigned whence, sds *error) {
-    return mpd_client_add_uris_to_queue(partition_state, uris, to, whence, error);
+    return mympd_client_add_uris_to_queue(partition_state, uris, to, whence, error);
 }
 
 /**
@@ -356,7 +350,7 @@ bool mympd_api_queue_insert(struct t_partition_state *partition_state, struct t_
  * @return true on success, else false
  */
 bool mympd_api_queue_append(struct t_partition_state *partition_state, struct t_list *uris, sds *error) {
-    return mpd_client_add_uris_to_queue(partition_state, uris, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
+    return mympd_client_add_uris_to_queue(partition_state, uris, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
 }
 
 /**
@@ -367,7 +361,7 @@ bool mympd_api_queue_append(struct t_partition_state *partition_state, struct t_
  * @return true on success, else false
  */
 bool mympd_api_queue_replace(struct t_partition_state *partition_state, struct t_list *uris, sds *error) {
-    return mpd_client_queue_clear(partition_state, error) &&
+    return mympd_client_queue_clear(partition_state, error) &&
         mympd_api_queue_append(partition_state, uris, error);
 }
 
@@ -391,7 +385,7 @@ bool mympd_api_queue_insert_search(struct t_partition_state *partition_state, sd
         *error = sdscat(*error, "Method not supported");
         return false;
     }
-    return mpd_client_search_add_to_queue(partition_state, expression, to, whence, sort, sort_desc, error);
+    return mympd_client_search_add_to_queue(partition_state, expression, to, whence, sort, sort_desc, error);
 }
 
 /**
@@ -421,7 +415,7 @@ bool mympd_api_queue_append_search(struct t_partition_state *partition_state, sd
 bool mympd_api_queue_replace_search(struct t_partition_state *partition_state, sds expression,
         const char *sort, bool sort_desc, sds *error)
 {
-    return mpd_client_queue_clear(partition_state, error) &&
+    return mympd_client_queue_clear(partition_state, error) &&
         mympd_api_queue_append_search(partition_state, expression, sort, sort_desc, error);
 }
 
@@ -438,7 +432,7 @@ bool mympd_api_queue_replace_search(struct t_partition_state *partition_state, s
 bool mympd_api_queue_insert_albums(struct t_partition_state *partition_state, struct t_cache *album_cache,
     struct t_list *albumids, unsigned to, unsigned whence, sds *error)
 {
-    return mpd_client_add_albums_to_queue(partition_state, album_cache, albumids, to, whence, error);
+    return mympd_client_add_albums_to_queue(partition_state, album_cache, albumids, to, whence, error);
 }
 
 /**
@@ -452,7 +446,7 @@ bool mympd_api_queue_insert_albums(struct t_partition_state *partition_state, st
 bool mympd_api_queue_append_albums(struct t_partition_state *partition_state, struct t_cache *album_cache,
         struct t_list *albumids, sds *error)
 {
-    return mpd_client_add_albums_to_queue(partition_state, album_cache, albumids, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
+    return mympd_client_add_albums_to_queue(partition_state, album_cache, albumids, UINT_MAX, MPD_POSITION_ABSOLUTE, error);
 }
 
 /**
@@ -466,7 +460,7 @@ bool mympd_api_queue_append_albums(struct t_partition_state *partition_state, st
 bool mympd_api_queue_replace_albums(struct t_partition_state *partition_state, struct t_cache *album_cache,
         struct t_list *albumids, sds *error)
 {
-    return mpd_client_queue_clear(partition_state, error) &&
+    return mympd_client_queue_clear(partition_state, error) &&
         mympd_api_queue_append_albums(partition_state, album_cache, albumids, error);
 }
 
@@ -500,7 +494,7 @@ bool mympd_api_queue_insert_album_tag(struct t_partition_state *partition_state,
         mpd_album, tag, value, &partition_state->config->albums);
     const char *sort = NULL;
     bool sortdesc = false;
-    bool rc = mpd_client_search_add_to_queue(partition_state, expression, to, whence, sort, sortdesc, error);
+    bool rc = mympd_client_search_add_to_queue(partition_state, expression, to, whence, sort, sortdesc, error);
     FREE_SDS(expression);
     return rc;
 }
@@ -534,7 +528,7 @@ bool mympd_api_queue_append_album_tag(struct t_partition_state *partition_state,
 bool mympd_api_queue_replace_album_tag(struct t_partition_state *partition_state,struct t_cache *album_cache,
         sds albumid, enum mpd_tag_type tag, sds value, sds *error)
 {
-    return mpd_client_queue_clear(partition_state, error) &&
+    return mympd_client_queue_clear(partition_state, error) &&
         mympd_api_queue_append_album_tag(partition_state, album_cache, albumid, tag, value, error);
 }
 
@@ -559,10 +553,6 @@ bool mympd_api_queue_insert_album_range(struct t_partition_state *partition_stat
         *error = sdscat(*error, "Method not supported");
         return false;
     }
-    if (partition_state->mpd_state->feat.search_add_sort_window == false) {
-        *error = sdscat(*error, "Method not supported");
-        return false;
-    }
     struct mpd_song *mpd_album = album_cache_get_album(album_cache, albumid);
     if (mpd_album == NULL) {
         *error = sdscat(*error, "Album not found");
@@ -575,7 +565,7 @@ bool mympd_api_queue_insert_album_range(struct t_partition_state *partition_stat
         mpd_album, &partition_state->config->albums);
     const char *sort = "Disc";
     bool sortdesc = false;
-    bool rc = mpd_client_search_add_to_queue_window(partition_state, expression, to, whence,
+    bool rc = mympd_client_search_add_to_queue_window(partition_state, expression, to, whence,
         sort, sortdesc, start, end_uint, error);
     FREE_SDS(expression);
     return rc;
@@ -610,7 +600,7 @@ bool mympd_api_queue_append_album_range(struct t_partition_state *partition_stat
 bool mympd_api_queue_replace_album_range(struct t_partition_state *partition_state,struct t_cache *album_cache,
         sds albumid, unsigned start, int end, sds *error)
 {
-    return mpd_client_queue_clear(partition_state, error) &&
+    return mympd_client_queue_clear(partition_state, error) &&
         mympd_api_queue_append_album_range(partition_state, album_cache, albumid, start, end, error);
 }
 
@@ -643,7 +633,6 @@ bool mympd_api_queue_insert_plist_range(struct t_partition_state *partition_stat
     else {
         mpd_send_load_range_to(partition_state->conn, plist, start, end_uint, to, whence);
     }
-    mpd_response_finish(partition_state->conn);
     return mympd_check_error_and_recover(partition_state, error, "mpd_send_load_range_to");
 }
 
@@ -674,7 +663,7 @@ bool mympd_api_queue_append_plist_range(struct t_partition_state *partition_stat
 bool mympd_api_queue_replace_plist_range(struct t_partition_state *partition_state, sds plist,
         unsigned start, int end, sds *error)
 {
-    return mpd_client_queue_clear(partition_state, error) &&
+    return mympd_client_queue_clear(partition_state, error) &&
         mympd_api_queue_append_plist_range(partition_state, plist, start, end, error);
 }
 
@@ -711,9 +700,8 @@ bool mympd_api_queue_insert_plists(struct t_partition_state *partition_state, st
             }
             current = current->next;
         }
-        mpd_client_command_list_end_check(partition_state);
+        mympd_client_command_list_end_check(partition_state);
     }
-    mpd_response_finish(partition_state->conn);
     return mympd_check_error_and_recover(partition_state, error, "mpd_send_load_range_to");
 }
 
@@ -736,7 +724,7 @@ bool mympd_api_queue_append_plists(struct t_partition_state *partition_state, st
  * @return true on success, else false
  */
 bool mympd_api_queue_replace_plists(struct t_partition_state *partition_state, struct t_list *plists, sds *error) {
-    return mpd_client_queue_clear(partition_state, error) &&
+    return mympd_client_queue_clear(partition_state, error) &&
         mympd_api_queue_append_plists(partition_state, plists, error);
 }
 
@@ -758,7 +746,6 @@ sds mympd_api_queue_crop(struct t_partition_state *partition_state, sds buffer, 
         playing_song_pos = mpd_status_get_song_pos(status);
         mpd_status_free(status);
     }
-    mpd_response_finish(partition_state->conn);
     if (mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_run_status") == false) {
         return buffer;
     }
@@ -781,9 +768,8 @@ sds mympd_api_queue_crop(struct t_partition_state *partition_state, sds buffer, 
                     mympd_set_mpd_failure(partition_state, "Error adding command to command list mpd_send_delete_range");
                 }
             }
-            mpd_client_command_list_end_check(partition_state);
+            mympd_client_command_list_end_check(partition_state);
         }
-        mpd_response_finish(partition_state->conn);
         if (mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_send_delete_range") == false) {
             return buffer;
         }
@@ -822,11 +808,20 @@ sds mympd_api_queue_list(struct t_mympd_state *mympd_state, struct t_partition_s
 {
     enum mympd_cmd_ids cmd_id = MYMPD_API_QUEUE_SEARCH;
     //update the queue status
-    mpd_client_queue_status_update(partition_state);
+    mympd_client_queue_status_update(partition_state);
     //Check offset
     if (offset >= partition_state->queue_length) {
-        offset = 0;
+        buffer = jsonrpc_respond_start(buffer, cmd_id, request_id);
+        buffer = sdscat(buffer, "\"data\":[");
+        buffer = sdscatlen(buffer, "],", 2);
+        buffer = tojson_uint(buffer, "totalTime", 0, true);
+        buffer = tojson_uint(buffer, "totalEntities", partition_state->queue_length, true);
+        buffer = tojson_uint(buffer, "offset", offset, true);
+        buffer = tojson_uint(buffer, "returnedEntities", 0, false);
+        buffer = jsonrpc_end(buffer);
+        return buffer;
     }
+
     //list the queue
     bool print_stickers = check_get_sticker(partition_state->mpd_state->feat.stickers, &tagcols->stickers);
     if (print_stickers == true) {
@@ -855,7 +850,6 @@ sds mympd_api_queue_list(struct t_mympd_state *mympd_state, struct t_partition_s
         buffer = tojson_uint(buffer, "returnedEntities", entities_returned, false);
         buffer = jsonrpc_end(buffer);
     }
-    mpd_response_finish(partition_state->conn);
     if (print_stickers == true) {
         stickerdb_enter_idle(mympd_state->stickerdb);
     }
@@ -883,7 +877,7 @@ sds mympd_api_queue_search(struct t_mympd_state *mympd_state, struct t_partition
 {
     enum mympd_cmd_ids cmd_id = MYMPD_API_QUEUE_SEARCH;
     //update the queue status
-    mpd_client_queue_status_update(partition_state);
+    mympd_client_queue_status_update(partition_state);
 
     sds real_expression = sdslen(expression) == 0
         ? sdsnew("(base '')")
@@ -944,7 +938,6 @@ sds mympd_api_queue_search(struct t_mympd_state *mympd_state, struct t_partition
         buffer = tojson_uint(buffer, "returnedEntities", entities_returned, false);
         buffer = jsonrpc_end(buffer);
     }
-    mpd_response_finish(partition_state->conn);
     if (print_stickers == true) {
         stickerdb_enter_idle(mympd_state->stickerdb);
     }

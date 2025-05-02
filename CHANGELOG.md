@@ -4,6 +4,137 @@ https://github.com/jcorporation/myMPD/
 
 ***
 
+## myMPD v21.0.0 (not yet released)
+
+This release supports the first new MPD 0.25 feature and improves the scripting feature.
+
+There is now a new trigger to provide a background image by a script. An example implementation is available in the [mympd-scripts repository](https://github.com/jcorporation/mympd-scripts/tree/main/Background).
+
+Scripts can now set temporary variables which are kept in memory only and have an expiration time. They are useful to save some state between script executions.
+
+Thanks to @cbrenberg that ironed out a severe bug in the `mympd.tmp_file()` function.
+
+### API changes
+
+- MYMPD_API_SCRIPT_TMP_DELETE: new
+- MYMPD_API_SCRIPT_TMP_GET: new
+- MYMPD_API_SCRIPT_TMP_LIST: new
+- MYMPD_API_SCRIPT_TMP_SET: new
+
+### Scripting changes
+
+- Feat: `mympd.check_arguments()` - Argument checking function
+- Feat: `mympd.isnilorempty()` - Checks for nil and empty string
+- Feat: `mympd.remove_file()` - Wrapper for `os.remove` that logs errors
+- Fix: `mympd.tmp_file()` - Function does not return always uniq names #1422
+
+### Changelog
+
+- Feat: Add temporary variables for scripts
+- Feat: Add cache for Lua http client #1421
+- Feat: Add trigger for background image selection #1420
+- Feat: Use MPD side filter and window for listing tags (MPD 0.25)
+- Feat: Add logviewer for gui logs
+- Feat: Use range for retrieving playlist contents (MPD 0.24) #1424
+- Upd: Improve websocket reconnection
+- Upd: Improve API explorer - show request
+- Upd: Bootstrap v5.3.4 #1418
+
+***
+
+## myMPD v20.1.3 (2025-04-15)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Set minimum MPD version to 0.22.4 #1419
+
+***
+
+## myMPD v20.1.2 (2025-03-30)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Enable partition feature #1415
+
+***
+
+## myMPD v20.1.1 (2025-03-25)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Upd: Translations
+- Upd: Rework compiler options
+- Upd: Initial support for MPD 0.25
+
+***
+
+## myMPD v20.1.0 (2025-03-16)
+
+This is the first release that supports only MPD 0.22.6 and above.
+
+### API changes
+
+- MYMPD_API_STICKER_FIND: new
+
+### Changelog
+
+- Feat: API explorer
+- Upd: Mongoose 7.17
+- Upd: Enforce search expression parsing errors
+- Upd: utf8.h
+- Fix: Check for openrc-run also in /usr/sbin (Alpine Linux /usr merge project) #1407
+- Fix: Simplify Debian packaging
+- Fix: Create new script
+
+***
+
+## myMPD v20.0.0 (2025-02-01)
+
+This release improves the Lua scripting interface, supports the newest MPD 0.24 sticker commands and add's a trigger for smart playlist creation.
+
+With endless scrolling, a long-delayed feature is now also available. It can be switched on in the settings, the page-by-page display remains the standard.
+
+### API changes
+
+- MYMPD_API_STICKER_INC: Add value parameter
+- MYMPD_API_STICKER_DEC: New
+- MYMPD_API_STICKER_PLAYCOUNT: New
+
+### Scripting changes
+
+- `mympd.cache_cover_write`: Add mimetype parameter
+- `mympd.cache_thumbs_write`: Add mimetype parameter
+- `mympd.http_header_get`: New function
+- `mympd.tmp_file`: Creates an empty file only if it is a new file
+
+### Changelog
+
+- Feat: Support new MPD 0.24 "sticker (inc|dec)" sub-commands #1390
+- Feat: New trigger event for smart playlist update #1389
+- Feat: Add `current_album` to `mympd_state` Lua table
+- Feat: Add option for "Endless scrolling"
+- Feat: Add search to list of scripts to import
+- Upd: libmympdclient 1.0.33
+
+***
+
+## myMPD v19.0.3 (2025-01-12)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Memory leak in playlist search
+- Fix: Grid layout for filesystem view
+
+***
+
 ## myMPD v19.0.2 (2024-12-26)
 
 This is a small bug fix release.

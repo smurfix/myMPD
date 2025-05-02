@@ -3,23 +3,26 @@
 -- @param uri The uri to access
 -- @param extra_headers Additional headers terminated by "\r\n"
 -- @param payload Payload to send
+-- @param cache Cache the response
 -- @return rc 0 for success, else 1
 -- @return HTTP status code
 -- @return HTTP Headers as Lua table
 -- @return HTTP Body
-function mympd.http_client(method, uri, extra_headers, payload)
-  return mympd_http_client(method, uri, extra_headers, payload)
+function mympd.http_client(method, uri, extra_headers, payload, cache)
+  return mympd_http_client(method, uri, extra_headers, payload, cache)
 end
 
 --- Download a file over http
 -- @param uri The uri to access
 -- @param extra_headers Additional headers terminated by "\r\n"
 -- @param out Filename to write the response body
+-- @param cache Cache the response
 -- @return 0 for success, else 1
 -- @return HTTP status code
 -- @return HTTP Headers as Lua table
-function mympd.http_download(uri, extra_headers, out)
-  return mympd_http_download(uri, extra_headers, out)
+-- @return Output filepath
+function mympd.http_download(uri, extra_headers, out, cache)
+  return mympd_http_download(uri, extra_headers, out, cache)
 end
 
 -- Map http status code to status text
@@ -89,6 +92,20 @@ local status_text = {
   c599 = "Network Connect Timeout Error"
 }
 
+--- Gets the named header value from a header lua table
+-- @param header Lua table of http headers and its values
+-- @param name Name of the header to return (case insensitive)
+-- @return HTTP header value or nil
+function mympd.http_header_get(header, name)
+  local uc_name = string.upper(name)
+  for k, v in pairs(header) do
+    if string.upper(k) == uc_name then
+      return v
+    end
+  end
+  return nil
+end
+
 --- Sends a HTTP reply.
 -- Can be only used in the "http" event
 -- @param status HTTP status code
@@ -120,10 +137,25 @@ end
 
 --- Serves a file from the filesystem.
 -- Only files from the diskcache are allowed.
--- @param file file to serve
+-- @param file File to serve
 -- @return HTTP response
 function mympd.http_serve_file(file)
-  return mympd_http_serve_file(file)
+  return mympd_http_serve_file(file, 0)
+end
+
+--- Serves a file from the filesystem and removes it afterwards.
+-- Only files from the diskcache are allowed.
+-- @param file File to serve
+-- @return HTTP response
+function mympd.http_serve_file_rm(file)
+  return mympd_http_serve_file(file, 1)
+end
+
+--- Serves a file from the http client cache.
+-- @param file File to serve
+-- @return HTTP response
+function mympd.http_serve_file_from_cache(file)
+  return mympd_http_serve_file_from_cache(file)
 end
 
 --- Sends a JSONRPC 2.0 response.

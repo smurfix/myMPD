@@ -7,7 +7,7 @@ myMPD is a standalone and lightweight web-based MPD client. It's tuned for minim
 
 The backend is written in C and has no dependencies to external databases or webservers. The configuration is stored in plain text files and all the data is pulled on demand from MPD. The MPD database is the only source of truth for myMPD.
 
-The frontend is mobile friendly, written as a PWA and offers on all devices the same functionality.
+The frontend is mobile friendly, written as a PWA in plain JavaScript and offers on all devices the same functionality.
 
 myMPD also integrates extended features like an advanced jukebox mode, timers, triggers and smart playlists. With the integrated lua interpreter myMPD functions can also be scripted.
 
@@ -18,10 +18,10 @@ myMPD also integrates extended features like an advanced jukebox mode, timers, t
 ## Features
 
 - Concurrent MPD partition support
-- Control mpd functions and options
+- Control MPD functions and options
 - MPD option presets
 - Queue and playlist management
-- Browse mpd database by tags or filesystem
+- Browse MPD database by tags or filesystem
 - Advanced search
 - Jukebox mode
 - MPD mount and neighbors support
@@ -50,10 +50,12 @@ To use all myMPD functions you should use the latest stable MPD version.
 
 The [mympd-scripts](https://github.com/jcorporation/mympd-scripts) repository provides many script to enhance and add features to myMPD.
 
-- Scrobbling to Last.fm, Maloja or ListenBrainz
-- Fetch albumart or tagart from fanart.tv and OpenOpus
-- Fetch lyrics
+- Scrobbling to [Last.fm](https://www.last.fm/), [Maloja](https://github.com/krateng/maloja) or [ListenBrainz](https://listenbrainz.org/)
+- Fetch albumart or tagart from [fanart.tv](https://fanart.tv/) and [OpenOpus](https://openopus.org/)
+- Fetch lyrics with [LRCLIB](https://lrclib.net/)
 - Import webradios from [RadioBrowser](https://www.radio-browser.info/)
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) integration
+- Home screen widgets
 - and many more
 
 ## Documentation
@@ -80,6 +82,6 @@ myMPD is in active development. If you like myMPD, you can help to improve it (n
 
 ## Copyright
 
-2018-2024 Juergen Mang <mail@jcgames.de>
+2018-2025 Juergen Mang <mail@jcgames.de>
 
 myMPD was originally a fork of [ympd](https://github.com/notandy/ympd), but it has evolved into a much more comprehensive MPD client.

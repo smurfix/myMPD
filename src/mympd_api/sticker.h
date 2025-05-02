@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -15,6 +15,9 @@
 
 sds mympd_api_sticker_get(struct t_stickerdb_state *stickerdb, sds buffer, unsigned request_id,
         sds uri, enum mympd_sticker_type type, sds name);
+sds mympd_api_sticker_find(struct t_stickerdb_state *stickerdb, sds buffer, unsigned request_id,
+        sds uri, enum mympd_sticker_type type, sds name, enum mpd_sticker_operator op, sds value,
+        enum mpd_sticker_sort sort, bool sort_desc, unsigned offset, unsigned limit);
 sds mympd_api_sticker_list(struct t_stickerdb_state *stickerdb, sds buffer, unsigned request_id,
         sds uri, enum mympd_sticker_type type);
 bool mympd_api_sticker_set_feedback(struct t_stickerdb_state *stickerdb, struct t_list *trigger_list, const char *partition_name,

@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -13,14 +13,15 @@
 
 #include "src/lib/api.h"
 #include "src/lib/filehandler.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/mympd_state.h"
 #include "src/lib/sds_extras.h"
 #include "src/lib/utility.h"
-#include "src/mpd_client/connection.h"
-#include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/partitions.h"
-#include "src/mpd_client/shortcuts.h"
+#include "src/mympd_client/connection.h"
+#include "src/mympd_client/errorhandler.h"
+#include "src/mympd_client/partitions.h"
+#include "src/mympd_client/shortcuts.h"
 
 #include <string.h>
 
@@ -126,7 +127,6 @@ sds mympd_api_partition_rm(struct t_mympd_state *mympd_state, struct t_partition
     struct t_list outputs;
     list_init(&outputs);
     mpd_send_noidle(partition_to_remove->conn);
-    mpd_response_finish(partition_to_remove->conn);
     if (mympd_check_error_and_recover_respond(partition_to_remove, &buffer, cmd_id, request_id, "mpd_send_noidle") == false) {
         return buffer;
     }
@@ -137,12 +137,11 @@ sds mympd_api_partition_rm(struct t_mympd_state *mympd_state, struct t_partition
             mpd_output_free(output);
         }
     }
-    mpd_response_finish(partition_to_remove->conn);
     if (mympd_check_error_and_recover_respond(partition_to_remove, &buffer, cmd_id, request_id, "mpd_send_outputs") == false) {
         return buffer;
     }
     //disconnect partition
-    mpd_client_disconnect(partition_to_remove);
+    mympd_client_disconnect(partition_to_remove);
     //move outputs
     if (mpd_command_list_begin(partition_state->conn, false)) {
         struct t_list_node *current;
@@ -154,9 +153,8 @@ sds mympd_api_partition_rm(struct t_mympd_state *mympd_state, struct t_partition
                 break;
             }
         }
-        mpd_client_command_list_end_check(partition_state);
+        mympd_client_command_list_end_check(partition_state);
     }
-    mpd_response_finish(partition_state->conn);
     list_clear(&outputs);
     if (mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_send_move_output") == false) {
         return buffer;

@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,9 +11,10 @@
 #include "compile_time.h"
 #include "src/mympd_api/outputs.h"
 
-#include "src/lib/jsonrpc.h"
-#include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/shortcuts.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_rpc.h"
+#include "src/mympd_client/errorhandler.h"
+#include "src/mympd_client/shortcuts.h"
 
 #include <string.h>
 
@@ -76,7 +77,6 @@ sds mympd_api_output_get(struct t_partition_state *partition_state, sds buffer, 
             buffer = jsonrpc_respond_message(buffer, cmd_id, request_id, JSONRPC_FACILITY_MPD, JSONRPC_SEVERITY_ERROR, "Output not found");
         }
     }
-    mpd_response_finish(partition_state->conn);
     mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_send_outputs");
     return buffer;
 }
@@ -112,7 +112,6 @@ sds mympd_api_output_list(struct t_partition_state *partition_state, sds buffer,
         buffer = tojson_uint(buffer, "totalEntities", entity_count, false);
         buffer = jsonrpc_end(buffer);
     }
-    mpd_response_finish(partition_state->conn);
     mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_send_outputs");
     return buffer;
 }
@@ -138,8 +137,7 @@ bool mympd_api_output_attributes_set(struct t_partition_state *partition_state,
                 break;
             }
         }
-        mpd_client_command_list_end_check(partition_state);
+        mympd_client_command_list_end_check(partition_state);
     }
-    mpd_response_finish(partition_state->conn);
     return mympd_check_error_and_recover(partition_state, error, "mpd_send_output_set");
 }

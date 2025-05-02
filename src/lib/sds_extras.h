@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -44,5 +44,6 @@ sds sds_hash_sha1_sds(sds s);
 sds sds_hash_sha256(const char *p);
 sds sds_hash_sha256_sds(sds s);
 sds sds_pad_int(int64_t value, sds buffer);
+void sds_free_void(void *p);
 
 #endif

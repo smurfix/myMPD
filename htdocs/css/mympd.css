@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -321,6 +321,10 @@ div.footerCounter {
   border-bottom: 0.4rem solid var(--mympd-highlightcolor);
 }
 
+#footerProgress:hover {
+  background-image: linear-gradient(transparent 0, transparent 0.45rem, var(--bs-secondary) 0.45rem, var(--bs-secondary) 1.8rem);
+}
+
 #footerProgressBar {
   height: 0.4rem;
   width: 0;
@@ -432,7 +436,8 @@ table.smallWidth [data-col="Action"] {
 }
 
 div.card {
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: anywhere;
   margin-bottom: 2rem;
 }
 

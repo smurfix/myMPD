@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalMaintenance_js */
@@ -14,6 +14,15 @@ function initModalMaintenance() {
         elGetById('modalMaintenanceLoglevelInput').value = settings.loglevel;
         cleanupModalId('modalMaintenance');
     });
+
+    const modalMaintenanceLoglevelInputEl = elGetById('modalMaintenanceLoglevelInput');
+    for (const severity in severities) {
+        const opt = elCreateTextTn('option', {'value': severities[severity].severity}, severity);
+        if (severities[severity].severity === settings.loglevel) {
+            opt.setAttribute('selected', 'selected');
+        }
+        modalMaintenanceLoglevelInputEl.appendChild(opt);
+    }
 }
 
 /**
@@ -31,6 +40,8 @@ function setLoglevel(target) {
         "loglevel": loglevel
     }, function() {
         settings.loglevel = loglevel;
+        // Set severity for filtering notifications and logs
+        elGetById('modalNotificationsSeveritySelect').value = settings.loglevel;
         if (target) {
             btnWaiting(target, false);
         }

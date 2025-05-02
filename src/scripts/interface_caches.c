@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,16 +11,37 @@
 #include "compile_time.h"
 #include "src/scripts/interface_caches.h"
 
-#include "src/lib/cache_disk_images.h"
-#include "src/lib/cache_disk_lyrics.h"
+#include "src/lib/cache/cache_disk_images.h"
+#include "src/lib/cache/cache_disk_lyrics.h"
 #include "src/lib/config_def.h"
 #include "src/lib/filehandler.h"
 #include "src/lib/log.h"
 #include "src/lib/mimetype.h"
+#include "src/lib/random.h"
 #include "src/lib/sds_extras.h"
 #include "src/scripts/interface.h"
 
 #include <string.h>
+
+/**
+ * Creates a temporary file in the misc cache folder
+ * @param lua_vm lua instance
+ * @return number of elements pushed to lua stack
+ */
+int lua_caches_tmp_file(lua_State *lua_vm) {
+    struct t_config *config = get_lua_global_config(lua_vm);
+    char filename[21];
+    randstring(filename, 21);
+    sds filepath = sdscatfmt(sdsempty(), "%S/misc/%s.tmp", config->cachedir, filename);
+    if (create_tmp_file(filepath) == true) {
+        lua_pushstring(lua_vm, filepath);
+    }
+    else {
+        lua_pushnil(lua_vm);
+    }
+    FREE_SDS(filepath);
+    return 1;
+}
 
 /**
  * Updates the timestamp of a file
@@ -45,7 +66,9 @@ int lua_caches_update_mtime(lua_State *lua_vm) {
     if (update_mtime(filename) == true) {
         lua_pushnumber(lua_vm, 0);
     }
-    lua_pushnumber(lua_vm, 1);
+    else {
+        lua_pushnumber(lua_vm, 1);
+    }
     return 1;
 }
 
@@ -57,7 +80,7 @@ int lua_caches_update_mtime(lua_State *lua_vm) {
 int lua_caches_images_write(lua_State *lua_vm) {
     struct t_config *config = get_lua_global_config(lua_vm);
     int n = lua_gettop(lua_vm);
-    if (n != 3) {
+    if (n != 4) {
         MYMPD_LOG_ERROR(NULL, "Lua - caches_images_write: Invalid number of arguments");
         lua_pop(lua_vm, n);
         return luaL_error(lua_vm, "Invalid number of arguments");
@@ -80,8 +103,9 @@ int lua_caches_images_write(lua_State *lua_vm) {
         lua_pop(lua_vm, n);
         return luaL_error(lua_vm, "uri is NULL");
     }
-
-    const char *mime_type = get_mime_type_by_magic_file(src);
+    const char *mime_type = lua_isstring(lua_vm, 4) == 1
+        ? lua_tostring(lua_vm, 4)
+        : get_mime_type_by_magic_file(src);
     const char *ext = get_ext_by_mime_type(mime_type);
     if (ext == NULL) {
         lua_pop(lua_vm, n);

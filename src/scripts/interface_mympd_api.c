@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,7 +12,7 @@
 #include "src/scripts/interface_mympd_api.h"
 
 #include "src/lib/api.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_query.h"
 #include "src/lib/log.h"
 #include "src/lib/msg_queue.h"
 #include "src/lib/random.h"
@@ -52,7 +52,9 @@ int lua_mympd_api(lua_State *lua_vm) {
         lua_pop(lua_vm, n);
         return luaL_error(lua_vm, "Invalid method");
     }
-    if (is_script_api_method(cmd_id) == false) {
+    if (check_cmd_acl(cmd_id, API_PUBLIC) == false &&
+        check_cmd_acl(cmd_id, API_SCRIPT) == false)
+    {
         MYMPD_LOG_ERROR(partition, "Lua - mympd_api: API method %s is for internal use only ", method);
         lua_pop(lua_vm, n);
         return luaL_error(lua_vm, "API method is for internal use only");
@@ -65,7 +67,7 @@ int lua_mympd_api(lua_State *lua_vm) {
     }
     //generate a request id
     unsigned request_id = randrange(0, UINT_MAX);
-    MYMPD_LOG_DEBUG(NULL, "Creating API request with id %u", request_id);
+    MYMPD_LOG_DEBUG(NULL, "Creating API request with id %u for %s", request_id, method);
     //create the request
     struct t_work_request *request = create_request(REQUEST_TYPE_SCRIPT, 0, request_id, cmd_id, NULL, partition);
     if (params[0] != '{') {
@@ -94,6 +96,7 @@ int lua_mympd_api(lua_State *lua_vm) {
                     populate_lua_table(lua_vm, lua_mympd_state);
                     lua_setglobal(lua_vm, "mympd_state");
                     lua_mympd_state_free(lua_mympd_state);
+                    response->extra = NULL;
                 }
             }
             //push return code and jsonrpc response

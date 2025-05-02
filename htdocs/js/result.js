@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module result_js */
@@ -99,7 +99,7 @@ function checkResultId(obj, parentid, mode) {
  * and displays the error in the table body.
  * @param {object} obj jsonrpc object to check
  * @param {HTMLElement} parent element to add the result message
- * @param {string} mode table or grid
+ * @param {string} mode One off table, grid, list or modalTable
  * @returns {boolean} false = result is  empty or an error, else true
  */
 function checkResult(obj, parent, mode) {
@@ -120,7 +120,9 @@ function checkResult(obj, parent, mode) {
     if (obj.error ||
         obj.result.returnedEntities === 0)
     {
-        if (mode === 'table') {
+        if (mode === 'table' ||
+            mode === 'modalTable')
+        {
             const thead = parent.querySelector('tr');
             colspan = thead !== null
                 ? thead.querySelectorAll('th').length
@@ -131,15 +133,21 @@ function checkResult(obj, parent, mode) {
             }
             parent = parent.querySelector('tbody');
         }
-        elClear(parent);
-        
+
         if (obj.error) {
+            elClear(parent);
             parent.appendChild(errorMsgEl(obj, colspan, mode));
         }
-        else {
+        else if (features.featPagination === true ||
+                 mode === 'modalTable' ||
+                 obj.result.offset === 0)
+        {
+            elClear(parent);
             parent.appendChild(emptyMsgEl(colspan, mode));
         }
-        if (mode === 'table') {
+        if (mode === 'table' ||
+            mode === 'modalTable')
+        {
             unsetUpdateView(parent.parentNode);
         }
         else {

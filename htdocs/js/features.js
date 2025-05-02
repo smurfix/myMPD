@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module features_js */
@@ -34,6 +34,10 @@ function setFeatures() {
     //stickers config value
     features.featStickersEnabled = settings.features.featStickersEnabled;
 
+    features.featPagination = settings.webuiSettings.endlessScroll === false
+        ? true
+        : false;
+
     //mpd features
     if (settings.partition.mpdConnected === true) {
         features.featLibrary = settings.features.featLibrary;
@@ -46,9 +50,7 @@ function setFeatures() {
         features.featNeighbors = settings.webuiSettings.enableMounts
             ? settings.features.featNeighbors
             : false;
-        features.featPartitions = settings.webuiSettings.enablePartitions
-            ? settings.features.featPartitions
-            : false;
+        features.featPartitions = settings.webuiSettings.enablePartitions;
         features.featPlaylists = settings.features.featPlaylists;
         features.featSmartplsAvailable = settings.features.featPlaylists && settings.features.featTags;
         features.featSmartpls = settings.features.featPlaylists && settings.features.featTags
@@ -56,7 +58,6 @@ function setFeatures() {
             : false;
         features.featStickers = settings.features.featStickers;
         features.featTags = settings.features.featTags;
-        features.featBinarylimit = settings.features.featBinarylimit;
         features.featFingerprint = settings.features.featFingerprint;
         features.featPlaylistRmRange = settings.features.featPlaylistRmRange;
         features.featWhence = settings.features.featWhence;

@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalSettings_js */
@@ -142,6 +142,9 @@ function populateSettingsFrm() {
     // feedback
     toggleBtnGroupValueId('modalSettingsFeedbackGroup', settings.webuiSettings.feedback);
 
+    // Dynamic background
+    toggleBtnGroupValueId('modalSettingsBackgroundGroup', settings.webuiSettings.dynamicBackground);
+
     // background image select
     getBgImageList();
     const bgImageInput = elGetById('modalSettingsBgImageInput');
@@ -236,7 +239,6 @@ function populateSettingsFrm() {
     setFeatureBtnId('modalSettingsEnableLyricsInput', settings.features.featLibrary);
     setFeatureBtnId('modalSettingsEnableScriptingInput', settings.features.featScripting);
     setFeatureBtnId('modalSettingsEnableMountsInput', settings.features.featMounts);
-    setFeatureBtnId('modalSettingsEnablePartitionsInput', settings.features.featPartitions);
 }
 
 /**
@@ -303,6 +305,7 @@ function saveSettings(target, closeModal) {
         settingsParams.tagListSearch = getTagMultiSelectValues(elGetById('modalSettingsSearchTagsList'), false);
         settingsParams.tagListBrowse = getTagMultiSelectValues(elGetById('modalSettingsBrowseTagsList'), false);
         settingsParams.webuiSettings.feedback = getBtnGroupValueId('modalSettingsFeedbackGroup');
+        settingsParams.webuiSettings.dynamicBackground = getBtnGroupValueId('modalSettingsBackgroundGroup');
 
         btnWaiting(target, true);
         if (closeModal === true) {

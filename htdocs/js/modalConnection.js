@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalConnection_js */
@@ -160,7 +160,7 @@ function populateConnectionFrm() {
         elGetById('modalConnectionMusicDirectoryInput').setAttribute('readonly', 'readonly');
     }
     else if (settings.musicDirectory === 'none') {
-        elGetById('modalConnectiontMusicDirectorySelect').value = settings.musicDirectory;
+        elGetById('modalConnectionMusicDirectorySelect').value = settings.musicDirectory;
         elGetById('modalConnectionMusicDirectoryInput').value = '';
         elGetById('modalConnectionMusicDirectoryInput').setAttribute('readonly', 'readonly');
     }

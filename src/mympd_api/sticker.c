@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,17 +12,18 @@
 #include "src/mympd_api/sticker.h"
 
 #include "dist/utf8/utf8.h"
-#include "src/lib/cache_rax_album.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/cache/cache_rax_album.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/sds_extras.h"
-#include "src/mpd_client/search.h"
-#include "src/mpd_client/stickerdb.h"
 #include "src/mympd_api/trigger.h"
+#include "src/mympd_client/search.h"
+#include "src/mympd_client/stickerdb.h"
 
 /**
  * Gets a sticker value
  * @param stickerdb pointer to stickerdb
- * @param buffer already allocated sds string to append the list
+ * @param buffer already allocated sds string to append the result
  * @param request_id jsonrpc request id
  * @param uri Sticker uri
  * @param type MPD sticker type
@@ -41,6 +42,57 @@ sds mympd_api_sticker_get(struct t_stickerdb_state *stickerdb, sds buffer, unsig
     buffer = tojson_sds(buffer, "value", value, false);
     buffer = jsonrpc_end(buffer);
     FREE_SDS(value);
+    return buffer;
+}
+
+/**
+ * Gets a sorted list of stickers by name and value
+ * @param stickerdb pointer to the stickerdb state
+ * @param buffer already allocated sds string to append the list
+ * @param request_id jsonrpc request id
+ * @param uri baseuri for search
+ * @param type MPD sticker type
+ * @param name sticker name
+ * @param op mpd sticker compare operator
+ * @param value sticker value or NULL to get all stickers with this name
+ * @param sort sticker sort type
+ * @param sort_desc sort descending?
+ * @param offset window start (including)
+ * @param limit window end (excluding), use UINT_MAX for open end
+ * @return pointer to buffer
+ */
+sds mympd_api_sticker_find(struct t_stickerdb_state *stickerdb, sds buffer, unsigned request_id,
+        sds uri, enum mympd_sticker_type type, sds name, enum mpd_sticker_operator op, sds value,
+        enum mpd_sticker_sort sort, bool sort_desc, unsigned offset, unsigned limit)
+{
+    struct t_list *result = stickerdb_find_stickers_sorted(stickerdb, type, uri, name, op, value, sort, sort_desc, offset, limit);
+    if (result == NULL) {
+        buffer = jsonrpc_respond_message(buffer, MYMPD_API_STICKER_FIND, request_id,
+            JSONRPC_FACILITY_STICKER, JSONRPC_SEVERITY_ERROR, "Failure searching for stickers");
+        return buffer;
+    }
+    buffer = jsonrpc_respond_start(buffer, MYMPD_API_STICKER_FIND, request_id);
+    buffer = sdscat(buffer,"\"data\":[");
+    unsigned entities_returned = 0;
+    struct t_list_node *current;
+    while ((current = list_shift_first(result)) != NULL) {
+        if (entities_returned++) {
+            buffer= sdscatlen(buffer, ",", 1);
+        }
+        buffer = sdscatlen(buffer, "{", 1);
+        buffer = tojson_char(buffer, "uri", current->key, true);
+        buffer = tojson_char(buffer, "name", name, true);
+        buffer = tojson_char(buffer, "value", current->value_p, false);
+        buffer = sdscatlen(buffer, "}", 1);
+        list_node_free(current);
+    }
+    list_free(result);
+    buffer = sdscatlen(buffer, "],", 2);
+    buffer = tojson_uint(buffer, "offset", offset, true);
+    buffer = tojson_uint(buffer, "limit", limit, true);
+    buffer = tojson_uint(buffer, "returnedEntities", entities_returned, true);
+    buffer = tojson_int(buffer, "totalEntities", -1, false);
+    buffer = jsonrpc_end(buffer);
     return buffer;
 }
 

@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -13,9 +13,11 @@
 
 #include "dist/mjson/mjson.h"
 #include "src/lib/api.h"
-#include "src/lib/cache_rax_album.h"
+#include "src/lib/cache/cache_rax_album.h"
 #include "src/lib/convert.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_query.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/list.h"
 #include "src/lib/log.h"
 #include "src/lib/mem.h"
@@ -24,27 +26,27 @@
 #include "src/lib/state_files.h"
 #include "src/lib/utility.h"
 #include "src/lib/validate.h"
-#include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/jukebox.h"
-#include "src/mpd_client/presets.h"
-#include "src/mpd_client/shortcuts.h"
-#include "src/mpd_client/tags.h"
 #include "src/mympd_api/jukebox.h"
 #include "src/mympd_api/sticker.h"
 #include "src/mympd_api/timer.h"
 #include "src/mympd_api/timer_handlers.h"
 #include "src/mympd_api/trigger.h"
+#include "src/mympd_client/errorhandler.h"
+#include "src/mympd_client/jukebox.h"
+#include "src/mympd_client/presets.h"
+#include "src/mympd_client/shortcuts.h"
+#include "src/mympd_client/tags.h"
+#include "src/webserver/mg_user_data.h"
 
 #include <inttypes.h>
-#include <stdio.h>
 #include <string.h>
 
 /**
  * Private declarations
  */
 
-static void set_invalid_value(struct t_jsonrpc_parse_error *error, const char *path, sds key, sds value, const char *message);
-static void set_invalid_field(struct t_jsonrpc_parse_error *error, const char *path, sds key);
+static void set_invalid_value(struct t_json_parse_error *error, const char *path, sds key, sds value, const char *message);
+static void set_invalid_field(struct t_json_parse_error *error, const char *path, sds key);
 static void enable_set_conn_options(struct t_mympd_state *mympd_state);
 
 /**
@@ -58,7 +60,6 @@ bool settings_to_webserver(struct t_mympd_state *mympd_state) {
     extra->playlist_directory = sdsdup(mympd_state->mpd_state->playlist_directory_value);
     extra->coverimage_names = sdsdup(mympd_state->coverimage_names);
     extra->thumbnail_names = sdsdup(mympd_state->thumbnail_names);
-    extra->feat_albumart = mympd_state->mpd_state->feat.albumart;
     extra->mpd_host = sdsdup(mympd_state->mpd_state->mpd_host);
     extra->webradiodb = mympd_state->webradiodb;
     extra->webradio_favorites = mympd_state->webradio_favorites;
@@ -71,9 +72,10 @@ bool settings_to_webserver(struct t_mympd_state *mympd_state) {
         }
         partition_state = partition_state->next;
     }
-    struct t_work_response *web_server_response = create_response_new(RESPONSE_TYPE_PUSH_CONFIG, 0, 0, INTERNAL_API_WEBSERVER_SETTINGS, MPD_PARTITION_DEFAULT);
-    web_server_response->extra = extra;
-    return mympd_queue_push(web_server_queue, web_server_response, 0);
+    struct t_work_response *webserver_response = create_response_new(RESPONSE_TYPE_PUSH_CONFIG, 0, 0, INTERNAL_API_WEBSERVER_SETTINGS, MPD_PARTITION_DEFAULT);
+    webserver_response->extra = extra;
+    webserver_response->extra_free = mg_user_data_free_void;
+    return mympd_queue_push(webserver_queue, webserver_response, 0);
 }
 
 /**
@@ -84,10 +86,10 @@ bool settings_to_webserver(struct t_mympd_state *mympd_state) {
  * @param vtype value type
  * @param vcb validation callback (unused)
  * @param userdata pointer to the t_mympd_state struct
- * @param error pointer to t_jsonrpc_parse_error
+ * @param error pointer to t_json_parse_error
  * @return true on success, else false
  */
-bool mympd_api_settings_connection_save(const char *path, sds key, sds value, int vtype, validate_callback vcb, void *userdata, struct t_jsonrpc_parse_error *error) {
+bool mympd_api_settings_connection_save(const char *path, sds key, sds value, int vtype, validate_callback vcb, void *userdata, struct t_json_parse_error *error) {
     (void) vcb;
     struct t_mympd_state *mympd_state = (struct t_mympd_state *)userdata;
 
@@ -316,10 +318,10 @@ bool mympd_api_settings_view_save(struct t_mympd_state *mympd_state, sds view, s
  * @param vtype value type
  * @param vcb validation callback (unused)
  * @param userdata pointer to central myMPD state
- * @param error pointer to t_jsonrpc_parse_error
+ * @param error pointer to t_json_parse_error
  * @return true on success, else false
  */
-bool mympd_api_settings_set(const char *path, sds key, sds value, int vtype, validate_callback vcb, void *userdata, struct t_jsonrpc_parse_error *error) {
+bool mympd_api_settings_set(const char *path, sds key, sds value, int vtype, validate_callback vcb, void *userdata, struct t_json_parse_error *error) {
     (void) vcb;
     struct t_mympd_state *mympd_state = (struct t_mympd_state *)userdata;
 
@@ -534,10 +536,10 @@ bool mympd_api_settings_set(const char *path, sds key, sds value, int vtype, val
  * @param vtype value type
  * @param vcb validation callback (unused)
  * @param userdata pointer to partition state
- * @param error pointer to t_jsonrpc_parse_error
+ * @param error pointer to t_json_parse_error
  * @return true on success, else false
  */
-bool mympd_api_settings_partition_set(const char *path, sds key, sds value, int vtype, validate_callback vcb, void *userdata, struct t_jsonrpc_parse_error *error) {
+bool mympd_api_settings_partition_set(const char *path, sds key, sds value, int vtype, validate_callback vcb, void *userdata, struct t_json_parse_error *error) {
     (void) vcb;
     struct t_partition_state *partition_state = (struct t_partition_state *)userdata;
 
@@ -593,10 +595,10 @@ bool mympd_api_settings_partition_set(const char *path, sds key, sds value, int 
  * @param vtype value type
  * @param vcb validation callback (unused)
  * @param userdata pointer to the t_partition_state struct
- * @param error pointer to t_jsonrpc_parse_error
+ * @param error pointer to t_json_parse_error
  * @return true on success, else false
  */
-bool mympd_api_settings_mpd_options_set(const char *path, sds key, sds value, int vtype, validate_callback vcb, void *userdata, struct t_jsonrpc_parse_error *error) {
+bool mympd_api_settings_mpd_options_set(const char *path, sds key, sds value, int vtype, validate_callback vcb, void *userdata, struct t_json_parse_error *error) {
     (void) vcb;
     struct t_partition_state *partition_state = (struct t_partition_state *)userdata;
 
@@ -685,7 +687,7 @@ bool mympd_api_settings_mpd_options_set(const char *path, sds key, sds value, in
         }
     }
     else if (strcmp(key, "jukeboxFilterInclude") == 0 && vtype == MJSON_TOK_STRING) {
-        if (vcb_issearchexpression(value) == false) {
+        if (vcb_issearchexpression_song(value) == false) {
             set_invalid_value(error, path, key, value, "Invalid MPD search expression");
             return false;
         }
@@ -695,7 +697,7 @@ bool mympd_api_settings_mpd_options_set(const char *path, sds key, sds value, in
         }
     }
     else if (strcmp(key, "jukeboxFilterExclude") == 0 && vtype == MJSON_TOK_STRING) {
-        if (vcb_issearchexpression(value) == false) {
+        if (vcb_issearchexpression_song(value) == false) {
             set_invalid_value(error, path, key, value, "Invalid MPD search expression");
             return false;
         }
@@ -914,8 +916,8 @@ void mympd_api_settings_statefiles_partition_read(struct t_partition_state *part
     partition_state->jukebox.last_played = state_file_rw_uint(workdir, partition_state->state_dir, "jukebox_last_played", partition_state->jukebox.last_played, JUKEBOX_LAST_PLAYED_MIN, JUKEBOX_LAST_PLAYED_MAX, true);
     partition_state->jukebox.uniq_tag.tags[0] = state_file_rw_tag(workdir, partition_state->state_dir, "jukebox_uniq_tag", partition_state->jukebox.uniq_tag.tags[0], true);
     partition_state->jukebox.ignore_hated = state_file_rw_bool(workdir, partition_state->state_dir, "jukebox_ignore_hated", MYMPD_JUKEBOX_IGNORE_HATED, true);
-    partition_state->jukebox.filter_include = state_file_rw_string_sds(workdir, partition_state->state_dir, "jukebox_filter_include", partition_state->jukebox.filter_include, vcb_issearchexpression, true);
-    partition_state->jukebox.filter_exclude = state_file_rw_string_sds(workdir, partition_state->state_dir, "jukebox_filter_exclude", partition_state->jukebox.filter_exclude, vcb_issearchexpression, true);
+    partition_state->jukebox.filter_include = state_file_rw_string_sds(workdir, partition_state->state_dir, "jukebox_filter_include", partition_state->jukebox.filter_include, vcb_issearchexpression_song, true);
+    partition_state->jukebox.filter_exclude = state_file_rw_string_sds(workdir, partition_state->state_dir, "jukebox_filter_exclude", partition_state->jukebox.filter_exclude, vcb_issearchexpression_song, true);
     partition_state->jukebox.min_song_duration= state_file_rw_uint(workdir, partition_state->state_dir, "jukebox_min_song_duration", partition_state->jukebox.min_song_duration, 0, JUKEBOX_MIN_SONG_DURATION_MAX, true);
     partition_state->jukebox.max_song_duration= state_file_rw_uint(workdir, partition_state->state_dir, "jukebox_max_song_duration", partition_state->jukebox.max_song_duration, 0, JUKEBOX_MAX_SONG_DURATION_MAX, true);
     partition_state->highlight_color = state_file_rw_string_sds(workdir, partition_state->state_dir, "highlight_color", partition_state->highlight_color, vcb_ishexcolor, true);
@@ -1028,7 +1030,7 @@ sds mympd_api_settings_get(struct t_mympd_state *mympd_state, struct t_partition
             if (mpd_send_replay_gain_status(partition_state->conn) == false) {
                 mympd_set_mpd_failure(partition_state, "Error adding command to command list mpd_send_replay_gain_status");
             }
-            mpd_client_command_list_end_check(partition_state);
+            mympd_client_command_list_end_check(partition_state);
         }
         struct mpd_status *status = mpd_recv_status(partition_state->conn);
         enum mpd_replay_gain_mode replay_gain_mode = MPD_REPLAY_UNKNOWN;
@@ -1048,7 +1050,6 @@ sds mympd_api_settings_get(struct t_mympd_state *mympd_state, struct t_partition
             buffer = tojson_char(buffer, "replaygain", mpd_lookup_replay_gain_mode(replay_gain_mode), false);
             mpd_status_free(status);
         }
-        mpd_response_finish(partition_state->conn);
         if (mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_run_status") == false) {
             return buffer;
         }
@@ -1059,18 +1060,20 @@ sds mympd_api_settings_get(struct t_mympd_state *mympd_state, struct t_partition
     }
     //features
     buffer = sdscat(buffer, "},\"features\":{");
+    // config settings
+    buffer = tojson_bool(buffer, "featStickersEnabled", mympd_state->config->stickers, true);
+    buffer = tojson_bool(buffer, "featWebradioDB", partition_state->config->webradiodb, true);
+    buffer = tojson_bool(buffer, "featCacert", (mympd_state->config->custom_cert == false && mympd_state->config->ssl == true ? true : false), true);
     if (partition_state->conn_state == MPD_CONNECTED) {
+        // feature detection
         buffer = tojson_bool(buffer, "featPlaylists", partition_state->mpd_state->feat.playlists, true);
         buffer = tojson_bool(buffer, "featTags", partition_state->mpd_state->feat.tags, true);
         buffer = tojson_bool(buffer, "featLibrary", partition_state->mpd_state->feat.library, true);
-        buffer = tojson_bool(buffer, "featStickersEnabled", mympd_state->config->stickers, true);
         buffer = tojson_bool(buffer, "featStickers", mympd_state->stickerdb->mpd_state->feat.stickers, true);
         buffer = tojson_bool(buffer, "featStickerAdv", mympd_state->stickerdb->mpd_state->feat.advsticker, true);
         buffer = tojson_bool(buffer, "featFingerprint", partition_state->mpd_state->feat.fingerprint, true);
-        buffer = tojson_bool(buffer, "featPartitions", partition_state->mpd_state->feat.partitions, true);
         buffer = tojson_bool(buffer, "featMounts", partition_state->mpd_state->feat.mount, true);
         buffer = tojson_bool(buffer, "featNeighbors", partition_state->mpd_state->feat.neighbor, true);
-        buffer = tojson_bool(buffer, "featBinarylimit", partition_state->mpd_state->feat.binarylimit, true);
         buffer = tojson_bool(buffer, "featPlaylistRmRange", partition_state->mpd_state->feat.playlist_rm_range, true);
         buffer = tojson_bool(buffer, "featWhence", partition_state->mpd_state->feat.whence, true);
         buffer = tojson_bool(buffer, "featAdvqueue", partition_state->mpd_state->feat.advqueue, true);
@@ -1079,9 +1082,8 @@ sds mympd_api_settings_get(struct t_mympd_state *mympd_state, struct t_partition
         buffer = tojson_bool(buffer, "featStartsWith", partition_state->mpd_state->feat.starts_with, true);
         buffer = tojson_bool(buffer, "featPcre", partition_state->mpd_state->feat.pcre, true);
         buffer = tojson_bool(buffer, "featDbAdded", partition_state->mpd_state->feat.db_added, true);
-        buffer = tojson_bool(buffer, "featWebradioDB", partition_state->config->webradiodb, true);
     }
-    buffer = tojson_bool(buffer, "featCacert", (mympd_state->config->custom_cert == false && mympd_state->config->ssl == true ? true : false), true);
+    // compile time options
     #ifdef MYMPD_ENABLE_MYGPIOD
         buffer = tojson_bool(buffer, "featMygpiod", true, true);
     #else
@@ -1128,13 +1130,13 @@ sds mympd_api_settings_get(struct t_mympd_state *mympd_state, struct t_partition
 
 /**
  * Helper function to set an error message
- * @param error pointer to t_jsonrpc_parse_error
+ * @param error pointer to t_json_parse_error
  * @param path jsonrpc path
  * @param key setting key
  * @param value setting value
  * @param message the message to print, leave empty for generic invalid message
  */
-static void set_invalid_value(struct t_jsonrpc_parse_error *error, const char *path, sds key, sds value, const char *message) {
+static void set_invalid_value(struct t_json_parse_error *error, const char *path, sds key, sds value, const char *message) {
     error->message = message[0] == '\0'
         ? sdscatfmt(sdsempty(), "Invalid value for \"%S\"", key)
         : sdsnew(message);
@@ -1144,11 +1146,11 @@ static void set_invalid_value(struct t_jsonrpc_parse_error *error, const char *p
 
 /**
  * Helper function to set an error message
- * @param error pointer to t_jsonrpc_parse_error
+ * @param error pointer to t_json_parse_error
  * @param path jsonrpc path
  * @param key setting key
  */
-static void set_invalid_field(struct t_jsonrpc_parse_error *error, const char *path, sds key) {
+static void set_invalid_field(struct t_json_parse_error *error, const char *path, sds key) {
     error->message = sdscatfmt(sdsempty(), "Invalid field: \"%s\"", key);
     error->path = sdscatfmt(sdsempty(), "%s.%S", path, key);
     MYMPD_LOG_WARN(NULL, "%s", error->message);

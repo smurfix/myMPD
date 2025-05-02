@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,10 +12,12 @@
 #include "src/scripts/api_handler.h"
 
 #include "src/lib/config_def.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_query.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/log.h"
 #include "src/lib/sds_extras.h"
 #include "src/scripts/api_scripts.h"
+#include "src/scripts/api_tmp.h"
 #include "src/scripts/api_vars.h"
 #include "src/scripts/scripts_lua.h"
 #include "src/scripts/util.h"
@@ -26,8 +28,8 @@
  * @param request pointer to the jsonrpc request struct
  */
 void scripts_api_handler(struct t_scripts_state *scripts_state, struct t_work_request *request) {
-    struct t_jsonrpc_parse_error parse_error;
-    jsonrpc_parse_error_init(&parse_error);
+    struct t_json_parse_error parse_error;
+    json_parse_error_init(&parse_error);
     const char *method = get_cmd_id_method_name(request->cmd_id);
     MYMPD_LOG_DEBUG(request->partition, "MYMPD API request (%lu)(%u) %s: %s",
         request->conn_id, request->id, method, request->data);
@@ -112,7 +114,7 @@ void scripts_api_handler(struct t_scripts_state *scripts_state, struct t_work_re
                     true, extra->script_event, response->id, request->conn_id, &error);
             respond = false;
             script_execute_data_free(extra);
-            extra = NULL;
+            request->extra = NULL;
             break;
         }
         case MYMPD_API_SCRIPT_EXECUTE: {
@@ -168,11 +170,37 @@ void scripts_api_handler(struct t_scripts_state *scripts_state, struct t_work_re
             break;
         case MYMPD_API_SCRIPT_VAR_SET:
             if (json_get_string(request->data, "$.params.key", 1, NAME_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true &&
-                json_get_string(request->data, "$.params.value", 1, NAME_LEN_MAX, &sds_buf2, vcb_isname, &parse_error) == true)
+                json_get_string(request->data, "$.params.value", 1, CONTENT_LEN_MAX, &sds_buf2, vcb_isname, &parse_error) == true)
             {
                 rc = scripts_vars_save(&scripts_state->var_list, sds_buf1, sds_buf2);
                 response->data = jsonrpc_respond_with_ok_or_error(response->data, request->cmd_id, request->id, rc,
                         JSONRPC_FACILITY_SCRIPT, "Can't save script variable");
+            }
+            break;
+        case MYMPD_API_SCRIPT_TMP_DELETE:
+            if (json_get_string(request->data, "$.params.key", 1, NAME_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true) {
+                scripts_tmp_delete(scripts_state->tmp_list, sds_buf1);
+                response->data = jsonrpc_respond_ok(response->data, request->cmd_id, request->id, JSONRPC_FACILITY_SCRIPT);
+            }
+            break;
+        case MYMPD_API_SCRIPT_TMP_GET:
+            script_tmp_list_should_expire(scripts_state);
+            if (json_get_string(request->data, "$.params.key", 1, NAME_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true) {
+                response->data = scripts_tmp_get(scripts_state->tmp_list, response->data, request->id, sds_buf1);
+            }
+            break;
+        case MYMPD_API_SCRIPT_TMP_LIST:
+            script_tmp_list_should_expire(scripts_state);
+            response->data = scripts_tmp_list(scripts_state->tmp_list, response->data, request->id);
+            break;
+        case MYMPD_API_SCRIPT_TMP_SET:
+            if (json_get_string(request->data, "$.params.key", 1, NAME_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true &&
+                json_get_string(request->data, "$.params.value", 1, CONTENT_LEN_MAX, &sds_buf2, vcb_isname, &parse_error) == true &&
+                json_get_int_max(request->data, "$.params.lifetime", &int_buf1, &parse_error) == true)
+            {
+                rc = scripts_tmp_set(scripts_state->tmp_list, sds_buf1, sds_buf2, int_buf1);
+                response->data = jsonrpc_respond_with_ok_or_error(response->data, request->cmd_id, request->id, rc,
+                    JSONRPC_FACILITY_SCRIPT, "Can't save script tmp variable");
             }
             break;
         // unhandled method
@@ -216,5 +244,5 @@ void scripts_api_handler(struct t_scripts_state *scripts_state, struct t_work_re
     }
     free_request(request);
     FREE_SDS(error);
-    jsonrpc_parse_error_clear(&parse_error);
+    json_parse_error_clear(&parse_error);
 }

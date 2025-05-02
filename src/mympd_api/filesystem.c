@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,17 +12,18 @@
 #include "src/mympd_api/filesystem.h"
 
 #include "dist/utf8/utf8.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/mem.h"
 #include "src/lib/rax_extras.h"
 #include "src/lib/sds_extras.h"
 #include "src/lib/smartpls.h"
 #include "src/lib/utility.h"
-#include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/stickerdb.h"
-#include "src/mpd_client/tags.h"
 #include "src/mympd_api/extra_media.h"
 #include "src/mympd_api/sticker.h"
+#include "src/mympd_client/errorhandler.h"
+#include "src/mympd_client/stickerdb.h"
+#include "src/mympd_client/tags.h"
 
 #include <libgen.h>
 #include <string.h>
@@ -74,7 +75,7 @@ sds mympd_api_browse_filesystem(struct t_mympd_state *mympd_state, struct t_part
             switch (mpd_entity_get_type(entity)) {
                 case MPD_ENTITY_TYPE_SONG: {
                     const struct mpd_song *song = mpd_entity_get_song(entity);
-                    sds entity_name =  mpd_client_get_tag_value_string(song, MPD_TAG_TITLE, sdsempty());
+                    sds entity_name =  mympd_client_get_tag_value_string(song, MPD_TAG_TITLE, sdsempty());
                     key = sdscatfmt(key, "2%s", mpd_song_get_uri(song));
                     search_dir_entry(entity_list, key, entity_name, entity, searchstr);
                     break;
@@ -117,7 +118,6 @@ sds mympd_api_browse_filesystem(struct t_mympd_state *mympd_state, struct t_part
         }
         FREE_SDS(key);
     }
-    mpd_response_finish(partition_state->conn);
     if (mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_send_list_meta") == false) {
         //free result
         rax_free_data(entity_list, free_t_dir_entry);

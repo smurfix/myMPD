@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,16 +12,18 @@
 #include "src/mympd_api/timer_handlers.h"
 
 #include "src/lib/api.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_query.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/list.h"
 #include "src/lib/log.h"
 #include "src/lib/mympd_state.h"
 #include "src/lib/sds_extras.h"
-#include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/jukebox.h"
-#include "src/mpd_client/shortcuts.h"
-#include "src/mpd_client/volume.h"
 #include "src/mympd_api/requests.h"
+#include "src/mympd_client/errorhandler.h"
+#include "src/mympd_client/jukebox.h"
+#include "src/mympd_client/shortcuts.h"
+#include "src/mympd_client/volume.h"
 
 #ifdef MYMPD_ENABLE_LUA
     #include "src/scripts/events.h"
@@ -75,8 +77,7 @@ void timer_handler_by_id(unsigned timer_id, struct t_timer_definition *definitio
 void timer_handler_select(unsigned timer_id, struct t_timer_definition *definition) {
     MYMPD_LOG_INFO(definition->partition, "Start timer_handler_select for timer \"%s\" (%u)", definition->name, timer_id);
     if (strcmp(definition->action, "player") == 0 && strcmp(definition->subaction, "stopplay") == 0) {
-        struct t_work_request *request = create_request(REQUEST_TYPE_DISCARD, 0, 0, MYMPD_API_PLAYER_STOP, NULL, definition->partition);
-        request->data = jsonrpc_end(request->data);
+        struct t_work_request *request = create_request(REQUEST_TYPE_DISCARD, 0, 0, MYMPD_API_PLAYER_STOP, "", definition->partition);
         push_request(request, 0);
     }
     else if (strcmp(definition->action, "player") == 0 && strcmp(definition->subaction, "startplay") == 0) {
@@ -126,7 +127,7 @@ bool mympd_api_timer_startplay(struct t_partition_state *partition_state,
     enum jukebox_modes old_jukebox_mode = partition_state->jukebox.mode;
     partition_state->jukebox.mode = JUKEBOX_OFF;
 
-    int old_volume = mpd_client_get_volume(partition_state);
+    int old_volume = mympd_client_get_volume(partition_state);
 
     enum jukebox_modes jukebox_mode = JUKEBOX_OFF;
     if (sdslen(preset) > 0) {
@@ -169,9 +170,8 @@ bool mympd_api_timer_startplay(struct t_partition_state *partition_state,
                 mympd_set_mpd_failure(partition_state, "Error adding command to command list mpd_send_clear");
             }
         }
-        mpd_client_command_list_end_check(partition_state);
+        mympd_client_command_list_end_check(partition_state);
     }
-    mpd_response_finish(partition_state->conn);
     //restore old jukebox mode
     partition_state->jukebox.mode = old_jukebox_mode;
 
@@ -195,8 +195,7 @@ bool mympd_api_timer_startplay(struct t_partition_state *partition_state,
  */
 static void timer_handler_cache_disk_crop(void) {
     MYMPD_LOG_INFO(NULL, "Start timer_handler_cache_disk_crop");
-    struct t_work_request *request = create_request(REQUEST_TYPE_DISCARD, 0, 0, MYMPD_API_CACHE_DISK_CROP, NULL, MPD_PARTITION_DEFAULT);
-    request->data = jsonrpc_end(request->data);
+    struct t_work_request *request = create_request(REQUEST_TYPE_DISCARD, 0, 0, MYMPD_API_CACHE_DISK_CROP, "", MPD_PARTITION_DEFAULT);
     push_request(request, 0);
 }
 

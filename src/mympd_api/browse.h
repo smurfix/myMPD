@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -20,4 +20,5 @@ sds mympd_api_browse_album_list(struct t_mympd_state *mympd_state, struct t_part
         const struct t_fields *tagcols);
 sds mympd_api_browse_tag_list(struct t_partition_state *partition_state, sds buffer,
         unsigned request_id, sds searchstr, sds tag, unsigned offset, unsigned limit, bool sortdesc);
+
 #endif

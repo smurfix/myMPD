@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module fields_js */
@@ -334,6 +334,7 @@ function saveView(viewName) {
     for (let i = 0, j = fields.length; i < j; i++) {
         params.fields.push(fields[i].getAttribute('data-field'));
     }
+    app.current.offset = 0;
     sendAPI("MYMPD_API_VIEW_SAVE", params, function() {
         // refresh the settings
         getSettings(parseSettings);
@@ -353,7 +354,6 @@ function filterFields(tableName) {
     settings[set].fields = settings[set].fields.filter(function(value) {
         return fields.includes(value);
     });
-    logDebug('Columns for ' + set + ': ' + settings[set]);
 }
 
 /**
@@ -563,7 +563,10 @@ function setFields(tableName) {
         }
         case 'BrowseRadioFavorites':
         case 'BrowseRadioWebradiodb':
-            return ["Added", "Country", "Description", "Genres", "Homepage", "Languages", "Last-Modified", "Name", "Region", "StreamUri", "Codec", "Bitrate", "Thumbnail"];
+            return webradioFields.concat([
+                "Name",
+                "Thumbnail"
+            ]);
         case 'BrowseDatabaseTagList':
             return ["Value", "Thumbnail"];
         case 'BrowseDatabaseAlbumList':
@@ -574,7 +577,7 @@ function setFields(tableName) {
             }
             tags.push('Thumbnail');
             if (settings.albumMode === 'adv') {
-                tags.push('Discs', 'SongCount', 'Duration', 'Last-Modified');
+                tags.push(...albumFields);
                 if (features.featDbAdded === true) {
                     tags.push('Added');
                 }
@@ -587,17 +590,20 @@ function setFields(tableName) {
         case 'BrowseDatabaseAlbumDetailInfo': {
             if (settings.albumMode === 'adv') {
                 const tags = settings.tagListAlbum.slice();
-                tags.push('Discs', 'SongCount', 'Duration', 'Last-Modified');
+                tags.push(...albumFields);
                 if (features.featDbAdded === true) {
                     tags.push('Added');
                 }
+                setFieldsStickers(tags, stickerListAll);
                 return tags.filter(function(value) {
                     return value !== 'Disc' &&
                         value !== 'Album';
                 });
             }
             else {
-                return settings.tagListAlbum;
+                const tags = settings.tagListAlbum.slice();
+                setFieldsStickers(tags, stickerListAll);
+                return tags;
             }
         }
         // No Default

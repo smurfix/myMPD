@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalPartitionOutputs_js */
@@ -26,7 +26,7 @@ function initModalPartitionOutputs() {
         //get all outputs
         sendAPIpartition("default", "MYMPD_API_PLAYER_OUTPUT_LIST", {}, function(allOutputs) {
             const outputList = elGetById('modalPartitionOutputsList');
-            if (checkResult(allOutputs, outputList, 'table') === false) {
+            if (checkResult(allOutputs, outputList, 'modalTable') === false) {
                 return;
             }
             //get partition specific outputs

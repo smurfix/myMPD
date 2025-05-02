@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 #SPDX-License-Identifier: GPL-3.0-or-later
-#myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+#myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 #https://github.com/jcorporation/mympd
 
 #exit on error
@@ -45,13 +45,13 @@ umask 0022
 
 #get myMPD version
 VERSION=$(grep "  VERSION" CMakeLists.txt | sed 's/  VERSION //')
-COPYRIGHT="myMPD ${VERSION} | (c) 2018-2024 Juergen Mang <mail@jcgames.de> | SPDX-License-Identifier: GPL-3.0-or-later | https://github.com/jcorporation/mympd"
+COPYRIGHT="myMPD ${VERSION} | (c) 2018-2025 Juergen Mang <mail@jcgames.de> | SPDX-License-Identifier: GPL-3.0-or-later | https://github.com/jcorporation/mympd"
 
-# Minify JavaScript only for master branch
+# Minify JavaScript not for devel
 if [ -z "${MYMPD_MINIFY_JS+x}" ]
 then
   MYMPD_MINIFY_JS="1"
-  if [ -f .git/HEAD ] && ! grep -q "master" .git/HEAD
+  if [ -f .git/HEAD ] && grep -q "devel" .git/HEAD
   then
     MYMPD_MINIFY_JS="0"
   fi
@@ -310,6 +310,7 @@ lualibs() {
   cat contrib/lualibs/mympd/50-util.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
   cat contrib/lualibs/mympd/60-caches.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
   cat contrib/lualibs/mympd/70-string.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
+  cat contrib/lualibs/mympd/80-tmpvar.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
   cat contrib/lualibs/mympd/99-end.lua >> "$MYMPD_BUILDDIR/contrib/lualibs/mympd.lua"
   echo "Compiling lua libraries"
   LUAC=$(command -v luac5.4 2> /dev/null || command -v luac5.3 2> /dev/null || command -v luac 2> /dev/null || true)
@@ -483,6 +484,7 @@ cleanup() {
 
   #caches
   rm -fr src/.cache
+  rm -fr test/.cache
   rm -fr .cache
 
   #node modules

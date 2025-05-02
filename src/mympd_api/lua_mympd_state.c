@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,13 +11,14 @@
 #include "compile_time.h"
 #include "src/mympd_api/lua_mympd_state.h"
 
+#include "src/lib/cache/cache_rax_album.h"
 #include "src/lib/log.h"
 #include "src/lib/mem.h"
 #include "src/lib/sds_extras.h"
 #include "src/lib/utility.h"
-#include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/shortcuts.h"
 #include "src/mympd_api/status.h"
+#include "src/mympd_client/errorhandler.h"
+#include "src/mympd_client/shortcuts.h"
 
 /**
  * Private definitions
@@ -46,7 +47,7 @@ bool mympd_api_status_lua_mympd_state_set(struct t_list *lua_partition_state, st
         if (mpd_send_replay_gain_status(partition_state->conn) == false) {
             mympd_set_mpd_failure(partition_state, "Error adding command to command list mpd_send_replay_gain_status");
         }
-        mpd_client_command_list_end_check(partition_state);
+        mympd_client_command_list_end_check(partition_state);
     }
     struct mpd_status *status = mpd_recv_status(partition_state->conn);
     enum mpd_replay_gain_mode replay_gain_mode = MPD_REPLAY_UNKNOWN;
@@ -72,12 +73,9 @@ bool mympd_api_status_lua_mympd_state_set(struct t_list *lua_partition_state, st
         lua_mympd_state_set_f(lua_partition_state, "mixrampdelay", mpd_status_get_mixrampdelay(status));
         lua_mympd_state_set_f(lua_partition_state, "mixrampdb", mpd_status_get_mixrampdb(status));
         lua_mympd_state_set_i(lua_partition_state, "replaygain", replay_gain_mode);
-        if (partition_state->mpd_state->feat.partitions == true) {
-            lua_mympd_state_set_p(lua_partition_state, "partition", mpd_status_get_partition(status));
-        }
+        lua_mympd_state_set_p(lua_partition_state, "partition", mpd_status_get_partition(status));
         mpd_status_free(status);
     }
-    mpd_response_finish(partition_state->conn);
     bool rc = mympd_check_error_and_recover(partition_state, NULL, "mpd_run_status");
     if (rc == false) {
         MYMPD_LOG_ERROR(partition_state->name, "Error getting mpd state for script execution");
@@ -85,6 +83,9 @@ bool mympd_api_status_lua_mympd_state_set(struct t_list *lua_partition_state, st
     // current song
     if (partition_state->song != NULL) {
         lua_mympd_state_set_mpd_song(lua_partition_state, "current_song", partition_state->song);
+        sds album_id = album_cache_get_key(sdsempty(), partition_state->song, &partition_state->config->albums);
+        lua_mympd_state_set_p(lua_partition_state, "current_album", album_id);
+        FREE_SDS(album_id);
     }
     lua_mympd_state_set_i(lua_partition_state, "start_time", partition_state->song_start_time);
     // myMPD state
@@ -185,10 +186,17 @@ void lua_mympd_state_set_b(struct t_list *lua_mympd_state, const char *k, bool v
 /**
  * Frees the lua_mympd_state list
  * @param lua_mympd_state pointer to the list
- * @return NULL
  */
-void *lua_mympd_state_free(struct t_list *lua_mympd_state) {
-    return list_free_user_data(lua_mympd_state, lua_mympd_state_free_user_data);
+void lua_mympd_state_free(struct t_list *lua_mympd_state) {
+    list_free_user_data(lua_mympd_state, lua_mympd_state_free_user_data);
+}
+
+/**
+ * Frees the lua_mympd_state list
+ * @param lua_mympd_state void pointer to lua_mympd_state
+ */
+void lua_mympd_state_free_void(void *lua_mympd_state) {
+    lua_mympd_state_free((struct t_list *)lua_mympd_state);
 }
 
 /**

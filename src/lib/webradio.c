@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -328,6 +328,14 @@ void webradios_free(struct t_webradios *webradios) {
         MYMPD_LOG_ERRNO(NULL, rc);
     }
     FREE_PTR(webradios);
+}
+
+/**
+ * Frees the webradios struct
+ * @param webradios struct to free
+ */
+void webradios_free_void(void *webradios) {
+    webradios_free((struct t_webradios *)webradios);
 }
 
 /**

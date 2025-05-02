@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalCustomSticker_js */
@@ -215,7 +215,7 @@ function parseStickerList(obj) {
     const table = elGetById('modalStickerList');
     const tbodySticker = table.querySelector('tbody');
     elClear(tbodySticker);
-    if (checkResult(obj, table, 'table') === false) {
+    if (checkResult(obj, table, 'modalTable') === false) {
         return;
     }
 
@@ -241,7 +241,7 @@ function parseStickerList(obj) {
             else {
                 valueEl = printValue(key, obj.result[key]);
             }
-            const tr = printStickerRow(tn(key), obj.result[key], valueEl);
+            const tr = printStickerRow(key, obj.result[key], valueEl);
             tbodySticker.appendChild(tr);
         }
     }
@@ -273,7 +273,7 @@ function parseStickerList(obj) {
  */
 function printStickerRow(name, value, valueEl) {
     const tr = elCreateNodes('tr', {"title": tn('Edit')}, [
-        elCreateText('td', {}, name),
+        elCreateTextTn('td', {}, name),
         elCreateNode('td', {}, valueEl),
         elCreateNodes('td', {"data-col": "Action"}, [
             elCreateText('a', {"href": "#", "data-title-phrase": "Delete", "data-action": "delete", "class": ["me-2", "mi", "color-darkgrey"]}, 'delete'),

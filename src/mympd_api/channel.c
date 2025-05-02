@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,9 +12,11 @@
 #include "src/mympd_api/channel.h"
 
 #include "src/lib/api.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/sds_extras.h"
-#include "src/mpd_client/errorhandler.h"
+#include "src/mympd_client/errorhandler.h"
+
 #include <string.h>
 
 /**
@@ -43,7 +45,6 @@ sds mympd_api_channel_list(struct t_partition_state *partition_state, sds buffer
         buffer = tojson_uint(buffer, "totalEntities", entity_count, false);
         buffer = jsonrpc_end(buffer);
     }
-    mpd_response_finish(partition_state->conn);
     mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_send_channels");
     return buffer;
 }
@@ -82,7 +83,6 @@ sds mympd_api_channel_messages_read(struct t_partition_state *partition_state, s
         buffer = tojson_uint(buffer, "totalEntities", entity_count, false);
         buffer = jsonrpc_end(buffer);
     }
-    mpd_response_finish(partition_state->conn);
     mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_send_channels");
     return buffer;
 }

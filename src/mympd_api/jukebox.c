@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,16 +11,17 @@
 #include "compile_time.h"
 #include "src/mympd_api/jukebox.h"
 
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/log.h"
 #include "src/lib/sds_extras.h"
 #include "src/lib/search.h"
-#include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/jukebox.h"
-#include "src/mpd_client/search.h"
-#include "src/mpd_client/stickerdb.h"
-#include "src/mpd_client/tags.h"
 #include "src/mympd_api/sticker.h"
+#include "src/mympd_client/errorhandler.h"
+#include "src/mympd_client/jukebox.h"
+#include "src/mympd_client/search.h"
+#include "src/mympd_client/stickerdb.h"
+#include "src/mympd_client/tags.h"
 
 /**
  * Clears the jukebox queue.
@@ -123,6 +124,12 @@ sds mympd_api_jukebox_list(struct t_partition_state *partition_state, struct t_s
     unsigned entities_found = 0;
     unsigned real_limit = offset + limit;
     struct t_list *expr_list = parse_search_expression_to_list(expression, SEARCH_TYPE_SONG);
+    if (expr_list == NULL) {
+        sdsclear(buffer);
+        buffer = jsonrpc_respond_message(buffer, cmd_id, request_id,
+            JSONRPC_FACILITY_DATABASE, JSONRPC_SEVERITY_ERROR, "Invalid search expression");
+        return buffer;
+    }
     buffer = jsonrpc_respond_start(buffer, cmd_id, request_id);
     buffer = sdscat(buffer, "\"data\":[");
     bool print_stickers = check_get_sticker(partition_state->mpd_state->feat.stickers, &tagcols->stickers);
@@ -158,7 +165,6 @@ sds mympd_api_jukebox_list(struct t_partition_state *partition_state, struct t_s
                     mpd_song_free(song);
                 }
             }
-            mpd_response_finish(partition_state->conn);
             mympd_check_error_and_recover(partition_state, NULL, "mpd_send_list_meta");
             current = current->next;
         }

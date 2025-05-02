@@ -1,10 +1,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+# myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 # https://github.com/jcorporation/mympd
 
 add_library(mympdclient "")
 
 target_include_directories(mympdclient PUBLIC include)
+
+if(CMAKE_BUILD_TYPE MATCHES "(Debug|Release|RelWithDebInfo|MinSizeRel)")
+  # Never create a libmympdclient debug build
+  target_compile_options(mympdclient
+    PRIVATE
+      "-DNDEBUG"
+  )
+endif()
 
 target_sources(mympdclient
   PRIVATE

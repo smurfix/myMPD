@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -44,7 +44,8 @@ bool vcb_ismpdstickertype(sds data);
 bool vcb_ismpdsort(sds data);
 bool vcb_isplaylistsort(sds data);
 bool vcb_iswebradiosort(sds data);
-bool vcb_issearchexpression(sds data);
+bool vcb_issearchexpression_song(sds data);
+bool vcb_issearchexpression_webradio(sds data);
 
 bool vcb_isstickersort(sds data);
 bool vcb_isstickerop(sds data);

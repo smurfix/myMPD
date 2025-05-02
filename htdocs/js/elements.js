@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module elements_js */
@@ -342,7 +342,6 @@ function getData(el, attribute) {
             value = undefined;
         }
     }
-    logDebug('getData: "' + attribute + '":"' + value + '"');
     return value;
 }
 

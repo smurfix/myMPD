@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module router_js */
@@ -18,14 +18,7 @@ function appPrepare() {
         for (let i = 0; i < domCache.navbarBtnsLen; i++) {
             domCache.navbarBtns[i].classList.remove('active');
         }
-        const cards = ['cardHome', 'cardPlayback', 'cardSearch',
-            'cardQueue', 'tabQueueCurrent', 'tabQueueLastPlayed',
-            'tabQueueJukebox', 'viewQueueJukeboxSong', 'viewQueueJukeboxAlbum',
-            'cardBrowse', 'tabBrowseFilesystem',
-            'tabBrowseRadio', 'viewBrowseRadioFavorites', 'viewBrowseRadioWebradiodb',
-            'tabBrowsePlaylist', 'viewBrowsePlaylistDetail', 'viewBrowsePlaylistList',
-            'tabBrowseDatabase', 'viewBrowseDatabaseTagList', 'viewBrowseDatabaseAlbumDetail', 'viewBrowseDatabaseAlbumList'];
-        for (const card of cards) {
+        for (const card of allCards) {
             elHideId(card);
         }
         //show active card
@@ -72,9 +65,10 @@ function appPrepare() {
  * @param {string} [tag] tag name
  * @param {string | object} [search] search object or string
  * @param {number} [newScrollPos] new scrolling position
+ * @param {boolean} [append] Append the result to current result
  * @returns {void}
  */
-function appGoto(card, tab, view, offset, limit, filter, sort, tag, search, newScrollPos) {
+function appGoto(card, tab, view, offset, limit, filter, sort, tag, search, newScrollPos, append) {
     //old app
     const oldptr = app.cards[app.current.card].offset !== undefined
         ? app.cards[app.current.card]
@@ -147,7 +141,7 @@ function appGoto(card, tab, view, offset, limit, filter, sort, tag, search, newS
     if (location.hash !== '#' + newHash) {
         location.hash = newHash;
     }
-    appRoute(card, tab, view, offset, limit, filter, sort, tag, search);
+    appRoute(card, tab, view, offset, limit, filter, sort, tag, search, append);
 }
 
 /**
@@ -163,6 +157,54 @@ function isArrayOrString(obj) {
 }
 
 /**
+ * Returns the default startup view
+ * @returns {string} Default startup view
+ */
+function defaultStartupView() {
+    return features.featHome === true
+        ? 'Home'
+        : 'Playback';
+}
+
+/**
+ * Checks and sets the startup view of myMPD
+ * @returns {Array} Startup path (card/tab/view)
+ */
+function startupView() {
+    if (settings.webuiSettings.startupView === undefined) {
+        // Set default startup view
+        settings.webuiSettings.startupView = defaultStartupView();
+    }
+    else if (settings.webuiSettings.startupView === 'Home' &&
+        features.featHome === false)
+    {
+        // Home feature is disabled
+        settings.webuiSettings.startupView = 'Playback';
+    }
+    else {
+        // Check for valid startup view
+        const path = settings.webuiSettings.startupView.split('/');
+        try {
+            if ((path.length === 1 && app.cards[path[0]] === undefined) ||
+                (path.length === 2 && app.cards[path[0]].tabs[path[1]] === undefined) ||
+                (path.length === 3 && app.cards[path[0]].tabs[path[1]].views[path[2]] === undefined) ||
+                path.length === 0 ||
+                path.length > 3)
+            {
+                settings.webuiSettings.startupView = defaultStartupView();
+            }
+        }
+        catch(error) {
+            logError("Invalid startupview");
+            logError(error);
+            settings.webuiSettings.startupView = defaultStartupView();
+        }
+    }
+
+    return settings.webuiSettings.startupView.split('/');
+}
+
+/**
  * Executes the actions after the view is shown
  * @param {string} [card] card element name
  * @param {string} [tab] tab element name
@@ -173,9 +215,10 @@ function isArrayOrString(obj) {
  * @param {object} [sort] sort object
  * @param {string} [tag] tag name
  * @param {string | object} [search] search object or string
+ * @param {boolean} [append] Append the result to current result
  * @returns {void}
  */
-function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
+function appRoute(card, tab, view, offset, limit, filter, sort, tag, search, append) {
     if (settingsParsed === 'false') {
         appInitStart();
         return;
@@ -203,15 +246,7 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
         }
         if (jsonHash === null) {
             appPrepare();
-            const initialStartupView = settings.webuiSettings.startupView === undefined || settings.webuiSettings.startupView === null
-                ? features.featHome === true
-                    ? 'Home'
-                    : 'Playback'
-                : features.featHome === false && settings.webuiSettings.startupView === 'Home'
-                    ? 'Playback'
-                    : settings.webuiSettings.startupView;
-            settings.webuiSettings.startupView = initialStartupView;
-            const path = initialStartupView.split('/');
+            const path = startupView();
             // @ts-ignore
             appGoto(...path);
             return;
@@ -221,8 +256,16 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
         app.current.card = card;
         app.current.tab = tab;
         app.current.view = view;
-        app.current.offset = offset;
-        app.current.limit = limit;
+        if (append === true) {
+            // In append mode (endless scrolling) the limit is the offset we get results for.
+            // This will be switch back below, after fetching the results.
+            app.current.offset = limit;
+            app.current.limit = settings.webuiSettings.maxElementsPerPage;
+        }
+        else {
+            app.current.offset = offset;
+            app.current.limit = limit;
+        }
         app.current.filter = filter;
         app.current.sort = sort;
         app.current.tag = tag;
@@ -247,12 +290,10 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
         app.cards[app.current.card].tabs[app.current.tab].active = app.current.view;
     }
     //set app options
-    ptr.offset = app.current.offset;
-    ptr.limit = app.current.limit;
-    ptr.filter = app.current.filter;
-    ptr.sort = app.current.sort;
-    ptr.tag = app.current.tag;
-    ptr.search = app.current.search;
+    //ptr.offset = app.current.offset;
+    //ptr.limit = app.current.limit;
+    
+    //get last scrolling position
     app.current.scrollPos = ptr.scrollPos;
     appPrepare();
 
@@ -273,21 +314,33 @@ function appRoute(card, tab, view, offset, limit, filter, sort, tag, search) {
         case 'BrowseRadioWebradiodb':     handleBrowseRadioWebradiodb(); break;
         case 'Search':                    handleSearch(); break;
         default: {
-            let initialStartupView = settings.webuiSettings.startupView;
-            if (initialStartupView === undefined ||
-                initialStartupView === null)
-            {
-                initialStartupView = features.featHome === true ? 'Home' : 'Playback';
-            }
-            const path = initialStartupView.split('/');
+            const path = startupView();
             // @ts-ignore
             appGoto(...path);
         }
     }
 
+    //Save app options
+    if (append === true) {
+        app.current.offset = offset;
+        app.current.limit = limit;
+    }
+    ptr.filter = app.current.filter;
+    ptr.sort = app.current.sort;
+    ptr.tag = app.current.tag;
+    ptr.search = app.current.search;
+    ptr.offset = app.current.offset;
+    ptr.limit = app.current.limit;
+
+    // Set last active view
     app.last.card = app.current.card;
     app.last.tab = app.current.tab;
     app.last.view = app.current.view;
+
+    // Trigger background change
+    if (settings.webuiSettings.dynamicBackground !== 'trigger') {
+        setBackgroundImage(domCache.body, currentSongObj.uri);
+    }
 }
 
 /**

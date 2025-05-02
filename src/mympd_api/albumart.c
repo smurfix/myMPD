@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,17 +12,18 @@
 #include "src/mympd_api/albumart.h"
 
 #include "src/lib/api.h"
-#include "src/lib/cache_disk.h"
-#include "src/lib/cache_disk_images.h"
-#include "src/lib/cache_rax_album.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/cache/cache_disk.h"
+#include "src/lib/cache/cache_disk_images.h"
+#include "src/lib/cache/cache_rax_album.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/log.h"
 #include "src/lib/mem.h"
 #include "src/lib/mimetype.h"
 #include "src/lib/sds_extras.h"
-#include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/search.h"
 #include "src/mympd_api/trigger.h"
+#include "src/mympd_client/errorhandler.h"
+#include "src/mympd_client/search.h"
 
 #include <string.h>
 
@@ -75,8 +76,7 @@ sds mympd_api_albumart_getcover_by_album_id(struct t_partition_state *partition_
 
     struct mpd_song *song = NULL;
     if (mpd_search_commit(partition_state->conn) == true &&
-        (song = mpd_recv_song(partition_state->conn)) != NULL &&
-        mpd_response_finish(partition_state->conn) == true)
+        (song = mpd_recv_song(partition_state->conn)) != NULL)
     {
         // found a song - send redirect to albumart by uri
         buffer = jsonrpc_respond_start(buffer, INTERNAL_API_ALBUMART_BY_ALBUMID, request_id);
@@ -86,14 +86,12 @@ sds mympd_api_albumart_getcover_by_album_id(struct t_partition_state *partition_
         // update album cache with uri
         album_cache_set_uri(album, mpd_song_get_uri(song));
         mpd_song_free(song);
+        mympd_check_error_and_recover(partition_state, NULL, "mpd_search_db_songs");
         FREE_SDS(expression);
         return buffer;
     }
 
     // no song found
-    if (song != NULL) {
-        mpd_song_free(song);
-    }
     FREE_SDS(expression);
     if (mympd_check_error_and_recover_respond(partition_state, &buffer, INTERNAL_API_ALBUMART_BY_ALBUMID, request_id, "mpd_search_db_songs") == false) {
         return buffer;
@@ -113,34 +111,31 @@ sds mympd_api_albumart_getcover_by_album_id(struct t_partition_state *partition_
  * @return jsonrpc response
  */
 sds mympd_api_albumart_getcover_by_uri(struct t_mympd_state *mympd_state, struct t_partition_state *partition_state,
-    sds buffer, unsigned request_id, unsigned long conn_id, sds uri, sds *binary)
+    sds buffer, unsigned request_id, unsigned long conn_id, sds uri, void **binary)
 {
     unsigned offset = 0;
     void *binary_buffer = malloc_assert(partition_state->mpd_state->mpd_binarylimit);
     int recv_len = 0;
-    if (partition_state->mpd_state->feat.albumart == true) {
-        MYMPD_LOG_DEBUG(partition_state->name, "Try mpd command albumart for \"%s\"", uri);
-        while ((recv_len = mpd_run_albumart(partition_state->conn, uri, offset, binary_buffer, partition_state->mpd_state->mpd_binarylimit)) > 0) {
-            MYMPD_LOG_DEBUG(partition_state->name, "Received %d bytes from mpd albumart command", recv_len);
-            *binary = sdscatlen(*binary, binary_buffer, (size_t)recv_len);
-            if (sdslen(*binary) > MPD_BINARY_SIZE_MAX) {
-                MYMPD_LOG_WARN(partition_state->name, "Retrieved binary data is too large, discarding");
-                sdsclear(*binary);
-                offset = 0;
-                break;
-            }
-            offset += (unsigned)recv_len;
+
+    MYMPD_LOG_DEBUG(partition_state->name, "Try mpd command albumart for \"%s\"", uri);
+    while ((recv_len = mpd_run_albumart(partition_state->conn, uri, offset, binary_buffer, partition_state->mpd_state->mpd_binarylimit)) > 0) {
+        MYMPD_LOG_DEBUG(partition_state->name, "Received %d bytes from mpd albumart command", recv_len);
+        *binary = sdscatlen(*binary, binary_buffer, (size_t)recv_len);
+        if (sdslen(*binary) > MPD_BINARY_SIZE_MAX) {
+            MYMPD_LOG_WARN(partition_state->name, "Retrieved binary data is too large, discarding");
+            sdsclear(*binary);
+            offset = 0;
+            break;
         }
-        if (recv_len < 0) {
-            MYMPD_LOG_DEBUG(partition_state->name, "MPD returned -1 for albumart command for uri \"%s\"", uri);
-        }
+        offset += (unsigned)recv_len;
     }
-    if (offset == 0 &&
-        partition_state->mpd_state->feat.readpicture == true)
-    {
+    if (recv_len < 0) {
+        MYMPD_LOG_DEBUG(partition_state->name, "MPD returned -1 for albumart command for uri \"%s\"", uri);
+    }
+
+    if (offset == 0) {
         //silently clear the error if no albumart is found
-        mpd_connection_clear_error(partition_state->conn);
-        mpd_response_finish(partition_state->conn);
+        mympd_clear_finish(partition_state);
         MYMPD_LOG_DEBUG(partition_state->name, "Try mpd command readpicture for \"%s\"", uri);
         while ((recv_len = mpd_run_readpicture(partition_state->conn, uri, offset, binary_buffer, partition_state->mpd_state->mpd_binarylimit)) > 0) {
             MYMPD_LOG_DEBUG(partition_state->name, "Received %d bytes from mpd readpicture command", recv_len);
@@ -157,12 +152,13 @@ sds mympd_api_albumart_getcover_by_uri(struct t_mympd_state *mympd_state, struct
             MYMPD_LOG_DEBUG(partition_state->name, "MPD returned -1 for readpicture command for uri \"%s\"", uri);
         }
     }
+
     if (offset == 0) {
         //silently clear the error if no albumart is found
-        mpd_connection_clear_error(partition_state->conn);
-        mpd_response_finish(partition_state->conn);
+        mympd_clear_finish(partition_state);
     }
     FREE_PTR(binary_buffer);
+
     if (offset > 0) {
         MYMPD_LOG_DEBUG(partition_state->name, "Albumart found by mpd for uri \"%s\" (%lu bytes)", uri, (unsigned long)sdslen(*binary));
         const char *mime_type = get_mime_type_by_magic_stream(*binary);

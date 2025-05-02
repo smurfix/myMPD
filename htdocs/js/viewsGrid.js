@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module viewsGrid_js */
@@ -207,23 +207,38 @@ function updateGrid(obj, list, perCardCallback, createCardBodyCallback, createCa
             card.appendChild(footer.cloneNode(true));
         }
         const col = elCreateNode('div', {"class": ["col", "px-0", "mb-2", "flex-grow-0"]}, card);
-        if (i < cols.length) {
-            replaceGridCol(mode, cols[i], col);
+        if (features.featPagination === true ||
+            obj.result.offset === 0)
+        {
+            if (i < cols.length) {
+                replaceGridCol(mode, cols[i], col);
+            }
+            else {
+                grid.append(col);
+            }
         }
         else {
             grid.append(col);
         }
     }
     //remove obsolete cards
-    cols = grid.querySelectorAll('.col');
-    for (let i = cols.length - 1; i >= obj.result.returnedEntities; i--) {
-        cols[i].remove();
+    if (features.featPagination === true ||
+        obj.result.offset === 0)
+    {
+        cols = grid.querySelectorAll('.col');
+        for (let i = cols.length - 1; i >= obj.result.returnedEntities; i--) {
+            cols[i].remove();
+        }
     }
 
     unsetUpdateView(grid);
     setPagination(obj.result.totalEntities, obj.result.returnedEntities);
     setScrollViewHeight(grid);
-    scrollToPosY(grid.parentNode, app.current.scrollPos);
+    if (features.featPagination === true ||
+        obj.result.offset === 0)
+    {
+        scrollToPosY(grid.parentNode, app.current.scrollPos);
+    }
 }
 
 /**

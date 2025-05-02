@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+# myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 # https://github.com/jcorporation/mympd
 
 add_executable(mympd "")
@@ -42,11 +42,11 @@ target_sources(mympd
   PRIVATE
     main.c
     lib/api.c
-    lib/cache_disk_images.c
-    lib/cache_disk_lyrics.c
-    lib/cache_disk.c
-    lib/cache_rax_album.c
-    lib/cache_rax.c
+    lib/cache/cache_disk_images.c
+    lib/cache/cache_disk_lyrics.c
+    lib/cache/cache_disk.c
+    lib/cache/cache_rax_album.c
+    lib/cache/cache_rax.c
     lib/cert.c
     lib/config.c
     lib/convert.c
@@ -57,7 +57,10 @@ target_sources(mympd
     lib/filehandler.c
     lib/handle_options.c
     lib/http_client.c
-    lib/jsonrpc.c
+    lib/http_client_cache.c
+    lib/json/json_print.c
+    lib/json/json_query.c
+    lib/json/json_rpc.c
     lib/last_played.c
     lib/list.c
     lib/log.c
@@ -80,32 +83,32 @@ target_sources(mympd
     lib/utility.c
     lib/validate.c
     lib/webradio.c
-    mpd_client/autoconf.c
-    mpd_client/connection.c
-    mpd_client/errorhandler.c
-    mpd_client/features.c
-    mpd_client/idle.c
-    mpd_client/jukebox.c
-    mpd_client/partitions.c
-    mpd_client/playlists.c
-    mpd_client/queue.c
-    mpd_client/presets.c
-    mpd_client/random_select.c
-    mpd_client/search.c
-    mpd_client/stickerdb.c
-    mpd_client/shortcuts.c
-    mpd_client/tags.c
-    mpd_client/volume.c
-    mpd_worker/mpd_worker.c
-    mpd_worker/album_cache.c
-    mpd_worker/api.c
-    mpd_worker/jukebox.c
-    mpd_worker/playlists.c
-    mpd_worker/random_select.c
-    mpd_worker/smartpls.c
-    mpd_worker/state.c
-    mpd_worker/song.c
-    mpd_worker/webradiodb.c
+    mympd_client/autoconf.c
+    mympd_client/connection.c
+    mympd_client/errorhandler.c
+    mympd_client/features.c
+    mympd_client/idle.c
+    mympd_client/jukebox.c
+    mympd_client/partitions.c
+    mympd_client/playlists.c
+    mympd_client/queue.c
+    mympd_client/presets.c
+    mympd_client/random_select.c
+    mympd_client/search.c
+    mympd_client/stickerdb.c
+    mympd_client/shortcuts.c
+    mympd_client/tags.c
+    mympd_client/volume.c
+    mympd_worker/mympd_worker.c
+    mympd_worker/album_cache.c
+    mympd_worker/api.c
+    mympd_worker/jukebox.c
+    mympd_worker/playlists.c
+    mympd_worker/random_select.c
+    mympd_worker/smartpls.c
+    mympd_worker/state.c
+    mympd_worker/song.c
+    mympd_worker/webradiodb.c
     mympd_api/mympd_api.c
     mympd_api/albumart.c
     mympd_api/browse.c
@@ -139,17 +142,18 @@ target_sources(mympd
     mympd_api/volume.c
     mympd_api/webradio.c
     mympd_api/webradio_favorites.c
-    web_server/web_server.c
-    web_server/albumart.c
-    web_server/folderart.c
-    web_server/request_handler.c
-    web_server/placeholder.c
-    web_server/proxy.c
-    web_server/sessions.c
-    web_server/playlistart.c
-    web_server/tagart.c
-    web_server/utility.c
-    web_server/webradio.c
+    webserver/webserver.c
+    webserver/albumart.c
+    webserver/folderart.c
+    webserver/mg_user_data.c
+    webserver/request_handler.c
+    webserver/placeholder.c
+    webserver/proxy.c
+    webserver/sessions.c
+    webserver/playlistart.c
+    webserver/tagart.c
+    webserver/utility.c
+    webserver/webradio.c
 )
 
 if(MYMPD_ENABLE_LUA)
@@ -158,6 +162,7 @@ if(MYMPD_ENABLE_LUA)
       mympd_api/lua_mympd_state.c
       scripts/api_handler.c
       scripts/api_scripts.c
+      scripts/api_tmp.c
       scripts/api_vars.c
       scripts/events.c
       scripts/interface_caches.c
@@ -169,7 +174,7 @@ if(MYMPD_ENABLE_LUA)
       scripts/scripts_worker.c
       scripts/scripts.c
       scripts/util.c
-      web_server/scripts.c
+      webserver/scripts.c
   )
 endif()
 
@@ -177,7 +182,7 @@ if(MYMPD_ENABLE_FLAC)
   target_sources(mympd
     PRIVATE
       mympd_api/lyrics_flac.c
-      web_server/albumart_flac.c
+      webserver/albumart_flac.c
   )
 endif()
 
@@ -185,7 +190,7 @@ if(MYMPD_ENABLE_LIBID3TAG)
   target_sources(mympd
     PRIVATE
       mympd_api/lyrics_id3.c
-      web_server/albumart_id3.c
+      webserver/albumart_id3.c
   )
 endif()
 

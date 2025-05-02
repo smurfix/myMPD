@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -512,4 +512,12 @@ sds sds_catbool(sds s, bool v) {
  */
 sds sds_pad_int(int64_t value, sds buffer) {
     return sdscatprintf(buffer, "%020" PRId64, value);
+}
+
+/**
+ * Frees an sds string pointed by void pointer
+ * @param p Void pointer to sds string
+ */
+void sds_free_void(void *p) {
+    sdsfree(p);
 }

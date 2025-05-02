@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,8 +11,8 @@
 #include "compile_time.h"
 #include "src/scripts/interface.h"
 
-#include "src/mpd_client/tags.h"
 #include "src/mympd_api/lua_mympd_state.h"
+#include "src/mympd_client/tags.h"
 
 /**
  * Gets the config struct from lua userdata

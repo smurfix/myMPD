@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,7 +12,7 @@
 #include "src/mympd_api/tagart.h"
 
 #include "src/lib/api.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/log.h"
 #include "src/mympd_api/trigger.h"
 

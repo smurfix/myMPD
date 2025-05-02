@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,7 +11,7 @@
 #include "compile_time.h"
 #include "src/mympd_api/extra_media.h"
 
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_print.h"
 #include "src/lib/log.h"
 #include "src/lib/mimetype.h"
 #include "src/lib/sds_extras.h"

@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -12,7 +12,7 @@
 #include "src/scripts/scripts_worker.h"
 
 #include "src/lib/api.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/log.h"
 #include "src/lib/sds_extras.h"
 #include "src/lib/thread.h"
@@ -25,7 +25,7 @@
  */
 void *script_run(void *script_thread_arg) {
     script_worker_threads++;
-    thread_logname = sds_replace(thread_logname, "scripts_worker");
+    thread_logname = sds_replace(thread_logname, "runscript");
     set_threadname(thread_logname);
     struct t_script_thread_arg *script_arg = (struct t_script_thread_arg *) script_thread_arg;
 

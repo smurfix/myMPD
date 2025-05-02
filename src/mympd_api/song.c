@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,11 +11,12 @@
 #include "compile_time.h"
 #include "src/mympd_api/song.h"
 
-#include "src/lib/jsonrpc.h"
-#include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/tags.h"
+#include "src/lib/json/json_print.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/mympd_api/extra_media.h"
 #include "src/mympd_api/sticker.h"
+#include "src/mympd_client/errorhandler.h"
+#include "src/mympd_client/tags.h"
 
 /**
  * Gets the song details, tags and stickers
@@ -41,7 +42,6 @@ sds mympd_api_song_details(struct t_mympd_state *mympd_state, struct t_partition
             mpd_song_free(song);
         }
     }
-    mpd_response_finish(partition_state->conn);
     if (mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_send_list_meta") == false) {
         return buffer;
     }
@@ -82,7 +82,6 @@ sds mympd_api_song_comments(struct t_partition_state *partition_state, sds buffe
             mpd_return_pair(partition_state->conn, pair);
         }
     }
-    mpd_response_finish(partition_state->conn);
     if (mympd_check_error_and_recover_respond(partition_state, &buffer, cmd_id, request_id, "mpd_send_read_comments") == false) {
         return buffer;
     }

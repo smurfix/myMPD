@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module websocket_js */
@@ -112,7 +112,8 @@ function webSocketConnect() {
                 break;
             case 'mpd_disconnected':
                 if (progressTimer) {
-                    clearTimeout(progressTimer);
+                    clearInterval(progressTimer);
+                    progressTimer = null;
                 }
                 settings.partition.mpdConnected = false;
                 toggleUI();
@@ -217,12 +218,13 @@ function webSocketConnect() {
         }
     };
 
-    socket.onclose = function(event) {
-        logError('Websocket connection closed: ' + event.code);
+    socket.onclose = function() {
+        logError('Websocket connection closed');
         if (appInited === true) {
             toggleUI();
             if (progressTimer) {
-                clearTimeout(progressTimer);
+                clearInterval(progressTimer);
+                progressTimer = null;
             }
         }
         else {
@@ -232,7 +234,7 @@ function webSocketConnect() {
     };
 
     socket.onerror = function() {
-        logError('Websocket error occurred');
+        logError('Websocket error occurred, closing connection');
         if (socket !== null) {
             try {
                 socket.close();
@@ -249,6 +251,7 @@ function webSocketConnect() {
  * @returns {void}
  */
 function webSocketClose() {
+    logDebug('Closing websocket');
     if (websocketKeepAliveTimer !== null) {
         clearInterval(websocketKeepAliveTimer);
         websocketKeepAliveTimer = null;
@@ -267,6 +270,23 @@ function webSocketClose() {
 }
 
 /**
+ * Reconnects to the websocket.
+ * We use a timer with 100 ms delay to prevent concurrent connections attempts.
+ * @returns {void}
+ */
+function websocketReconnect() {
+    if (websocketReconnectTimer !== null) {
+        logDebug('Websocket reconnect already started');
+        return;
+    }
+    webSocketClose();
+    websocketReconnectTimer = setTimeout(function() {
+        webSocketConnect();
+        websocketReconnectTimer = null;
+    }, 100);
+}
+
+/**
  * Sends a ping keepalive message to the websocket endpoint
  * or reconnects the socket if the socket is disconnected or stale.
  * Refreshes the home widgets if the socket is connected.
@@ -278,8 +298,7 @@ function websocketKeepAlive() {
         // stale websocket connection
         logError('Stale websocket connection, reconnecting');
         toggleAlert('alertMympdState', true, tn('myMPD connection failed, trying to reconnect'));
-        webSocketClose();
-        webSocketConnect();
+        websocketReconnect();
     }
     else if (getWebsocketState() === true) {
         // websocket is connected
@@ -289,8 +308,7 @@ function websocketKeepAlive() {
         catch(error) {
             toggleAlert('alertMympdState', true, tn('myMPD connection failed, trying to reconnect'));
             logError(error);
-            webSocketClose();
-            webSocketConnect();
+            websocketReconnect();
             return;
         }
         // Check if home widgets should be refreshed
@@ -304,7 +322,6 @@ function websocketKeepAlive() {
         // websocket is not connected
         logDebug('Reconnecting websocket');
         toggleAlert('alertMympdState', true, tn('myMPD connection failed, trying to reconnect'));
-        webSocketClose();
-        webSocketConnect();
+        websocketReconnect();
     }
 }

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de> | SPDX-License-Identifier: GPL-3.0-or-later | https://github.com/jcorporation/mympd
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de> | SPDX-License-Identifier: GPL-3.0-or-later | https://github.com/jcorporation/mympd
 -->
 <html lang="en">
 <head>
@@ -192,7 +192,7 @@
             </select>
             <input data-is="mympd-input-clear" data-clear-event="keydown" data-placeholder-phrase="Search queue" class="form-control rounded-start-0 rounded-end" id="QueueCurrentSearchStr"/>
           </div>
-          <div  id="QueueCurrentSettingsPlayback" class="btn-group me-2">
+          <div id="QueueCurrentSettingsPlayback" class="btn-group me-2">
             <button data-title-phrase="Playback settings" type="button" class="btn btn-secondary mi" data-bs-toggle="modal" href="#modalPlayback">tune</button>
             <button type="button" class="btn btn-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" data-title-phrase="Select preset"></button>
             <div class="dropdown-menu px-2" id="selectPresetDropdown1">
@@ -254,7 +254,7 @@
           <div class="btn-group me-2 featTags">
             <button data-title-phrase="View settings" data-contextmenu="viewSettings" data-href='{"cmd": "showContextMenu", "options": ["event"]}' class="btn btn-secondary mi" type="button" data-bs-toggle="dropdown">settings</button>
           </div>
-          <div id="QueueCurrentPaginationTop" class="btn-group me-2 pagination"></div>
+          <div id="QueueCurrentPaginationTop" class="btn-group me-2 pagination featPagination"></div>
         </div>
         <div class="breadcrumb p-2 rounded-2 d-none" id="QueueCurrentSearchCrumb"></div>
         <h1 data-phrase="Queue" class="viewTitle"></h1>
@@ -309,7 +309,7 @@
           <div class="btn-group me-2 featHome">
             <button data-title-phrase="Add view to homescreen" data-href='{"cmd": "addViewToHome", "options": []}' type="button" class="btn btn-secondary mi">add_to_home_screen</button>
           </div>
-          <div id="QueueLastPlayedPaginationTop" class="btn-group me-2 pagination"></div>
+          <div id="QueueLastPlayedPaginationTop" class="btn-group me-2 pagination featPagination"></div>
         </div>
         <div class="breadcrumb p-2 rounded-2 d-none" id="QueueLastPlayedSearchCrumb"></div>
         <h1 data-phrase="Last played" class="viewTitle"></h1>
@@ -368,7 +368,7 @@
             <div class="btn-group me-2 featHome">
               <button data-title-phrase="Add view to homescreen" data-href='{"cmd": "addViewToHome", "options": []}' type="button" class="btn btn-secondary mi">add_to_home_screen</button>
             </div>
-            <div id="QueueJukeboxSongPaginationTop" class="btn-group me-2 pagination"></div>
+            <div id="QueueJukeboxSongPaginationTop" class="btn-group me-2 pagination featPagination"></div>
           </div>
           <div class="breadcrumb p-2 rounded-2 d-none" id="QueueJukeboxSongSearchCrumb"></div>
           <h1 data-phrase="Jukebox" class="viewTitle"></h1>
@@ -427,7 +427,7 @@
             <div class="btn-group me-2 featHome">
               <button data-title-phrase="Add view to homescreen" data-href='{"cmd": "addViewToHome", "options": []}' type="button" class="btn btn-secondary mi">add_to_home_screen</button>
             </div>
-            <div id="QueueJukeboxAlbumPaginationTop" class="btn-group me-2 pagination"></div>
+            <div id="QueueJukeboxAlbumPaginationTop" class="btn-group me-2 pagination featPagination"></div>
           </div>
           <div class="breadcrumb p-2 rounded-2 d-none" id="QueueJukeboxAlbumSearchCrumb"></div>
           <h1 data-phrase="Jukebox" class="viewTitle"></h1>
@@ -494,7 +494,7 @@
             <div class="btn-group me-2 featHome">
               <button data-title-phrase="Add view to homescreen" data-href='{"cmd": "addViewToHome", "options": []}' type="button" class="btn btn-secondary mi">add_to_home_screen</button>
             </div>
-            <div id="BrowsePlaylistListPaginationTop" class="btn-group me-2 pagination"></div>
+            <div id="BrowsePlaylistListPaginationTop" class="btn-group me-2 pagination featPagination"></div>
           </div>
           <h1 data-phrase="Playlists" class="viewTitle"></h1>
           <div id="BrowsePlaylistListContainer"></div>
@@ -596,7 +596,7 @@
             <div class="input-group me-2 featStickerAdv">
               <button class="btn btn-secondary mi" data-title-phrase="Sticker" data-href='{"cmd": "showPlaylistSticker", "options": ["event"]}'>discount</button>
             </div>
-            <div id="BrowsePlaylistDetailPaginationTop" class="btn-group me-2 pagination"></div>
+            <div id="BrowsePlaylistDetailPaginationTop" class="btn-group me-2 pagination featPagination"></div>
           </div>
           <div class="breadcrumb p-2 rounded-2 d-none" id="BrowsePlaylistDetailSearchCrumb"></div>
           <div id="playlistDetailAlert" class="alert alert-warning alert-dismissible d-none">
@@ -634,7 +634,7 @@
             <div class="btn-group me-2 featHome">
               <button data-title-phrase="Add view to homescreen" data-href='{"cmd": "addViewToHome", "options": []}' type="button" class="btn btn-secondary mi">add_to_home_screen</button>
             </div>
-            <div id="BrowseDatabaseTagListPaginationTop" class="btn-group me-2 pagination"></div>
+            <div id="BrowseDatabaseTagListPaginationTop" class="btn-group me-2 pagination featPagination"></div>
           </div>
           <h1 id="BrowseDatabaseTagListTitle" class="viewTitle"></h1>
           <div id="BrowseDatabaseTagListContainer"></div>
@@ -693,7 +693,7 @@
             <div class="btn-group me-2 featHome">
               <button data-title-phrase="Add view to homescreen" data-href='{"cmd": "addViewToHome", "options": []}' type="button" class="btn btn-secondary mi">add_to_home_screen</button>
             </div>
-            <div id="BrowseDatabaseAlbumListPaginationTop" class="btn-group me-2 pagination"></div>
+            <div id="BrowseDatabaseAlbumListPaginationTop" class="btn-group me-2 pagination featPagination"></div>
           </div>
           <div class="breadcrumb p-2 rounded-2 d-none" id="BrowseDatabaseAlbumListSearchCrumb"></div>
           <h1 data-phrase="Albums" class="viewTitle"></h1>
@@ -801,7 +801,7 @@
           <div class="btn-group me-2 featTags">
             <button data-title-phrase="View settings" data-contextmenu="viewSettings" data-href='{"cmd": "showContextMenu", "options": ["event"]}' class="btn btn-secondary mi" type="button" data-bs-toggle="dropdown">settings</button>
           </div>
-          <div id="BrowseFilesystemPaginationTop" class="btn-group me-2 pagination"></div>
+          <div id="BrowseFilesystemPaginationTop" class="btn-group me-2 pagination featPagination"></div>
         </div>
         <ol id="BrowseFilesystemBreadcrumb" class="breadcrumb p-2 rounded-2 overflow-auto nowrap"></ol>
         <div id="BrowseFilesystemImages" class="featLibrary not-clickable" data-href='{"cmd": "zoomPicture", "options": ["target"]}'></div>
@@ -870,7 +870,7 @@
             <div class="btn-group me-2 featHome">
               <button data-title-phrase="Add view to homescreen" data-href='{"cmd": "addViewToHome", "options": []}' type="button" class="btn btn-secondary mi">add_to_home_screen</button>
             </div>
-            <div id="BrowseRadioFavoritesPaginationTop" class="btn-group me-2 pagination"></div>
+            <div id="BrowseRadioFavoritesPaginationTop" class="btn-group me-2 pagination featPagination"></div>
           </div>
           <div class="breadcrumb p-2 rounded-2 d-none" id="BrowseRadioFavoritesSearchCrumb"></div>
           <h1 data-phrase="Webradio favorites" class="viewTitle"></h1>
@@ -934,7 +934,7 @@
             <div class="btn-group me-2 featHome">
               <button data-title-phrase="Add view to homescreen" data-href='{"cmd": "addViewToHome", "options": []}' type="button" class="btn btn-secondary mi">add_to_home_screen</button>
             </div>
-            <div id="BrowseRadioWebradiodbPaginationTop" class="btn-group me-2 pagination"></div>
+            <div id="BrowseRadioWebradiodbPaginationTop" class="btn-group me-2 pagination featPagination"></div>
           </div>
           <div class="breadcrumb p-2 rounded-2 d-none" id="BrowseRadioWebradiodbSearchCrumb"></div>
           <h1 data-phrase="WebradioDB" class="viewTitle"></h1>
@@ -1006,7 +1006,7 @@
           <div class="btn-group me-2 featTags">
             <button data-title-phrase="View settings" data-contextmenu="viewSettings" data-href='{"cmd": "showContextMenu", "options": ["event"]}' class="btn btn-secondary mi" type="button" data-bs-toggle="dropdown">settings</button>
           </div>
-          <div id="SearchPaginationTop" class="btn-group me-2 pagination"></div>
+          <div id="SearchPaginationTop" class="btn-group me-2 pagination featPagination"></div>
         </div>
         <div class="breadcrumb p-2 rounded-2 d-none" id="SearchSearchCrumb"></div>
         <h1 data-phrase="Search songs" class="viewTitle"></h1>
@@ -1556,6 +1556,17 @@
               <div id="modalSettingsThemeFrm3"></div>
               <hr/>
               <h4 data-phrase="Background"></h4>
+              <div class="mb-3 row">
+                <label class="col-sm-4 col-form-label" data-phrase="Background"></label>
+                <div class="col-sm-8">
+                  <div class="btn-group" id="modalSettingsBackgroundGroup">
+                    <button data-value="albumart" class="btn btn-secondary" data-href='{"cmd": "toggleBtnGroup", "options": ["target"]}' type="button" data-phrase="Albumart"></button>
+                    <button data-value="trigger" class="btn btn-secondary featScripting" data-href='{"cmd": "toggleBtnGroup", "options": ["target"]}' type="button" data-phrase="Trigger"></button>
+                    <button data-value="off" class="btn btn-secondary" data-href='{"cmd": "toggleBtnGroup", "options": ["target"]}' type="button" data-phrase="Off"></button>
+                  </div>
+                  <small class="help" data-phrase="helpSettingsDynamicBackground"></small>
+                </div>
+              </div>
               <div id="modalSettingsBgFrm"></div>
               <hr/>
               <h4 data-phrase="Navigation bar"></h4>
@@ -2259,6 +2270,45 @@
         </div>
         <div class="modal-body">
           <div class="tab-content">
+            <div id="modalScriptAPItab" class="tab-pane">
+              <form class="mb-3">
+                <div class="form-group row mb-3">
+                  <label class="col-sm-4 col-form-label" for="modalScriptAPIcmdsInput" data-phrase="Method"></label>
+                  <div class="col-sm-6">
+                    <select id="modalScriptAPIcmdsInput" class="form-select"></select>
+                  </div>
+                  <div class="col-sm-2">
+                    <button class="btn btn-success w-100" id="modalScriptAPISubmitBtn" data-phrase="Send"></button>
+                  </div>
+                </div>
+                <small id="modalScriptAPIdesc"></small>
+                <hr/>
+                <div id="modalScriptAPIparams"></div>
+              </form>
+              <div class="card border d-none" id="modalScriptAPIresult">
+                <div class="card-header pb-0">
+                  <ul class="nav nav-tabs border-bottom-0">
+                    <li class="nav-item">
+                      <a class="nav-link active" href="#modalScriptAPIresultTab" data-bs-toggle="tab" data-height="true" data-phrase="Response"></a>
+                    </li>
+                    <li class="nav-item">
+                      <a class="nav-link" href="#modalScriptAPIrequestTab" data-bs-toggle="tab" data-height="true" data-phrase="Request"></a>
+                    </li>
+                  </ul>
+                </div>
+                <div class="card-body">
+                  <div class="tab-content">
+                    <div class="tab-pane active" id="modalScriptAPIresultTab">
+                      <textarea rows="10" class="font-monospace form-control" id="modalScriptAPIresultText"></textarea>
+                    </div>
+                    <div class="tab-pane" id="modalScriptAPIrequestTab">
+                      <textarea rows="10" class="font-monospace form-control" id="modalScriptAPIrequestText"></textarea>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-footer" id="modalScriptAPIresultState" data-phrase="Result"></div>
+              </div>
+            </div>
             <div id="modalScriptsEditTab" class="tab-pane">
               <div class="mb-3 row">
                 <label class="col-sm-4 col-form-label" for="modalScriptsScriptInput" data-phrase="Script name"></label>
@@ -2346,23 +2396,33 @@
               </div>
             </div>
             <div class="tab-pane active" id="modalScriptsImportTab">
+              <div class="input-group">
+                <input id="modalScriptsImportSearchStr" data-is="mympd-input-clear" data-clear-event="keydown" data-placeholder-phrase="Search" class="form-control rounded-end mb-2"/>
+              </div>
               <ul id="modalScriptsImportList" class="list-group"></ul>
             </div>
           </div>
+        </div>
+        <div id="modalScriptAPIfooter" class="modal-footer justify-content-between">
+          <button data-href='{"cmd":"showListScripts","options":[]}' type="button" class="btn btn-secondary" data-phrase="Cancel"></button>
         </div>
         <div id="modalScriptsListFooter" class="modal-footer justify-content-between">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-phrase="Close"></button>
           <div>
             <button data-href='{"cmd":"showImportScript","options":["",""]}' class="btn btn-success protected me-2" data-phrase="Import"></button>
-            <button data-href='{"cmd":"showEditScript","options":["",""]}' class="btn btn-success protected" data-phrase="New script"></button>
+            <button data-href='{"cmd":"showModalScriptAPItab","options":["",""]}' class="btn btn-success protected me-2" data-phrase="API"></button>
+            <button data-href='{"cmd":"showEditScript","options":["","undefined"]}' class="btn btn-success protected" data-phrase="New"></button>
           </div>
         </div>
         <div id="modalScriptsEditFooter" class="modal-footer justify-content-between d-none">
           <div>
-            <button data-href='{"cmd":"showListScripts","options":[]}' type="button" class="btn btn-secondary" data-phrase="Cancel"></button>
+            <button data-href='{"cmd":"showListScripts","options":[]}' type="button" class="btn btn-secondary me-2" data-phrase="Cancel"></button>
             <button type="button" class="btn btn-secondary btnHelp mi" data-href='{"cmd": "toggleHelp", "options": []}' data-title-phrase="Show help">question_mark</button>
           </div>
-          <button data-href='{"cmd":"saveScript","options":["target"]}' type="button" class="btn btn-success protected" data-phrase="Save"></button>
+          <div>
+            <button data-href='{"cmd":"showModalScriptAPItab","options":["",""]}' class="btn btn-success protected me-2" data-phrase="API"></button>
+            <button data-href='{"cmd":"saveScript","options":["target"]}' type="button" class="btn btn-success protected" data-phrase="Save"></button>
+          </div>
         </div>
         <div id="modalScriptsImportFooter" class="modal-footer justify-content-between d-none">
           <button data-href='{"cmd":"showListScripts","options":[]}' type="button" class="btn btn-secondary" data-phrase="Cancel"></button>
@@ -2959,16 +3019,7 @@
             <label class="col-sm-4 col-form-label"><span data-phrase="Loglevel"></span><small class="mi mi-sm ms-1" data-title-phrase="Temporary setting">hourglass_bottom</small></label>
             <div class="col-sm-8">
               <div class="input-group">
-                <select id="modalMaintenanceLoglevelInput" class="form-select">
-                  <option value="0" data-phrase="0 - Emerg"></option>
-                  <option value="1" data-phrase="1 - Alert"></option>
-                  <option value="2" data-phrase="2 - Critical"></option>
-                  <option value="3" data-phrase="3 - Error"></option>
-                  <option value="4" data-phrase="4 - Warn"></option>
-                  <option value="5" data-phrase="5 - Notice"></option>
-                  <option value="6" data-phrase="6 - Info"></option>
-                  <option value="7" data-phrase="7 - Debug"></option>
-                </select>
+                <select id="modalMaintenanceLoglevelInput" class="form-select"></select>
                 <button type="button" class="btn btn-secondary protected" data-href='{"cmd": "setLoglevel", "options": ["target"]}' data-phrase="Set"></button>
               </div>
             </div>
@@ -3117,28 +3168,59 @@
   <div class="modal fade" id="modalNotifications" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
       <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><span class="mi title-icon">chat_bubble_outline</span> <span data-phrase="Notifications"></span></h5>
+        <div class="modal-header pb-0">
+          <ul class="nav nav-tabs border-bottom-0">
+            <li class="nav-item">
+              <a id="modalNotificationsMessagesTab" class="nav-link active" href="#modalNotificationsMessagesTabPane" data-bs-toggle="tab" data-height="true" data-phrase="Notifications"></a>
+            </li>
+            <li class="nav-item">
+              <a id="modalNotificationsLogsTab" class="nav-link" href="#modalNotificationsLogsTabPane" data-bs-toggle="tab" data-height="true" data-phrase="Logs"></a>
+            </li>
+          </ul>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <div class="table-responsive">
-            <table id="modalNotificationsList" class="table table-sm">
-              <thead>
-                <tr>
-                  <th data-phrase="Timestamp"></th>
-                  <th data-phrase="Facility"></th>
-                  <th>#</th>
-                  <th data-phrase="Message"></th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+          <div class="tab-content">
+            <div class="tab-pane active" id="modalNotificationsMessagesTabPane">
+              <div class="table-responsive">
+                <table id="modalNotificationsMessagesList" class="table table-sm">
+                  <thead>
+                    <tr>
+                      <th data-phrase="Timestamp"></th>
+                      <th data-phrase="Facility"></th>
+                      <th>#</th>
+                      <th data-phrase="Message"></th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="tab-pane" id="modalNotificationsLogsTabPane">
+              <div class="table-responsive">
+                <table id="modalNotificationsLogsList" class="table table-sm">
+                  <thead>
+                    <tr>
+                      <th data-phrase="Timestamp"></th>
+                      <th data-phrase="Loglevel"></th>
+                      <th data-phrase="Message"></th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
         <div class="modal-footer justify-content-between">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-phrase="Close"></button>
-          <button type="button" class="btn btn-secondary" data-href='{"cmd": "clearMessages", "options": ["target"]}' data-phrase="Clear"></button>
+          <div>
+            <select class="form-select" id="modalNotificationsSeveritySelect"></select>
+          </div>
+          <div>
+            <button type="button" class="btn btn-secondary me-2" data-href='{"cmd": "refreshMessages", "options": ["target"]}' data-phrase="Refresh"></button>
+            <button type="button" class="btn btn-secondary" data-href='{"cmd": "clearMessages", "options": ["target"]}' data-phrase="Clear"></button>
+          </div>
         </div>
       </div>
     </div>

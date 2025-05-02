@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -116,7 +116,7 @@ sds state_file_rw_string(sds workdir, const char *dir, const char *name, const c
     int nread = 0;
     result = sds_getfile_from_fp(result, fp, LINE_LENGTH_MAX, true, &nread);
     (void) fclose(fp);
-    if (nread > 0 &&              //successfully read the value
+    if (nread > 0 &&          //successfully read the value
         vcb != NULL &&        //has validation callback
         vcb(result) == false) //validation failed, return default
     {

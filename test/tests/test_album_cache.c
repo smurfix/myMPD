@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -10,8 +10,8 @@
 
 #include "dist/utest/utest.h"
 #include "dist/libmympdclient/src/isong.h"
-#include "src/lib/cache_rax_album.h"
-#include "src/mpd_client/tags.h"
+#include "src/lib/cache/cache_rax_album.h"
+#include "src/mympd_client/tags.h"
 
 #include <mpd/client.h>
 

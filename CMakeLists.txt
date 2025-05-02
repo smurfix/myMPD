@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+# myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 # https://github.com/jcorporation/mympd
 
 # minimal cmake version needed for new option handling
@@ -9,7 +9,7 @@ cmake_policy(SET CMP0003 NEW)
 # myMPD is written in C
 # supported compilers: gcc, clang
 project(mympd
-  VERSION 19.0.2
+  VERSION 21.0.0
   LANGUAGES C
 )
 
@@ -43,18 +43,18 @@ if(NOT DEFINED MYMPD_EMBEDDED_ASSETS)
 endif()
 
 # available options
-option(MYMPD_BUILD_TESTING "Enables building of unit tests" "OFF")
+option(MYMPD_BUILD_TESTING "Enables building of unit tests, default OFF" "OFF")
 option(MYMPD_DOC "Installs documentation, default ON" "ON")
 option(MYMPD_DOC_HTML "Creates and installs the html documentation, default OFF" "OFF")
 option(MYMPD_EMBEDDED_ASSETS "Embed assets in binary, default ON, OFF for Debug" "ON")
-option(MYMPD_ENABLE_EXPERIMENTAL "Enable experimental features" "OFF")
+option(MYMPD_ENABLE_EXPERIMENTAL "Enable experimental features, default OFF" "OFF")
 option(MYMPD_ENABLE_FLAC "Enables flac support, default ON" "ON")
 option(MYMPD_ENABLE_IPV6 "Enables IPv6, default ON" "ON")
 option(MYMPD_ENABLE_LIBID3TAG "Enables libid3tag support, default ON" "ON")
 option(MYMPD_ENABLE_LUA "Enables lua support, default ON" "ON")
 option(MYMPD_ENABLE_MYGPIOD "Enables myGPIOd support, default ON" "ON")
-option(MYMPD_MANPAGES "Creates and installs manpages" "ON")
-option(MYMPD_MINIMAL "Enables minimal myMPD build, disables all MYMPD_ENABLE_* flags" "OFF")
+option(MYMPD_MANPAGES "Creates and installs manpages, default ON" "ON")
+option(MYMPD_MINIMAL "Enables minimal myMPD build, disables all MYMPD_ENABLE_* flags, default OFF" "OFF")
 option(MYMPD_STARTUP_SCRIPT "Installs the startup script, default ON" "ON")
 # sanitizer options
 option(MYMPD_ENABLE_ASAN "Enables build with address sanitizer, default OFF" "OFF")
@@ -185,7 +185,7 @@ if(MYMPD_EMBEDDED_ASSETS)
   set(MYMPD_LUALIBS_PATH "")
   execute_process(COMMAND "${PROJECT_SOURCE_DIR}/build.sh" createassets RESULT_VARIABLE RC_CREATE_ASSETS)
   # remove object files with embedded assets
-  file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/src/CMakeFiles/mympd.dir/web_server/utility.c.o")
+  file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/src/CMakeFiles/mympd.dir/webserver/utility.c.o")
   file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/src/CMakeFiles/mympd.dir/mympd_api/scripts.c.o")
 else()
   message("Serving assets from filesystem")
@@ -263,7 +263,7 @@ endif()
 
 # configure some files - version and path information
 configure_file(src/compile_time.h.in "${PROJECT_BINARY_DIR}/compile_time.h")
-configure_file(src/web_server/embedded_files.c.in "${PROJECT_BINARY_DIR}/embedded_files.c")
+configure_file(src/webserver/embedded_files.c.in "${PROJECT_BINARY_DIR}/embedded_files.c")
 configure_file(src/scripts/lualibs.c.in "${PROJECT_BINARY_DIR}/lualibs.c")
 configure_file(cmake/Install.cmake.in cmake/Install.cmake @ONLY)
 configure_file(contrib/initscripts/mympd.service.system.in contrib/initscripts/system/mympd.service @ONLY)
@@ -285,16 +285,30 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 if(CMAKE_BUILD_TYPE MATCHES "(Debug|Release|RelWithDebInfo|MinSizeRel)")
-  # set strict global compile flags
-  add_compile_options(
+  set(C_OPTS
+    "-D_GLIBCXX_ASSERTIONS"
+    "-D_LIBCXX_ENABLE_ASSERTIONS"
+    "-fcf-protection=full"
     "-fdata-sections"
     "-ffunction-sections"
+    "-fno-delete-null-pointer-checks"
+    "-fno-omit-frame-pointer"
+    "-fno-plt"
+    "-fno-strict-aliasing"
+    "-fno-strict-overflow"
+    "-fstack-clash-protection"
     "-fstack-protector-strong"
+    "-fstrict-flex-arrays=3"
+    "-ftrivial-auto-var-init=zero"
+    "-mbranch-protection=standard"
+    "-mno-omit-leaf-frame-pointer"
+    "-mshstk"
     "-pedantic"
+    "-std=gnu17"
     "-Wall"
     "-Werror"
     "-Wextra"
-    "-Wformat"
+    "-Wformat=2"
     "-Wformat-security"
     "-Winit-self"
     "-Wmissing-include-dirs"
@@ -310,9 +324,8 @@ if(CMAKE_BUILD_TYPE MATCHES "(Debug|Release|RelWithDebInfo|MinSizeRel)")
     "-Wvla"
     "-Wwrite-strings"
   )
-
-  # check for supported compiler flags
-  foreach(FLAG IN ITEMS "-std=gnu17" "-fstack-clash-protection" "-fcf-protection" "-fno-plt")
+  # check and set strict global compile flags
+  foreach(FLAG IN ITEMS ${C_OPTS})
     message("Checking for compiler flag ${FLAG}")
     unset(COMPILER_SUPPORTS_FLAG CACHE)
     unset(COMPILER_SUPPORTS_FLAG)
@@ -325,7 +338,9 @@ if(CMAKE_BUILD_TYPE MATCHES "(Debug|Release|RelWithDebInfo|MinSizeRel)")
   if(NOT MYMPD_ENABLE_ASAN AND NOT MYMPD_ENABLE_UBSAN)
     # incompatible with address sanitizers
     if(NOT CMAKE_C_FLAGS MATCHES "_FORTIFY_SOURCE")
-      add_compile_options("-D_FORTIFY_SOURCE=2")
+      add_compile_options(
+        "-D_FORTIFY_SOURCE=2"
+      )
     endif()
   endif()
 else()
@@ -402,7 +417,13 @@ endif()
 if(CMAKE_BUILD_TYPE MATCHES "(Release|RelWithDebInfo|MinSizeRel)")
   add_link_options(
     "-pie"
-    "-Wl,-z,relro,-z,now,--gc-sections,--as-needed"
+    "-Wl,-z,nodlopen"
+    "-Wl,-z,noexecstack"
+    "-Wl,-z,relro"
+    "-Wl,-z,now"
+    "-Wl,--as-needed"
+    "-Wl,--no-copy-dt-needed-entries"
+    "-Wl,--gc-sections"
   )
   if(CMAKE_BUILD_TYPE MATCHES "(Release|MinSizeRel)")
     message("Generating stripped binary")

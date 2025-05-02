@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -14,9 +14,10 @@
 #include "dist/libmympdclient/include/mpd/client.h"
 #include "dist/utf8/utf8.h"
 #include "src/lib/log.h"
+#include "src/lib/search.h"
 #include "src/lib/sticker.h"
 #include "src/lib/webradio.h"
-#include "src/mpd_client/playlists.h"
+#include "src/mympd_client/playlists.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -140,7 +141,7 @@ bool vcb_isprint(sds data) {
 }
 
 /**
- * Checks if string is a hexcaolor starting with #
+ * Checks if string is a hexcolor starting with #
  * @param data sds string to check
  * @return true on success else false
  */
@@ -463,11 +464,11 @@ bool vcb_isstickerop(sds data) {
 }
 
 /**
- * Checks if string is a valid mpd search expression
+ * Checks if string is a valid song search expression
  * @param data sds string to check
  * @return true on success else false
  */
-bool vcb_issearchexpression(sds data) {
+bool vcb_issearchexpression_song(sds data) {
     size_t len = sdslen(data);
     if (len == 0) {
         return true;
@@ -477,15 +478,43 @@ bool vcb_issearchexpression(sds data) {
         MYMPD_LOG_ERROR(NULL, "String is not valid utf8");
         return false;
     }
-    //only some basic checks
-    if (len < 2 ||
-        data[0] != '(' ||
-        data[len - 1] != ')')
-    {
-        MYMPD_LOG_ERROR(NULL, "String is not a valid search expression");
+    if (check_for_invalid_chars(data, invalid_name_chars) == false) {
         return false;
     }
-    return check_for_invalid_chars(data, invalid_name_chars);
+
+    struct t_list *expr = parse_search_expression_to_list(data, SEARCH_TYPE_SONG);
+    if (expr == NULL) {
+        return false;
+    }
+    free_search_expression_list(expr);
+    return true;
+}
+
+/**
+ * Checks if string is a valid song search expression
+ * @param data sds string to check
+ * @return true on success else false
+ */
+bool vcb_issearchexpression_webradio(sds data) {
+    size_t len = sdslen(data);
+    if (len == 0) {
+        return true;
+    }
+    //check if it is valid utf8
+    if (utf8valid(data) != 0) {
+        MYMPD_LOG_ERROR(NULL, "String is not valid utf8");
+        return false;
+    }
+    if (check_for_invalid_chars(data, invalid_name_chars) == false) {
+        return false;
+    }
+
+    struct t_list *expr = parse_search_expression_to_list(data, SEARCH_TYPE_WEBRADIO);
+    if (expr == NULL) {
+        return false;
+    }
+    free_search_expression_list(expr);
+    return true;
 }
 
 /**

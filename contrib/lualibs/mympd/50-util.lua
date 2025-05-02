@@ -129,3 +129,41 @@ function mympd.read_file(path)
   file:close()
   return content
 end
+
+--- Wrapper for os.remove that logs the error on failure
+-- @param path File to remove
+-- @return true on success, else nil
+-- @return Error message on failure
+function mympd.remove_file(path)
+  local rc, errorstr = os.remove(path)
+  if rc == nil then
+    mympd.log(3, "Failure removing ".. path .. ": " .. errorstr)
+  end
+  return rc, errorstr
+end
+
+--- Checks arguments from the mympd_arguments global variable.
+-- @param tocheck Table of arguments with options to check
+--                Available options: notempty, required, number
+-- @return true on success, else nil
+-- @return Error message on failure
+function mympd.check_arguments(tocheck)
+  for arg, option in pairs(tocheck) do
+    if mympd_arguments[arg] == nil then
+      mympd.log(3, "Argument " .. arg  .. " not found.")
+      return false, "Argument " .. arg  .. " not found."
+    end
+    if option == "notempty" then
+      if mympd_arguments[arg] == "" then
+        mympd.log(3, "Argument " .. arg  .. " is empty.")
+        return false, "Argument " .. arg  .. " is empty."
+      end
+    elseif option == 'number' then
+      if mympd_arguments[arg] == nil or tonumber(mympd_arguments[arg]) == nil then
+        mympd.log(3, "Argument " .. arg  .. " is not a number.")
+        return false, "Argument " .. arg  .. " is not a number."
+      end
+    end
+  end
+  return true
+end

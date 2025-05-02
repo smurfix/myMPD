@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -19,7 +19,7 @@
 
 /**
  * myMPD api methods
- * all above INTERNAL_API_COUNT are internal
+ * Must be added to mympd_cmd_acl_entity also!
  * TOTAL_API_COUNT must be the last
  */
 #define MYMPD_CMDS(X) \
@@ -47,8 +47,6 @@
     X(INTERNAL_API_WEBSERVER_NOTIFY) \
     X(INTERNAL_API_WEBSERVER_READY) \
     X(INTERNAL_API_WEBSERVER_SETTINGS) \
-    X(INTERNAL_API_COUNT) \
-    X(MYMPD_API_CACHES_CREATE) \
     X(MYMPD_API_CHANNEL_SUBSCRIBE) \
     X(MYMPD_API_CHANNEL_UNSUBSCRIBE) \
     X(MYMPD_API_CHANNEL_LIST) \
@@ -57,6 +55,7 @@
     X(MYMPD_API_CONNECTION_SAVE) \
     X(MYMPD_API_CACHE_DISK_CLEAR) \
     X(MYMPD_API_CACHE_DISK_CROP) \
+    X(MYMPD_API_CACHES_CREATE) \
     X(MYMPD_API_DATABASE_ALBUM_DETAIL) \
     X(MYMPD_API_DATABASE_ALBUM_LIST) \
     X(MYMPD_API_DATABASE_LIST_RANDOM) \
@@ -193,6 +192,10 @@
     X(MYMPD_API_SCRIPT_RELOAD) \
     X(MYMPD_API_SCRIPT_RM) \
     X(MYMPD_API_SCRIPT_SAVE) \
+    X(MYMPD_API_SCRIPT_TMP_DELETE) \
+    X(MYMPD_API_SCRIPT_TMP_GET) \
+    X(MYMPD_API_SCRIPT_TMP_LIST) \
+    X(MYMPD_API_SCRIPT_TMP_SET) \
     X(MYMPD_API_SCRIPT_VALIDATE) \
     X(MYMPD_API_SCRIPT_VAR_DELETE) \
     X(MYMPD_API_SCRIPT_VAR_LIST) \
@@ -214,10 +217,13 @@
     X(MYMPD_API_STATS) \
     X(MYMPD_API_STICKER_DELETE) \
     X(MYMPD_API_STICKER_GET) \
+    X(MYMPD_API_STICKER_FIND) \
     X(MYMPD_API_STICKER_LIST) \
     X(MYMPD_API_STICKER_NAMES) \
     X(MYMPD_API_STICKER_SET) \
     X(MYMPD_API_STICKER_INC) \
+    X(MYMPD_API_STICKER_DEC) \
+    X(MYMPD_API_STICKER_PLAYCOUNT) \
     X(MYMPD_API_TIMER_GET) \
     X(MYMPD_API_TIMER_LIST) \
     X(MYMPD_API_TIMER_RM) \
@@ -257,6 +263,21 @@ enum mympd_cmd_ids {
 };
 
 /**
+ * myMPD ACL values
+ */
+enum mympd_cmd_acl_entity {
+    API_INTERNAL = 0x1,            //!< Defines internal methods.
+    API_PUBLIC = 0x2,              //!< Defines methods that are public.
+    API_PROTECTED = 0x4,           //!< Defines methods that need authentication if a pin is set.
+    API_SCRIPT = 0x8,              //!< Defines internal methods that are accessible by scripts.
+    API_MPD_DISCONNECTED = 0x10,   //!< Defines methods that should be handled if MPD is disconnected.
+    API_MYMPD_ONLY = 0x20,         //!< Defines methods that do not require to leave the mpd idle mode in the mympd_api thread.
+    API_MYMPD_WORKER_ONLY = 0x40,  //!< Defines methods that do not require to create a mpd connection in the mympd_worker thread.
+    API_INVALID = 0x80,            //!< API methods that should not be called.
+    API_SCRIPT_THREAD = 0x100,     //!< API methods that are handled by the script thread.
+};
+
+/**
  * Response types
  */
 enum work_response_types {
@@ -276,7 +297,7 @@ enum work_response_types {
  */
 enum work_request_types {
     REQUEST_TYPE_DEFAULT = 0,       //!< Request is from a mongoose connection
-    REQUEST_TYPE_SCRIPT,            //!< Request is from th script thread
+    REQUEST_TYPE_SCRIPT,            //!< Request is from the script thread
     REQUEST_TYPE_NOTIFY_PARTITION,  //!< Send message to all clients in a specific partition
     REQUEST_TYPE_DISCARD            //!< Response will be discarded
 };
@@ -290,8 +311,9 @@ struct t_work_request {
     unsigned id;                   //!< the jsonrpc id
     enum mympd_cmd_ids cmd_id;     //!< the jsonrpc method as enum
     sds data;                      //!< full jsonrpc request
-    void *extra;                   //!< extra data for the request
     sds partition;                 //!< mpd partition
+    void *extra;                   //!< extra data for the request
+    void (*extra_free)(void *);    //!< Function pointer to free extra data
 };
 
 /**
@@ -303,9 +325,9 @@ struct t_work_response {
     unsigned id;                    //!< the jsonrpc id
     enum mympd_cmd_ids cmd_id;      //!< the jsonrpc method as enum
     sds data;                       //!< full jsonrpc response
-    sds binary;                     //!< binary data for the response
-    void *extra;                    //!< extra data for the response
     sds partition;                  //!< mpd partition
+    void *extra;                    //!< extra data for the response
+    void (*extra_free)(void *);     //!< Function pointer to free extra data
 };
 
 /**
@@ -316,7 +338,6 @@ struct set_mg_user_data_request {
     sds playlist_directory;                  //!< configured mpd playlist directory
     sds coverimage_names;                    //!< comma separated list of coverimage names
     sds thumbnail_names;                     //!< comma separated list of coverimage thumbnail names
-    bool feat_albumart;                      //!< true if mpd supports the albumart protocol command
     sds mpd_host;                            //!< configured mpd host
     struct t_list partitions;                //!< partition specific settings
     struct t_webradios *webradiodb;          //!< Pointer to webradiodb
@@ -328,12 +349,7 @@ struct set_mg_user_data_request {
  */
 enum mympd_cmd_ids get_cmd_id(const char *cmd);
 const char *get_cmd_id_method_name(enum mympd_cmd_ids cmd_id);
-bool is_mpd_disconnected_api_method(enum mympd_cmd_ids cmd_id);
-bool is_protected_api_method(enum mympd_cmd_ids cmd_id);
-bool is_public_api_method(enum mympd_cmd_ids cmd_id);
-bool is_script_api_method(enum mympd_cmd_ids cmd_id);
-bool is_mympd_only_api_method(enum mympd_cmd_ids cmd_id);
-bool is_mpdworker_only_api_method(enum mympd_cmd_ids cmd_id);
+bool check_cmd_acl(enum mympd_cmd_ids cmd_id, enum mympd_cmd_acl_entity ace);
 void ws_notify(sds message, const char *partition);
 void ws_notify_client(sds message, unsigned request_id);
 void ws_script_dialog(sds message, unsigned request_id);

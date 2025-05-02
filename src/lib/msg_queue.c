@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -17,10 +17,6 @@
 #include "src/lib/log.h"
 #include "src/lib/mem.h"
 
-#ifdef MYMPD_ENABLE_LUA
-    #include "src/mympd_api/lua_mympd_state.h"
-#endif
-
 #include <errno.h>
 
 /*
@@ -30,7 +26,6 @@
 //private definitions
 static bool check_for_queue_id(struct t_mympd_queue *queue, unsigned id);
 static void free_queue_node(struct t_mympd_msg *n, enum mympd_queue_types type);
-static void free_queue_node_extra(void *extra, enum mympd_cmd_ids cmd_id);
 static int unlock_mutex(pthread_mutex_t *mutex);
 static void set_wait_time(int timeout_ms, struct timespec *max_wait);
 
@@ -286,37 +281,15 @@ static void free_queue_node(struct t_mympd_msg *node, enum mympd_queue_types typ
     //free data
     if (type == QUEUE_TYPE_REQUEST) {
         struct t_work_request *request = node->data;
-        free_queue_node_extra(request->extra, request->cmd_id);
         free_request(request);
     }
     else {
         //QUEUE_TYPE_RESPONSE
         struct t_work_response *response = node->data;
-        free_queue_node_extra(response->extra, response->cmd_id);
         free_response(response);
     }
     //free the node itself
     FREE_PTR(node);
-}
-
-/**
- * Frees the extra data from a t_work_request or t_work_response struct.
- * It respects the cmd_id
- * @param extra extra data from request or response
- * @param cmd_id method of request or response
- */
-static void free_queue_node_extra(void *extra, enum mympd_cmd_ids cmd_id) {
-    if (extra == NULL) {
-        return;
-    }
-    if (cmd_id == INTERNAL_API_SCRIPT_INIT) {
-        #ifdef MYMPD_ENABLE_LUA
-            lua_mympd_state_free(extra);
-        #endif
-    }
-    else {
-        FREE_PTR(extra);
-    }
 }
 
 /**

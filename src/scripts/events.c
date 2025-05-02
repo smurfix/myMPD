@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -68,4 +68,12 @@ void script_execute_data_free(struct t_script_execute_data *data) {
     list_free(data->arguments);
     FREE_SDS(data->scriptname);
     FREE_PTR(data);
+}
+
+/**
+ * Frees the script_execute_data struct
+ * @param data script_execute_data struct
+ */
+void script_execute_data_free_void(void *data) {
+    script_execute_data_free((struct t_script_execute_data *)data);
 }

@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -53,6 +53,7 @@ struct t_config {
     int cache_lyrics_keep_days;     //!< expiration time for lyrics cache files in days
     int cache_thumbs_keep_days;     //!< expiration time for thumbs cache files in days
     int cache_misc_keep_days;       //!< expiration time for misc cache files in days
+    int cache_http_keep_days;       //!< expiration time for HTTP cache files in days
     int http_port;                  //!< http port to listen
     int loglevel;                   //!< loglevel
     int ssl_port;                   //!< https port to listen

@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-License-Identifier: GPL-3.0-or-later
-// myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+// myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 // https://github.com/jcorporation/mympd
 
 /** @module modalTimer_js */
@@ -375,10 +375,10 @@ function showListTimer() {
 function parseListTimer(obj) {
     const table = elGetById('modalTimerList');
     const tbody = table.querySelector('tbody');
-    if (checkResult(obj, table, 'table') === false) {
+    elClear(tbody);
+    if (checkResult(obj, table, 'modalTable') === false) {
         return;
     }
-    elClear(tbody);
     const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     for (let i = 0; i < obj.result.returnedEntities; i++) {
         const btn = elCreateEmpty('button', {"name": "enabled", "class": ["btn", "btn-secondary", "btn-xs", "mi", "mi-sm"]});

@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -8,7 +8,7 @@
 
 #include "dist/libmympdclient/src/isong.h"
 #include "src/lib/filehandler.h"
-#include "src/mpd_client/tags.h"
+#include "src/mympd_client/tags.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +17,7 @@
 
 void init_testenv(void) {
     mkdir("/tmp/mympd-test", 0770);
+    mkdir("/tmp/mympd-test/http", 0770);
     mkdir("/tmp/mympd-test/state", 0770);
     mkdir("/tmp/mympd-test/state/default", 0770);
     mkdir("/tmp/mympd-test/webradios", 0770);

@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -11,6 +11,7 @@
 #ifndef MYMPD_SCRIPTS_UTIL_H
 #define MYMPD_SCRIPTS_UTIL_H
 
+#include "dist/rax/rax.h"
 #include "dist/sds/sds.h"
 #include "src/lib/list.h"
 #include "src/scripts/events.h"
@@ -24,8 +25,10 @@
  */
 struct t_scripts_state {
     struct t_config *config;     //!< pointer to static config
-    struct t_list var_list;      //!< list of variables for scripts
     struct t_list script_list;   //!< list of scripts
+    struct t_list var_list;      //!< list of variables for scripts
+    rax *tmp_list;               //!< list of tmp variables for scripts
+    time_t tmp_list_next_exp;    //!< last expiration of the tmp_list
 };
 
 /**

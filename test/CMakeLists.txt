@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+# myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 # https://github.com/jcorporation/mympd
 
 set(MYMPD_BUILD_DIR "${PROJECT_BINARY_DIR}")
@@ -9,9 +9,9 @@ set(TEST_SOURCES
   main.c
   utility.c
   ../src/lib/api.c
-  ../src/lib/cache_disk_lyrics.c
-  ../src/lib/cache_rax_album.c
-  ../src/lib/cache_rax.c
+  ../src/lib/cache/cache_disk_lyrics.c
+  ../src/lib/cache/cache_rax_album.c
+  ../src/lib/cache/cache_rax.c
   ../src/lib/cert.c
   ../src/lib/config.c
   ../src/lib/convert.c
@@ -21,7 +21,10 @@ set(TEST_SOURCES
   ../src/lib/fields.c
   ../src/lib/filehandler.c
   ../src/lib/http_client.c
-  ../src/lib/jsonrpc.c
+  ../src/lib/http_client_cache.c
+  ../src/lib/json/json_print.c
+  ../src/lib/json/json_query.c
+  ../src/lib/json/json_rpc.c
   ../src/lib/last_played.c
   ../src/lib/list.c
   ../src/lib/log.c
@@ -42,20 +45,20 @@ set(TEST_SOURCES
   ../src/lib/utility.c
   ../src/lib/validate.c
   ../src/lib/webradio.c
-  ../src/mpd_client/connection.c
-  ../src/mpd_client/errorhandler.c
-  ../src/mpd_client/features.c
-  ../src/mpd_client/jukebox.c
-  ../src/mpd_client/presets.c
-  ../src/mpd_client/queue.c
-  ../src/mpd_client/playlists.c
-  ../src/mpd_client/random_select.c
-  ../src/mpd_client/search.c
-  ../src/mpd_client/shortcuts.c
-  ../src/mpd_client/stickerdb.c
-  ../src/mpd_client/tags.c
-  ../src/mpd_client/jukebox.c
-  ../src/mpd_client/volume.c
+  ../src/mympd_client/connection.c
+  ../src/mympd_client/errorhandler.c
+  ../src/mympd_client/features.c
+  ../src/mympd_client/jukebox.c
+  ../src/mympd_client/presets.c
+  ../src/mympd_client/queue.c
+  ../src/mympd_client/playlists.c
+  ../src/mympd_client/random_select.c
+  ../src/mympd_client/search.c
+  ../src/mympd_client/shortcuts.c
+  ../src/mympd_client/stickerdb.c
+  ../src/mympd_client/tags.c
+  ../src/mympd_client/jukebox.c
+  ../src/mympd_client/volume.c
   ../src/mympd_api/extra_media.c
   ../src/mympd_api/home.c
   ../src/mympd_api/last_played.c
@@ -72,6 +75,7 @@ set(TEST_SOURCES
   ../src/mympd_api/queue.c
   ../src/mympd_api/webradio.c
   ../src/scripts/events.c
+  ../src/webserver/mg_user_data.c
   tests/test_album_cache.c
   tests/test_api.c
   tests/test_cert.c
@@ -80,6 +84,7 @@ set(TEST_SOURCES
   tests/test_env.c
   tests/test_filehandler.c
   tests/test_http_client.c
+  tests/test_http_client_cache.c
   tests/test_jsonrpc.c
   tests/test_list.c
   tests/test_mimetype.c

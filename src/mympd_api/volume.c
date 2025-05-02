@@ -1,6 +1,6 @@
 /*
  SPDX-License-Identifier: GPL-3.0-or-later
- myMPD (c) 2018-2024 Juergen Mang <mail@jcgames.de>
+ myMPD (c) 2018-2025 Juergen Mang <mail@jcgames.de>
  https://github.com/jcorporation/mympd
 */
 
@@ -13,10 +13,10 @@
 
 #include "dist/libmympdclient/include/mpd/client.h"
 #include "src/lib/api.h"
-#include "src/lib/jsonrpc.h"
+#include "src/lib/json/json_rpc.h"
 #include "src/lib/log.h"
-#include "src/mpd_client/errorhandler.h"
-#include "src/mpd_client/volume.h"
+#include "src/mympd_client/errorhandler.h"
+#include "src/mympd_client/volume.h"
 
 /**
  * Sets an absolute volume level
@@ -63,7 +63,7 @@ sds mympd_api_volume_change(struct t_partition_state *partition_state, unsigned 
         sds buffer, unsigned request_id, int relative_volume)
 {
     //calculate absolute volume
-    int curVolume = mpd_client_get_volume(partition_state);
+    int curVolume = mympd_client_get_volume(partition_state);
     int newVolume = curVolume + relative_volume;
 
     //enforce volume range limit
