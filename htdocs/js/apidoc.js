@@ -2152,6 +2152,21 @@ const APImethods = {
             }
         }
     },
+    "MYMPD_API_SCRIPT_VERIFY_SIG": {
+        "desc": "Verifies the signature of a script.",
+        "params": {
+            "script": {
+                "type": APItypes.string,
+                "example": "return \"test\"",
+                "desc": "Script content"
+            },
+            "signature": {
+                "type": APItypes.string,
+                "example": "",
+                "desc": "Base64 encoded signature"
+            }
+        }
+    },
     "MYMPD_API_SCRIPT_TMP_DELETE": {
         "desc": "Deletes a temporary variable.",
         "params": {
@@ -2386,7 +2401,42 @@ const APImethods = {
             }
         }
     },
-    "MYMPD_API_HOME_WIDGET_SAVE": {
+    "MYMPD_API_HOME_WIDGET_IFRAME_SAVE": {
+        "desc": "Saves a home icon",
+        "params": {
+            "replace": {
+                "type": APItypes.bool,
+                "example": false,
+                "desc": "Replace widget at pos oldpos."
+            },
+            "oldpos": {
+                "type": APItypes.uint,
+                "example": 0,
+                "desc": "Position of home widget to replace."
+            },
+            "name": {
+                "type": APItypes.string,
+                "example": "test home icon",
+                "desc": "Name of the home widget."
+            },
+            "refresh": {
+                "type": APItypes.uint,
+                "example": 10,
+                "desc": "Refresh interval"
+            },
+            "size": {
+                "type": APItypes.string,
+                "example": "2x2",
+                "desc": "Size of the widget"
+            },
+            "uri": {
+                "type": APItypes.string,
+                "example": "https://github.com/jcorporation",
+                "desc": "Uri for the iFrame"
+            }
+        }
+    },
+    "MYMPD_API_HOME_WIDGET_SCRIPT_SAVE": {
         "desc": "Saves a home icon",
         "params": {
             "replace": {

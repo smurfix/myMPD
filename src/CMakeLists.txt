@@ -42,6 +42,7 @@ target_sources(mympd
   PRIVATE
     main.c
     lib/api.c
+    lib/cacertstore.c
     lib/cache/cache_disk_images.c
     lib/cache/cache_disk_lyrics.c
     lib/cache/cache_disk.c
@@ -64,7 +65,6 @@ target_sources(mympd
     lib/last_played.c
     lib/list.c
     lib/log.c
-    lib/mg_str_utils.c
     lib/mimetype.c
     lib/mpack.c
     lib/passwd.c
@@ -75,6 +75,7 @@ target_sources(mympd
     lib/rax_extras.c
     lib/search.c
     lib/sds_extras.c
+    lib/signal.c
     lib/smartpls.c
     lib/sticker.c
     lib/state_files.c
@@ -111,11 +112,12 @@ target_sources(mympd
     mympd_worker/webradiodb.c
     mympd_api/mympd_api.c
     mympd_api/albumart.c
-    mympd_api/browse.c
+    mympd_api/albums.c
     mympd_api/channel.c
     mympd_api/database.c
     mympd_api/extra_media.c
     mympd_api/filesystem.c
+    mympd_api/folderart.c
     mympd_api/home.c
     mympd_api/jukebox.c
     mympd_api/last_played.c
@@ -125,6 +127,7 @@ target_sources(mympd
     mympd_api/outputs.c
     mympd_api/partitions.c
     mympd_api/pictures.c
+    mympd_api/playlistart.c
     mympd_api/playlists.c
     mympd_api/queue.c
     mympd_api/requests.c
@@ -136,6 +139,7 @@ target_sources(mympd
     mympd_api/status.c
     mympd_api/sticker.c
     mympd_api/tagart.c
+    mympd_api/tags.c
     mympd_api/timer.c
     mympd_api/timer_handlers.c
     mympd_api/trigger.c
@@ -174,6 +178,7 @@ if(MYMPD_ENABLE_LUA)
       scripts/scripts_worker.c
       scripts/scripts.c
       scripts/util.c
+      scripts/verify.c
       webserver/scripts.c
   )
 endif()

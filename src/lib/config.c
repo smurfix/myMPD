@@ -11,7 +11,9 @@
 #include "compile_time.h"
 #include "src/lib/config.h"
 
+#include "src/lib/cacertstore.h"
 #include "src/lib/cache/cache_rax_album.h"
+#include "src/lib/config_def.h"
 #include "src/lib/env.h"
 #include "src/lib/filehandler.h"
 #include "src/lib/log.h"
@@ -21,6 +23,7 @@
 #include "src/lib/utility.h"
 #include "src/lib/validate.h"
 
+#include <assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -29,24 +32,63 @@
 #include <time.h>
 
 /**
- * Private declarations
+ * Default config definition
  */
-
-static sds startup_getenv_string(const char *env_var, const char *default_value, validate_callback vcb, bool first_startup);
-static int startup_getenv_int(const char *env_var, int default_value, int min, int max, bool first_startup);
-static bool startup_getenv_bool(const char *env_var, bool default_value, bool first_startup);
+static const struct t_config_default config_default[] = {
+    [CI_ACL]                    = {"acl",                    {.t = CIT_S, .s = ""},             0, 0, vcb_isname},
+    [CI_ALBUM_MODE]             = {"album_mode",             {.t = CIT_S, .s = "adv"},          0, 0, vcb_isalnum},
+    [CI_ALBUM_GROUP_TAG]        = {"album_group_tag",        {.t = CIT_S, .s = "Date"},         0, 0, vcb_isalnum},
+    [CI_CA_CERT_STORE]          = { "ca_cert_store",         {.t = CIT_S, .s = ""},             0, 0, vcb_isfilepath},
+    [CI_CACHE_COVER_KEEP_DAYS]  = {"cache_cover_keep_days",  {.t = CIT_I, .i = 31},             CACHE_AGE_MIN, CACHE_AGE_MAX, NULL},
+    [CI_CACHE_HTTP_KEEP_DAYS]   = {"cache_http_keep_days",   {.t = CIT_I, .i = 31},             CACHE_AGE_MIN, CACHE_AGE_MAX, NULL},
+    [CI_CACHE_LYRICS_KEEP_DAYS] = {"cache_lyrics_keep_days", {.t = CIT_I, .i = 31},             CACHE_AGE_MIN, CACHE_AGE_MAX, NULL},
+    [CI_CACHE_MISC_KEEP_DAYS]   = {"cache_misc_keep_days",   {.t = CIT_I, .i = 1},              1, CACHE_AGE_MAX, NULL},
+    [CI_CACHE_THUMBS_KEEP_DAYS] = {"cache_thumbs_keep_days", {.t = CIT_I, .i = 31},             CACHE_AGE_MIN, CACHE_AGE_MAX, NULL},
+    [CI_CERT_CHECK]             = {"cert_check",             {.t = CIT_B, .b = true},           0, 0, NULL},
+    [CI_CUSTOM_CERT]            = {"custom_cert",            {.t = CIT_B, .b = false},          0, 0, NULL},
+    [CI_CUSTOM_CSS]             = {"custom_css",             {.t = CIT_S, .s = ""},             0, 0, vcb_istext},
+    [CI_CUSTOM_JS]              = {"custom_js",              {.t = CIT_S, .s = ""},             0, 0, vcb_istext},
+    [CI_HTTP]                   = {"http",                   {.t = CIT_B, .b = true},           0, 0, NULL},
+    [CI_HTTP_HOST]              = {"http_host",              {.t = CIT_S, .s = ""},             0, 0, vcb_isname}, 
+    [CI_HTTP_PORT]              = {"http_port",              {.t = CIT_I, .i = 8080},           0, MPD_PORT_MAX, NULL},
+    [CI_LOGLEVEL]               = {"loglevel",               {.t = CIT_I, .i = CFG_MYMPD_LOGLEVEL},  LOGLEVEL_MIN, LOGLEVEL_MAX, NULL},
+    [CI_MYMPD_URI]              = {"mympd_uri",              {.t = CIT_S, .s = "auto"},         0, 0, vcb_isname},
+    [CI_PIN_HASH]               = {"pin_hash",               {.t = CIT_S, .s = ""},             0, 0, vcb_isalnum},
+    [CI_SAVE_CACHES]            = {"save_caches",            {.t = CIT_B, .b = true},           0, 0, NULL},
+    [CI_SCRIPTACL]              = {"scriptacl",              {.t = CIT_S, .s = "+127.0.0.0/8"}, 0, 0, vcb_isname},
+    [CI_SCRIPTS_EXTERNAL]       = {"scripts_external",       {.t = CIT_B, .b = false},          0, 0, NULL},
+    [CI_SSL]                    = {"ssl",                    {.t = CIT_B, .b = true},           0, 0, NULL},
+    [CI_SSL_CERT]               = {"ssl_cert",               {.t = CIT_S, .s = ""},             0, 0, vcb_isfilepath},
+    [CI_SSL_KEY]                = {"ssl_key",                {.t = CIT_S, .s = ""},             0, 0, vcb_isfilepath},
+    [CI_SSL_PORT]               = {"ssl_port",               {.t = CIT_I, .i = 8443},           0, MPD_PORT_MAX, NULL},
+    [CI_SSL_SAN]                = {"ssl_san",                {.t = CIT_S, .s = ""},             0, 0, vcb_isname},
+    [CI_STICKERS]               = {"stickers",               {.t = CIT_B, .b = true},           0, 0, NULL},
+    [CI_STICKERS_PAD_INT]       = {"stickers_pad_int",       {.t = CIT_B, .b = false},          0, 0, NULL},
+    [CI_WEBRADIODB]             = {"webradiodb",             {.t = CIT_B, .b = true},           0, 0, NULL}
+};
 
 /**
- * Public functions
+ * Compile time initialization check
  */
+#define IFV_N (sizeof config_default/sizeof config_default[0])
+_Static_assert(IFV_N == CI_COUNT, "Unexpected size");
 
 /**
  * Frees the config struct
  * @param config pointer to config struct
  */
 void mympd_config_free(struct t_config *config) {
-    FREE_SDS(config->acl);
+    // Command line options
     FREE_SDS(config->cachedir);
+    FREE_SDS(config->workdir);
+    // Configuration
+    FREE_SDS(config->acl);
+    FREE_SDS(config->album_mode);
+    FREE_SDS(config->album_group_tag);
+    FREE_SDS(config->ca_certs);
+    FREE_SDS(config->ca_cert_store);
+    FREE_SDS(config->custom_css);
+    FREE_SDS(config->custom_js);
     FREE_SDS(config->http_host);
     FREE_SDS(config->mympd_uri);
     FREE_SDS(config->pin_hash);
@@ -54,8 +96,7 @@ void mympd_config_free(struct t_config *config) {
     FREE_SDS(config->ssl_cert);
     FREE_SDS(config->ssl_key);
     FREE_SDS(config->ssl_san);
-    FREE_SDS(config->user);
-    FREE_SDS(config->workdir);
+    // Struct itself
     FREE_PTR(config);
 }
 
@@ -68,14 +109,18 @@ void mympd_config_defaults_initial(struct t_config *config) {
     //command line options
     config->log_to_syslog = CFG_MYMPD_LOG_TO_SYSLOG;
     config->cachedir = sdsnew(MYMPD_CACHE_DIR);
-    config->user = sdsnew(CFG_MYMPD_USER);
     config->workdir = sdsnew(MYMPD_WORK_DIR);
     //not configurable
     config->bootstrap = false;
-    config->first_startup = false;
     config->startup_time = time(NULL);
     //set all other sds strings to NULL
     config->acl = NULL;
+    config->album_mode = NULL;
+    config->album_group_tag = NULL;
+    config->ca_certs = NULL;
+    config->ca_cert_store = NULL;
+    config->custom_css = NULL;
+    config->custom_js = NULL;
     config->http_host = NULL;
     config->mympd_uri = NULL;
     config->pin_hash = NULL;
@@ -86,70 +131,232 @@ void mympd_config_defaults_initial(struct t_config *config) {
 }
 
 /**
- * Sets the default values for config struct
- * This function is used after reading command line arguments and
- * reads the environment variables.
- * Environment variables are only respected at first startup.
- * @param config pointer to config struct
+ * Sets config values
+ * @param config Pointer to config
+ * @param ci Config item enum
+ * @param value Value to set
  */
-void mympd_config_defaults(struct t_config *config) {
-    if (config->bootstrap == true) {
-        config->first_startup = true;
+static void set_config(struct t_config *config, enum config_item ci, struct t_config_value *value) {
+    switch (ci) {
+        case CI_CUSTOM_CERT:
+            assert(value->t == CIT_B);
+            config->custom_cert = value->b;
+            break;
+        case CI_HTTP:
+            assert(value->t == CIT_B);
+            config->http = value->b;
+            break;
+        case CI_SAVE_CACHES:
+            assert(value->t == CIT_B);
+            config->save_caches = value->b;
+            break;
+        case CI_SSL:
+            assert(value->t == CIT_B);
+            config->ssl = value->b;
+            break;
+        case CI_STICKERS:
+            assert(value->t == CIT_B);
+            config->stickers = value->b;
+            break;
+        case CI_STICKERS_PAD_INT:
+            assert(value->t == CIT_B);
+            config->stickers_pad_int = value->b;
+            break;
+        case CI_WEBRADIODB:
+            assert(value->t == CIT_B);
+            config->webradiodb = value->b;
+            break;
+        case CI_CERT_CHECK:
+            assert(value->t == CIT_B);
+            config->cert_check = value->b;
+            break;
+        case CI_CACHE_COVER_KEEP_DAYS:
+            assert(value->t == CIT_I);
+            config->cache_cover_keep_days = value->i;
+            break;
+        case CI_CACHE_LYRICS_KEEP_DAYS:
+            assert(value->t == CIT_I);
+            config->cache_lyrics_keep_days = value->i;
+            break;
+        case CI_CACHE_THUMBS_KEEP_DAYS:
+            assert(value->t == CIT_I);
+            config->cache_thumbs_keep_days = value->i;
+            break;
+        case CI_CACHE_MISC_KEEP_DAYS:
+            assert(value->t == CIT_I);
+            config->cache_misc_keep_days = value->i;
+            break;
+        case CI_CACHE_HTTP_KEEP_DAYS:
+            assert(value->t == CIT_I);
+            config->cache_http_keep_days = value->i;
+            break;
+        case CI_HTTP_PORT:
+            assert(value->t == CIT_I);
+            config->http_port = value->i;
+            break;
+        case CI_LOGLEVEL:
+            assert(value->t == CIT_I);
+            config->loglevel = value->i;
+            break;
+        case CI_SSL_PORT:
+            assert(value->t == CIT_I);
+            config->ssl_port = value->i;
+            break;
+        case CI_ACL:
+            assert(value->t == CIT_S);
+            config->acl = value->s;
+            break;
+        case CI_ALBUM_MODE:
+            assert(value->t == CIT_S);
+            config->album_mode = value->s;
+            break;
+        case CI_ALBUM_GROUP_TAG:
+            assert(value->t == CIT_S);
+            config->album_group_tag = value->s;
+            break;
+        case CI_HTTP_HOST:
+            assert(value->t == CIT_S);
+            config->http_host = value->s;
+            break;
+        case CI_MYMPD_URI:
+            assert(value->t == CIT_S);
+            config->mympd_uri = value->s;
+            break;
+        case CI_PIN_HASH:
+            assert(value->t == CIT_S);
+            config->pin_hash = value->s;
+            break;
+        case CI_SCRIPTACL:
+            assert(value->t == CIT_S);
+            config->scriptacl = value->s;
+            break;
+        case CI_SCRIPTS_EXTERNAL:
+            assert(value->t == CIT_B);
+            config->scripts_external = value->b;
+            break;
+        case CI_SSL_CERT:
+            assert(value->t == CIT_S);
+            config->ssl_cert = value->s;
+            break;
+        case CI_SSL_KEY:
+            assert(value->t == CIT_S);
+            config->ssl_key = value->s;
+            break;
+        case CI_SSL_SAN:
+            assert(value->t == CIT_S);
+            config->ssl_san = value->s;
+            break;
+        case CI_CA_CERT_STORE:
+            assert(value->t == CIT_S);
+            config->ca_cert_store = value->s;
+            break;
+        case CI_CUSTOM_CSS:
+            assert(value->t == CIT_S);
+            config->custom_css = value->s;
+            break;
+        case CI_CUSTOM_JS:
+            assert(value->t == CIT_S);
+            config->custom_js = value->s;
+            break;
+        case CI_COUNT:
+            assert(NULL);
+            // This should not occur
     }
-    if (config->first_startup == true) {
-        MYMPD_LOG_INFO(NULL, "Reading environment variables");
-    }
-    //configurable with environment variables at first startup
-    config->http = startup_getenv_bool("MYMPD_HTTP", CFG_MYMPD_HTTP, config->first_startup);
+}
+
+/**
+ * Reads the myMPD configuration from environment or files
+ * This function is used after reading command line arguments.
+ * @param config pointer to config struct
+ * @return true on success, else false
+ */
+bool mympd_config_read(struct t_config *config) {
+    const char *http_host;
     #ifdef MYMPD_ENABLE_IPV6
         if (get_ipv6_support() == true) {
-            config->http_host = startup_getenv_string("MYMPD_HTTP_HOST", CFG_MYMPD_HTTP_HOST_IPV6, vcb_isname, config->first_startup);
+            http_host = CFG_MYMPD_HTTP_HOST_IPV6;
         }
         else {
-            config->http_host = startup_getenv_string("MYMPD_HTTP_HOST", CFG_MYMPD_HTTP_HOST_IPV4, vcb_isname, config->first_startup);
+            http_host = CFG_MYMPD_HTTP_HOST_IPV4;
         }
     #else
-        config->http_host = startup_getenv_string("MYMPD_HTTP_HOST", CFG_MYMPD_HTTP_HOST_IPV4, vcb_isname, config->first_startup);
+        http_host = CFG_MYMPD_HTTP_HOST_IPV4;
     #endif
-    config->http_port = startup_getenv_int("MYMPD_HTTP_PORT", CFG_MYMPD_HTTP_PORT, 0, MPD_PORT_MAX, config->first_startup);
-    config->ssl = startup_getenv_bool("MYMPD_SSL", CFG_MYMPD_SSL, config->first_startup);
-    config->ssl_port = startup_getenv_int("MYMPD_SSL_PORT", CFG_MYMPD_SSL_PORT, 0, MPD_PORT_MAX, config->first_startup);
-    config->ssl_san = startup_getenv_string("MYMPD_SSL_SAN", CFG_MYMPD_SSL_SAN, vcb_isname, config->first_startup);
-    config->custom_cert = startup_getenv_bool("MYMPD_CUSTOM_CERT", CFG_MYMPD_CUSTOM_CERT, config->first_startup);
-    sds default_cert = sdscatfmt(sdsempty(), "%S/%s/server.pem", config->workdir, DIR_WORK_SSL);
-    sds default_key = sdscatfmt(sdsempty(), "%S/%s/server.key", config->workdir, DIR_WORK_SSL);
-    if (config->custom_cert == true) {
-        config->ssl_cert = startup_getenv_string("MYMPD_SSL_CERT", default_cert, vcb_isfilepath, config->first_startup);
-        config->ssl_key = startup_getenv_string("MYMPD_SSL_KEY", default_key, vcb_isfilepath, config->first_startup);
-        FREE_SDS(default_cert);
-        FREE_SDS(default_key);
-    }
-    else {
-        config->ssl_cert = default_cert;
-        config->ssl_key = default_key;
-    }
-    config->acl = startup_getenv_string("MYMPD_ACL", CFG_MYMPD_ACL, vcb_isname, config->first_startup);
-    config->scriptacl = startup_getenv_string("MYMPD_SCRIPTACL", CFG_MYMPD_SCRIPTACL, vcb_isname, config->first_startup);
-    config->loglevel = getenv_int("MYMPD_LOGLEVEL", CFG_MYMPD_LOGLEVEL, LOGLEVEL_MIN, LOGLEVEL_MAX);
-    config->pin_hash = sdsnew(CFG_MYMPD_PIN_HASH);
-    config->cache_cover_keep_days = startup_getenv_int("MYMPD_CACHE_COVER_KEEP_DAYS", CFG_MYMPD_CACHE_COVER_KEEP_DAYS, CACHE_AGE_MIN, CACHE_AGE_MAX, config->first_startup);
-    config->cache_lyrics_keep_days = startup_getenv_int("MYMPD_CACHE_LYRICS_KEEP_DAYS", CFG_MYMPD_CACHE_LYRICS_KEEP_DAYS, CACHE_AGE_MIN, CACHE_AGE_MAX, config->first_startup);
-    config->cache_thumbs_keep_days = startup_getenv_int("MYMPD_CACHE_THUMBS_KEEP_DAYS", CFG_MYMPD_CACHE_THUMBS_KEEP_DAYS, CACHE_AGE_MIN, CACHE_AGE_MAX, config->first_startup);
-    config->cache_http_keep_days = startup_getenv_int("MYMPD_CACHE_HTTP_KEEP_DAYS", CFG_MYMPD_CACHE_HTTP_KEEP_DAYS, CACHE_AGE_MIN, CACHE_AGE_MAX, config->first_startup);
-    config->cache_misc_keep_days = startup_getenv_int("MYMPD_CACHE_MISC_KEEP_DAYS", CFG_MYMPD_CACHE_MISC_KEEP_DAYS, 1, CACHE_AGE_MAX, config->first_startup);
-    config->save_caches = startup_getenv_bool("MYMPD_SAVE_CACHES", CFG_MYMPD_SAVE_CACHES, config->first_startup);
-    config->mympd_uri = startup_getenv_string("MYMPD_URI", CFG_MYMPD_URI, vcb_isname, config->first_startup);
-    config->stickers = startup_getenv_bool("MYMPD_STICKERS", CFG_MYMPD_STICKERS, config->first_startup);
-    config->stickers_pad_int = startup_getenv_bool("MYMPD_STICKERS_PAD_INT", CFG_MYMPD_STICKERS_PAD_INT, config->first_startup);
-    config->webradiodb = startup_getenv_bool("MYMPD_WEBRADIODB", CFG_MYMPD_WEBRADIODB, config->first_startup);
 
-    sds album_mode_str = startup_getenv_string("MYMPD_ALBUM_MODE", CFG_MYMPD_ALBUM_MODE, vcb_isname, config->first_startup);
-    config->albums.mode = parse_album_mode(album_mode_str);
-    FREE_SDS(album_mode_str);
+    sds env_var = sdsempty();
+    sds cfg_file = sdsempty();
+    for (enum config_item i = 0; i < CI_COUNT; i++) {
+        env_var = sdscatfmt(env_var, "MYMPD_%s", config_default[i].file);
+        sdstoupper(env_var);
+        cfg_file = sdscatfmt(cfg_file, "%s/%s/%s", config->workdir, DIR_WORK_CONFIG, config_default[i].file);
+        struct t_config_value value;
+        value.t = config_default[i].value.t;
+        bool rc;
+        switch (config_default[i].value.t) {
+            case CIT_B:
+                value.b = getenv_bool(env_var, config_default[i].value.b, &rc);
+                if (rc == true) {
+                    // Overwrite config file
+                    try_rm_file(cfg_file);
+                    value.b = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, config_default[i].file, value.b, true);
+                }
+                else {
+                    value.b = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, config_default[i].file, config_default[i].value.b, true);
+                }
+                break;
+            case CIT_I:
+                value.i = getenv_int(env_var, config_default[i].value.i, config_default[i].min, config_default[i].max, &rc);
+                if (rc == true) {
+                    // Overwrite config file
+                    try_rm_file(cfg_file);
+                    value.i = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, config_default[i].file, value.i, config_default[i].min, config_default[i].max, true);
+                }
+                else {
+                    value.i = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, config_default[i].file, config_default[i].value.i, config_default[i].min, config_default[i].max, true);
+                }
+                break;
+            case CIT_S: {
+                const char *def;
+                switch (i) {
+                    case CI_HTTP_HOST: def = http_host; break;
+                    case CI_CA_CERT_STORE: def = find_ca_cert_store(false); break;
+                    default: def = config_default[i].value.s;
+                }
+                value.s = getenv_string(env_var, def, config_default[i].vcb, &rc);
+                if (rc == true) {
+                    // Overwrite config file
+                    try_rm_file(cfg_file);
+                    value.s = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, config_default[i].file, value.s, config_default[i].vcb, true);
+                }
+                else {
+                    FREE_SDS(value.s);
+                    value.s = state_file_rw_string(config->workdir, DIR_WORK_CONFIG, config_default[i].file, def, config_default[i].vcb, true);
+                }
+                break;
+            }
+        }
+        set_config(config, i, &value);
+        sdsclear(env_var);
+        sdsclear(cfg_file);
+    }
+    FREE_SDS(env_var);
+    FREE_SDS(cfg_file);
 
-    sds album_group_tag_str = startup_getenv_string("MYMPD_ALBUM_GROUP_TAG", CFG_MYMPD_ALBUM_GROUP_TAG, vcb_isname, config->first_startup);
-    config->albums.group_tag = mpd_tag_name_iparse(album_group_tag_str);
-    FREE_SDS(album_group_tag_str);
+    // Handle custom certificates
+    if (config->custom_cert == false) {
+        FREE_SDS(config->ssl_cert);
+        FREE_SDS(config->ssl_key);
+        config->ssl_cert = sdscatfmt(sdsempty(), "%S/%s/server.pem", config->workdir, DIR_WORK_SSL);
+        config->ssl_key = sdscatfmt(sdsempty(), "%S/%s/server.key", config->workdir, DIR_WORK_SSL);
+    }
+
+    // Parse album configuration
+    config->albums.mode = parse_album_mode(config->album_mode);
+    config->albums.group_tag = mpd_tag_name_iparse(config->album_group_tag);
+    FREE_SDS(config->album_mode);
+    FREE_SDS(config->album_group_tag);
+
+    return true;
 }
 
 /**
@@ -183,130 +390,58 @@ bool mympd_config_rm(struct t_config *config) {
 }
 
 /**
- * Reads or writes the config from the /var/lib/mympd/config directory
- * @param config pointer to config struct
- * @param write if true create the file if not exists
- * @return true on success, else false
+ * Reads the ca certificates
+ * @param config Pointer to central config
+ * @return true on success or disabled certificate checking, else false
  */
-bool mympd_config_rw(struct t_config *config, bool write) {
-    config->http = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "http", config->http, write);
-    config->http_host = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "http_host", config->http_host, vcb_isname, write);
-    config->http_port = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "http_port", config->http_port, 0, MPD_PORT_MAX, write);
-    
-    // for compatibility with v10.2.0
-    if (config->http_port == 0) {
-        config->http = false;
+bool mympd_read_ca_certificates(struct t_config *config) {
+    if (config->cert_check == false) {
+        return true;
     }
-
-    config->ssl = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "ssl", config->ssl, write);
-    config->ssl_port = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "ssl_port", config->ssl_port, 0, MPD_PORT_MAX, write);
-    config->ssl_san = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "ssl_san", config->ssl_san, vcb_isname, write);
-    config->custom_cert = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "custom_cert", config->custom_cert, write);
-    if (config->custom_cert == true) {
-        config->ssl_cert = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "ssl_cert", config->ssl_cert, vcb_isname, write);
-        config->ssl_key = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "ssl_key", config->ssl_key, vcb_isname, write);
+    if (sdslen(config->ca_cert_store) == 0) {
+        MYMPD_LOG_EMERG(NULL, "System certificate store not found.");
+        return false;
     }
-    config->pin_hash = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "pin_hash", config->pin_hash, vcb_isname, write);
-    config->acl = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "acl", config->acl, vcb_isname, write);
-    config->scriptacl = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "scriptacl", config->scriptacl, vcb_isname, write);
-    config->cache_cover_keep_days = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "cache_cover_keep_days", config->cache_cover_keep_days, CACHE_AGE_MIN, CACHE_AGE_MAX, write);
-    config->cache_lyrics_keep_days = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "cache_lyrics_keep_days", config->cache_lyrics_keep_days, CACHE_AGE_MIN, CACHE_AGE_MAX, write);
-    config->cache_misc_keep_days = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "cache_misc_keep_days", config->cache_misc_keep_days, 1, CACHE_AGE_MAX, write);
-    config->cache_thumbs_keep_days = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "cache_thumbs_keep_days", config->cache_thumbs_keep_days, CACHE_AGE_MIN, CACHE_AGE_MAX, write);
-    config->cache_http_keep_days = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "cache_http_keep_days", config->cache_http_keep_days, CACHE_AGE_MIN, CACHE_AGE_MAX, write);
-    config->loglevel = state_file_rw_int(config->workdir, DIR_WORK_CONFIG, "loglevel", config->loglevel, LOGLEVEL_MIN, LOGLEVEL_MAX, write);
-    config->save_caches = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "save_caches", config->save_caches, write);
-    config->mympd_uri = state_file_rw_string_sds(config->workdir, DIR_WORK_CONFIG, "mympd_uri", config->mympd_uri, vcb_isname, write);
-    config->stickers = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "stickers", config->stickers, write);
-    config->stickers_pad_int = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "stickers_pad_int", config->stickers_pad_int, write);
-    config->webradiodb = state_file_rw_bool(config->workdir, DIR_WORK_CONFIG, "webradiodb", config->webradiodb, write);
-
-    sds album_mode_str = state_file_rw_string(config->workdir, DIR_WORK_CONFIG, "album_mode", lookup_album_mode(config->albums.mode), vcb_isname, write);
-    config->albums.mode = parse_album_mode(album_mode_str);
-    FREE_SDS(album_mode_str);
-
-    sds album_group_tag_str = state_file_rw_string(config->workdir, DIR_WORK_CONFIG, "album_group_tag", mpd_tag_name(config->albums.group_tag), vcb_isname, write);
-    config->albums.group_tag = mpd_tag_name_iparse(album_group_tag_str);
-    FREE_SDS(album_group_tag_str);
-
-    //overwrite configured loglevel
-    config->loglevel = getenv_int("MYMPD_LOGLEVEL", config->loglevel, LOGLEVEL_MIN, LOGLEVEL_MAX);
+    MYMPD_LOG_INFO(NULL, "Reading ca certificates from %s", config->ca_cert_store);
+    config->ca_certs = sdsempty();
+    int nread;
+    config->ca_certs = sds_getfile(config->ca_certs, config->ca_cert_store, CACERT_STORE_SIZE_MAX, false, true, &nread);
+    if (nread == FILE_TO_BIG) {
+        MYMPD_LOG_EMERG(NULL, "System certificate store too big.");
+        return false;
+    }
+    if (nread <= FILE_IS_EMPTY) {
+        MYMPD_LOG_EMERG(NULL, "System certificate store not found or empty.");
+        return false;
+    }
     return true;
 }
 
 /**
- * Writes the current version to the version file
- * @param workdir working directory
- * @return true if file was written, else false
+ * Dumps the default myMPD configuration
  */
-bool mympd_version_set(sds workdir) {
-    sds version = sdsnew(MYMPD_VERSION);
-    sds filepath = sdscatfmt(sdsempty(), "%S/%s/version", workdir, DIR_WORK_CONFIG);
-    bool rc = write_data_to_file(filepath, version, sdslen(version));
-    FREE_SDS(version);
-    FREE_SDS(filepath);
-    return rc;
-}
-
-/**
- * Checks the version of the configuration against current version
- * @param workdir working directory
- * @return true if version has not changed, else false
- */
-bool mympd_version_check(sds workdir) {
-    sds filepath = sdscatfmt(sdsempty(), "%S/%s/version", workdir, DIR_WORK_CONFIG);
-    int nread = 0;
-    sds version = sds_getfile(sdsempty(), filepath, 10, true, false, &nread);
-    bool rc = strcmp(version, MYMPD_VERSION) == 0
-        ? true
-        : false;
-    FREE_SDS(version);
-    FREE_SDS(filepath);
-    return rc;
-}
-
-/**
- * Private functions
- */
-
-/**
- * Gets an environment variable as sds string
- * @param env_var variable name to read
- * @param default_value default value if variable is not set
- * @param vcb validation callback
- * @param first_startup true for first startup else false
- * @return environment variable as sds string
- */
-static sds startup_getenv_string(const char *env_var, const char *default_value, validate_callback vcb, bool first_startup) {
-    return first_startup == true 
-        ? getenv_string(env_var, default_value, vcb)
-        : sdsnew(default_value);
-}
-
-/**
- * Gets an environment variable as int
- * @param env_var variable name to read
- * @param default_value default value if variable is not set
- * @param min minimum value (including)
- * @param max maximum value (including)
- * @param first_startup true for first startup else false
- * @return environment variable as integer
- */
-static int startup_getenv_int(const char *env_var, int default_value, int min, int max, bool first_startup) {
-    return first_startup == true
-        ? getenv_int(env_var, default_value, min, max)
-        : default_value;
-}
-
-/**
- * Gets an environment variable as bool
- * @param env_var variable name to read
- * @param default_value default value if variable is not set
- * @param first_startup true for first startup else false
- * @return environment variable as bool
- */
-static bool startup_getenv_bool(const char *env_var, bool default_value, bool first_startup) {
-    return first_startup == true
-        ? getenv_bool(env_var, default_value)
-        : default_value;
+void mympd_config_dump_default(void) {
+    printf("Default configuration:\n");
+    for (int i = 0; i < CI_COUNT; i++) {
+        switch (config_default[i].value.t) {
+            case CIT_B:
+                printf("    %s: %s\n", config_default[i].file, (config_default[i].value.b == true ? "true" : "false"));
+                break;
+            case CIT_I:
+                printf("    %s: %d\n", config_default[i].file, config_default[i].value.i);
+                break;
+            case CIT_S:
+                if (i == CI_CA_CERT_STORE) {
+                    const char *ca_cert_store = find_ca_cert_store(true);
+                    if (ca_cert_store == NULL) {
+                        ca_cert_store = "";
+                    }
+                    printf("    %s: %s\n", config_default[i].file, ca_cert_store);
+                }
+                else {
+                    printf("    %s: %s\n", config_default[i].file, config_default[i].value.s);
+                }
+                break;
+        }
+    }
 }

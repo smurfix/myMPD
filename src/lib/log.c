@@ -11,10 +11,12 @@
 #include "compile_time.h"
 #include "src/lib/log.h"
 
+#include "src/lib/env.h"
 #include "src/lib/sds_extras.h"
 
 #include <pthread.h>
 #include <string.h>
+#include <unistd.h>
 
 /**
  * Global variables
@@ -31,14 +33,9 @@ _Thread_local sds thread_logname;
 _Atomic int loglevel;
 
 /**
- * Log to syslog?
+ * Type of logging system
  */
-bool log_to_syslog;
-
-/**
- * Log goes to tty?
- */
-bool log_on_tty;
+enum log_types log_type;
 
 /**
  * Maps loglevels to names
@@ -98,6 +95,29 @@ void set_loglevel(int level) {
 }
 
 /**
+ * Initializes the logging sub-system
+ */
+void log_init(void) {
+    log_type = LOG_TO_STDOUT;
+    if (isatty(fileno(stdout)) == true) {
+        log_type = LOG_TO_TTY;
+    }
+    else if (getenv_check("INVOCATION_ID") != NULL) {
+        #ifdef MYMPD_ENABLE_SYSTEMD
+            log_type = LOG_TO_SYSTEMD;
+        #endif
+    }
+    #ifdef MYMPD_DEBUG
+        set_loglevel(LOG_DEBUG);
+    #else
+        bool getenv_rc;
+        set_loglevel(
+            getenv_int("MYMPD_LOGLEVEL", CFG_MYMPD_LOGLEVEL, LOGLEVEL_MIN, LOGLEVEL_MAX, &getenv_rc)
+        );
+    #endif
+}
+
+/**
  * Logs the errno string
  * This function should be called by the suitable macro
  * @param file filename for debug logging
@@ -133,7 +153,7 @@ void mympd_log(int level, const char *file, int line, const char *partition, con
         return;
     }
 
-    if (log_to_syslog == true) {
+    if (log_type == LOG_TO_SYSLOG) {
         va_list args;
         va_start(args, fmt);
         #pragma GCC diagnostic push
@@ -147,13 +167,16 @@ void mympd_log(int level, const char *file, int line, const char *partition, con
     sds logline = sdsempty();
     //preallocate some space for the logline to avoid continuous reallocations
     logline = sdsMakeRoomFor(logline, 512);
-    if (log_on_tty == true) {
+    if (log_type == LOG_TO_TTY) {
         logline = sdscat(logline, loglevel_colors[level]);
         time_t now = time(NULL);
         struct tm timeinfo;
         if (localtime_r(&now, &timeinfo) != NULL) {
             logline = sdscatprintf(logline, "%02d:%02d:%02d ", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
         }
+    }
+    else if (log_type == LOG_TO_SYSTEMD) {
+        logline = sdscatfmt(logline, "<%d>", level);
     }
     logline = sdscatprintf(logline, "%-8s %-11s", loglevel_names[level], thread_logname);
     #ifdef MYMPD_DEBUG
@@ -176,7 +199,7 @@ void mympd_log(int level, const char *file, int line, const char *partition, con
         logline = sdscatlen(logline, "...", 3);
     }
 
-    if (log_on_tty == true) {
+    if (log_type == LOG_TO_TTY) {
         logline = sdscat(logline, "\033[0m\n");
     }
     else {

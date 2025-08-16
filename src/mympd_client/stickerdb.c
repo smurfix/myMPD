@@ -89,7 +89,7 @@ bool stickerdb_connect(struct t_stickerdb_state *stickerdb) {
     // check for sticker support
     stickerdb->mpd_state->feat.stickers = check_sticker_support(stickerdb);
     if (stickerdb->mpd_state->feat.stickers == false) {
-        MYMPD_LOG_ERROR("stickerdb", "MPD does not support stickers");
+        MYMPD_LOG_WARN("stickerdb", "MPD does not support stickers");
         stickerdb_disconnect(stickerdb);
         send_jsonrpc_notify(JSONRPC_FACILITY_MPD, JSONRPC_SEVERITY_CRIT, MPD_PARTITION_ALL, "MPD does not support stickers");
         mympd_api_request_sticker_features(false, false);
@@ -162,7 +162,7 @@ bool stickerdb_exit_idle(struct t_stickerdb_state *stickerdb) {
     if (mpd_send_noidle(stickerdb->conn) == false) {
         MYMPD_LOG_ERROR("stickerdb", "Error exiting idle mode");
     }
-    return stickerdb_check_error_and_recover(stickerdb, "mpd_run_noidle");
+    return stickerdb_check_error_and_recover(stickerdb, "mpd_send_noidle");
 }
 
 /**
@@ -176,12 +176,10 @@ bool stickerdb_check_error_and_recover(struct t_stickerdb_state *stickerdb, cons
         stickerdb->conn_state = MPD_FAILURE;
         return false;
     }
-    mpd_response_finish(stickerdb->conn);
-    enum mpd_error error = mpd_connection_get_error(stickerdb->conn);
-    if (error == MPD_ERROR_SUCCESS) {
+    if (mpd_response_finish(stickerdb->conn) == true) {
         return true;
     }
-
+    enum mpd_error error = mpd_connection_get_error(stickerdb->conn);
     const char *error_msg = mpd_connection_get_error_message(stickerdb->conn);
     if (error == MPD_ERROR_SERVER) {
         enum mpd_server_error server_error = mpd_connection_get_server_error(stickerdb->conn);
@@ -191,12 +189,14 @@ bool stickerdb_check_error_and_recover(struct t_stickerdb_state *stickerdb, cons
         MYMPD_LOG_ERROR(stickerdb->name, "MPD error for command %s: %s (%d)", command, error_msg , error);
     }
     //try to recover from error
-    if (mpd_connection_clear_error(stickerdb->conn) == false) {
-        MYMPD_LOG_ERROR(stickerdb->name, "%s", "Unrecoverable MPD error");
+    if (mpd_connection_clear_error(stickerdb->conn) == false ||
+        mpd_response_finish(stickerdb->conn) == false)
+    {
+        MYMPD_LOG_ERROR(stickerdb->name, "Unrecoverable MPD error");
         stickerdb->conn_state = MPD_FAILURE;
     }
     else {
-        mpd_response_finish(stickerdb->conn);
+        MYMPD_LOG_WARN(stickerdb->name, "Recovered from MPD error");
     }
     return false;
 }

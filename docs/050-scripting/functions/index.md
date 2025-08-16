@@ -34,6 +34,9 @@ List of myMPD specific Lua functions.
 | [mympd.http_serve_file](http_replies.md) | Serves a file from the filesystem. Only files from the diskcache are allowed. |
 | [mympd.init](mympd_init.md) | Initializes the Lua table mympd_state. |
 | [mympd.isnilorempty](string.md) | Checks for empty string or nil. |
+| [mympd.jsonrpc_error](util.md) | Creates a JSONRPC 2.0 error. |
+| [mympd.jsonrpc_notification](http_replies.md) | Creates a JSONRPC 2.0 notification. |
+| [mympd.jsonrpc_warn](util.md) | Creates a JSONRPC 2.0 warning. |
 | [mympd.log](util.md) | Logging to myMPD log. |
 | [mympd.notify_client](util.md) | Sends a notification to the client. |
 | [mympd.notify_partition](util.md) | Sends a notification to all clients in a partition. |
@@ -42,6 +45,7 @@ List of myMPD specific Lua functions.
 | [mympd.remove_file](util.md) | Deletes a file or empty directory. |
 | [mympd.sleep](util.md) | Sleep ms. |
 | [mympd.splitlines](string.md) | Split string by newline characters and trims the lines. |
+| [mympd.tblvalue_in_list](string.md) | Checks a Lua table of tags against a comma separated list |
 | [mympd.tmp_file](diskcache.md) | Generates a random tmp filename for the misc cache. |
 | [mympd.tmpvar_delete](tmpvar.md) | Deletes a temporary variable. |
 | [mympd.tmpvar_get](tmpvar.md) | Gets a temporary variable. |

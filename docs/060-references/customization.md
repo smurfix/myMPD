@@ -1,6 +1,17 @@
 ---
-title: Custom navbar icons
+title: Customization
 ---
+
+## Custom CSS and JavaScript
+
+You can define custom CSS and JavaScript to further customize the frontend. The files are read at startup and are cached by the service worker.
+
+| FILE | DESCRIPTION |
+| ---- | ----------- |
+| `/var/lib/mympd/config/custom.css` | User defined CSS. |
+| `/var/lib/mympd/config/custom.js` | User defined JavaScript. |
+
+## Custom navbar icons
 
 The navbar icons can be customized. You must edit the file `/var/lib/mympd/state/navbar_icons` and restart myMPD. It must be a valid JSON array.
 

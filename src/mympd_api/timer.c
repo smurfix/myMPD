@@ -170,7 +170,8 @@ bool mympd_api_timer_replace(struct t_timer_list *l, int timeout, int interval, 
 {
     //ignore return code for remove
     mympd_api_timer_remove(l, timer_id);
-    return mympd_api_timer_add(l, timeout, interval, handler, timer_id, definition);
+    return mympd_api_timer_add(l, timeout, interval, handler, timer_id, definition) &&
+        list_sort_by_key(&l->list, LIST_SORT_ASC);
 }
 
 /**
@@ -207,7 +208,8 @@ bool mympd_api_timer_add(struct t_timer_list *l, int timeout, int interval, time
     else {
         new_node->fd = -1;
     }
-    list_push(&l->list, "", timer_id, NULL, new_node);
+    //Use timer name as key for sorting
+    list_push(&l->list, (definition != NULL ? definition->name : ""), timer_id, NULL, new_node);
     if (definition == NULL ||
         definition->enabled == true)
     {
@@ -304,7 +306,6 @@ void *mympd_api_timer_free_definition(struct t_timer_definition *timer_def) {
 
 /**
  * Parses a json object string to a timer definition.
- * Frees the timer and sets the pointer to NULL if there is a parsing error.
  * @param str string to parse
  * @param partition mpd partition
  * @param error pointer to sds string to populate an error string
@@ -320,7 +321,7 @@ struct t_timer_definition *mympd_api_timer_parse(sds str, const char *partition,
     timer_def->preset = NULL;
     list_init(&timer_def->arguments);
 
-    if (json_get_string_max(str, "$.params.name", &timer_def->name, vcb_isname, error) == true &&
+    if (json_get_string(str, "$.params.name", 1, NAME_LEN_MAX, &timer_def->name, vcb_isname, error) == true &&
         json_get_bool(str, "$.params.enabled", &timer_def->enabled, error) == true &&
         json_get_int(str, "$.params.startHour", 0, 23, &timer_def->start_hour, error) == true &&
         json_get_int(str, "$.params.startMinute", 0, 59, &timer_def->start_minute, error) == true &&
@@ -511,6 +512,7 @@ bool mympd_api_timer_file_read(struct t_timer_list *timer_list, sds workdir) {
     (void) fclose(fp);
     FREE_SDS(timer_file);
     MYMPD_LOG_INFO(NULL, "Read %u timer(s) from disc", timer_list->list.length);
+    list_sort_by_key(&timer_list->list, LIST_SORT_ASC);
     return true;
 }
 

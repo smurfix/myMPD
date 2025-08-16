@@ -173,6 +173,20 @@ bool vcb_isname(sds data) {
 }
 
 /**
+ * Checks if string is a valid sticker name
+ * @param data sds string to check
+ * @return true on success else false
+ */
+bool vcb_isstickername(sds data) {
+    bool rc = vcb_isname(data) &&
+        strchr(data, '=') == NULL;
+    if (rc == false) {
+        MYMPD_LOG_WARN(NULL, "Invalid sticker name");
+    }
+    return rc;
+}
+
+/**
  * Checks if string contains invalid chars
  * Invalid chars are "\a\b\f\r\v"
  * @param data sds string to check
@@ -481,12 +495,14 @@ bool vcb_issearchexpression_song(sds data) {
     if (check_for_invalid_chars(data, invalid_name_chars) == false) {
         return false;
     }
-
-    struct t_list *expr = parse_search_expression_to_list(data, SEARCH_TYPE_SONG);
-    if (expr == NULL) {
+    //only some basic checks, we do not support the complete MPD search expression syntax
+    if (len < 2 ||
+        data[0] != '(' ||
+        data[len - 1] != ')')
+    {
+        MYMPD_LOG_ERROR(NULL, "String is not a valid search expression");
         return false;
     }
-    free_search_expression_list(expr);
     return true;
 }
 

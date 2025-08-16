@@ -62,30 +62,27 @@ disabledentry=gray,
 entry=white,gray'
 
 set_default() {
-    MYMPD_ACL=""
-    MYMPD_ALBUM_GROUP_TAG="Date"
-    MYMPD_ALBUM_MODE="adv"
-    MYMPD_CACHE_COVER_KEEP_DAYS="31"
-    MYMPD_CACHE_HTTP_KEEP_DAYS="31"
-    MYMPD_CACHE_LYRICS_KEEP_DAYS="31"
-    MYMPD_CACHE_MISC_KEEP_DAYS="1"
-    MYMPD_CACHE_THUMBS_KEEP_DAYS="31"
-    MYMPD_LOGLEVEL="5"
-    MYMPD_URI="auto"
-    MYMPD_SAVE_CACHES="true"
-    MYMPD_SCRIPTACL="+127.0.0.1"
-    MYMPD_STICKERS="true"
-    MYMPD_STICKERS_PAD_INT="false"
-    MYMPD_HTTP_HOST="[::]"
-    MYMPD_HTTP="true"
-    MYMPD_HTTP_PORT="80"
-    MYMPD_SSL="true"
-    MYMPD_SSL_PORT="443"
-    MYMPD_SSL_SAN=""
-    MYMPD_CUSTOM_CERT="false"
-    MYMPD_SSL_CERT=""
-    MYMPD_SSL_KEY=""
-    MYMPD_WEBRADIODB="true"
+    $MYMPD_BIN -d | $MYMPD_BIN -d | awk -F: '/^    /{print toupper($1) $2}' > /tmp/mympd_defaults
+    while read -r KEY VALUE
+    do
+        eval "MYMPD_$KEY=$VALUE"
+    done < /tmp/mympd_defaults
+    rm /tmp/mympd_defaults
+    if ! MYMPD_CA_CERT_STORE=$(curl-config --ca)
+    then
+        MYMPD_CA_CERT_STORE_PATHS="/etc/ssl/certs/ca-certificates.crt \
+            /etc/ssl/certs/ca-bundle.crt \
+            /etc/pki/tls/certs/ca-bundle.crt \
+            /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+        for P in $MYMPD_CA_CERT_STORE_PATHS
+        do
+            if [ -f "$P" ]
+            then
+                MYMPD_CA_CERT_STORE="$P"
+                break
+            fi
+        done
+    fi
 }
 
 read_config() {
@@ -101,6 +98,7 @@ read_config() {
     [ -f "${CONFIG_DIR}/mympd_uri" ] && read -r MYMPD_URI < "${CONFIG_DIR}/mympd_uri"
     [ -f "${CONFIG_DIR}/save_caches" ] && read -r MYMPD_SAVE_CACHES < "${CONFIG_DIR}/save_caches"
     [ -f "${CONFIG_DIR}/scriptacl" ] && read -r MYMPD_SCRIPTACL < "${CONFIG_DIR}/scriptacl"
+    [ -f "${CONFIG_DIR}/scripts_external" ] && read -r MYMPD_SCRIPTS_EXTERNAL < "${CONFIG_DIR}/scripts_external"
     [ -f "${CONFIG_DIR}/stickers" ] && read -r MYMPD_STICKERS < "${CONFIG_DIR}/stickers"
     [ -f "${CONFIG_DIR}/stickers_pad_int" ] && read -r MYMPD_STICKERS_PAD_INT < "${CONFIG_DIR}/stickers_pad_int"
     [ -f "${CONFIG_DIR}/http_host" ] && read -r MYMPD_HTTP_HOST < "${CONFIG_DIR}/http_host"
@@ -113,6 +111,8 @@ read_config() {
     [ -f "${CONFIG_DIR}/ssl_cert" ] && read -r MYMPD_SSL_CERT < "${CONFIG_DIR}/ssl_cert"
     [ -f "${CONFIG_DIR}/ssl_key" ] && read -r MYMPD_SSL_KEY < "${CONFIG_DIR}/ssl_key"
     [ -f "${CONFIG_DIR}/webradiodb" ] && read -r MYMPD_WEBRADIODB < "${CONFIG_DIR}/webradiodb"
+    [ -f "${CONFIG_DIR}/cert_check" ] && read -r MYMPD_CERT_CHECK < "${CONFIG_DIR}/cert_check"
+    [ -f "${CONFIG_DIR}/ca_cert_store" ] && read -r MYMPD_CA_CERT_STORE < "${CONFIG_DIR}/ca_cert_store"
 }
 
 apply_config() {
@@ -131,6 +131,7 @@ apply_config() {
             -E MYMPD_URI="$MYMPD_URI" \
             -E MYMPD_SAVE_CACHES="$MYMPD_SAVE_CACHES" \
             -E MYMPD_SCRIPTACL="$MYMPD_SCRIPTACL" \
+            -E MYMPD_SCRIPTS_EXTERNAL="$MYMPD_SCRIPTS_EXTERNAL" \
             -E MYMPD_STICKERS="$MYMPD_STICKERS" \
             -E MYMPD_STICKERS_PAD_INT="$MYMPD_STICKERS_PAD_INT" \
             -E MYMPD_HTTP_HOST="$MYMPD_HTTP_HOST" \
@@ -143,6 +144,8 @@ apply_config() {
             -E MYMPD_SSL_CERT="$MYMPD_SSL_CERT" \
             -E MYMPD_SSL_KEY="$MYMPD_SSL_KEY" \
             -E MYMPD_WEBRADIODB="$MYMPD_WEBRADIODB" \
+            -E MYMPD_CERT_CHECK="$MYMPD_CERT_CHECK" \
+            -E MYMPD_CA_CERT_STORE="$MYMPD_CA_CERT_STORE" \
             $MYMPD_BIN -c
     else
         export MYMPD_ACL
@@ -157,6 +160,7 @@ apply_config() {
         export MYMPD_URI
         export MYMPD_SAVE_CACHES
         export MYMPD_SCRIPTACL
+        export MYMPD_SCRIPTS_EXTERNAL
         export MYMPD_STICKERS
         export MYMPD_STICKERS_PAD_INT
         export MYMPD_HTTP_HOST
@@ -169,6 +173,8 @@ apply_config() {
         export MYMPD_SSL_CERT
         export MYMPD_SSL_KEY
         export MYMPD_WEBRADIODB
+        export MYMPD_CERT_CHECK
+        export MYMPD_CA_CERT_STORE
         $MYMPD_BIN -c
     fi
 }
@@ -208,6 +214,7 @@ menu_webserver() {
         "HTTP" "$MYMPD_HTTP" \
         "ACL" "$MYMPD_ACL" \
         "Script ACL" "$MYMPD_SCRIPTACL" \
+        "Scripts External" "$MYMPD_SCRIPTS_EXTERNAL" \
         "HTTP Port" "$MYMPD_HTTP_PORT" \
         "SSL" "$MYMPD_SSL" \
         "SSL Port" "$MYMPD_SSL_PORT" \
@@ -220,7 +227,8 @@ menu_webserver() {
         "Listening IP") MYMPD_HTTP_HOST=$(get_input "$SELECT" "$MYMPD_HTTP_HOST") ;;
         "HTTP") MYMPD_HTTP=$(toggle_bool "$MYMPD_HTTP") ;;
         "ACL") MYMPD_ACL=$(toggle_bool "$MYMPD_ACL") ;;
-        "Script ACL") MYMPD_SCRIPTACL=$(toggle_bool "$MYMPD_SCRIPTACL") ;;
+        "Script ACL") MYMPD_SCRIPTACL=$(get_input "$SELECT" "$MYMPD_SCRIPTACL") ;;
+        "Scripts External") MYMPD_SCRIPTS_EXTERNAL=$(toggle_bool "$MYMPD_SCRIPTS_EXTERNAL") ;;
         "HTTP Port") MYMPD_HTTP_PORT=$(get_input "$SELECT" "$MYMPD_HTTP_PORT") ;;
         "SSL") MYMPD_SSL=$(toggle_bool "$MYMPD_SSL") ;;
         "SSL Port") MYMPD_SSL_PORT=$(get_input "$SELECT" "$MYMPD_SSL_PORT") ;;
@@ -285,6 +293,8 @@ menu_misc() {
         "Enable stickers" "$MYMPD_STICKERS" \
         "Enable sticker padding" "$MYMPD_STICKERS_PAD_INT" \
         "Enable WebradioDB" "$MYMPD_WEBRADIODB" \
+        "Enable cert check" "$MYMPD_CERT_CHECK" \
+        "CA certificate store" "$MYMPD_CA_CERT_STORE" \
         3>&1 1>&2 2>&3)
     case "$SELECT" in
         "Album group tag") MYMPD_ALBUM_GROUP_TAG=$(get_input "$SELECT" "$MYMPD_ALBUM_GROUP_TAG") ;;
@@ -300,6 +310,8 @@ menu_misc() {
         "Enable stickers") MYMPD_STICKERS=$(toggle_bool "$MYMPD_STICKERS") ;;
         "Enable sticker padding") MYMPD_STICKERS_PAD_INT=$(toggle_bool "$MYMPD_STICKERS_PAD_INT") ;;
         "Enable WebradioDB") MYMPD_WEBRADIODB=$(toggle_bool "$MYMPD_WEBRADIODB") ;;
+        "Enable cert check") MYMPD_CERT_CHECK=$(toggle_bool "$MYMPD_CERT_CHECK") ;;
+        "CA certificate store") MYMPD_CA_CERT_STORE=$(get_input "$SELECT" "$MYMPD_CA_CERT_STORE") ;;
         "") return ;;
     esac
     menu_misc
@@ -340,6 +352,7 @@ parse_options() {
             MYMPD_URI) MYMPD_URI="$2" ;;
             MYMPD_SAVE_CACHES) MYMPD_SAVE_CACHES="$2" ;;
             MYMPD_SCRIPTACL) MYMPD_SCRIPTACL="$2" ;;
+            MYMPD_SCRIPTS_EXTERNAL) MYMPD_SCRIPTS_EXTERNAL="$2" ;;
             MYMPD_STICKERS) MYMPD_STICKERS="$2" ;;
             MYMPD_STICKERS_PAD_INT) MYMPD_STICKERS_PAD_INT="$2" ;;
             MYMPD_HTTP_HOST) MYMPD_HTTP_HOST="$2" ;;
@@ -352,6 +365,8 @@ parse_options() {
             MYMPD_SSL_CERT) MYMPD_SSL_CERT="$2" ;;
             MYMPD_SSL_KEY) MYMPD_SSL_KEY="$2" ;;
             MYMPD_WEBRADIODB) MYMPD_WEBRADIODB="$2" ;;
+            MYMPD_CERT_CHECK) MYMPD_CERT_CHECK="$2" ;;
+            MYMPD_CA_CERT_STORE) MYMPD_CA_CERT_STORE="$2" ;;
             *)
                 echo "Invalid configuration setting"
                 exit 1

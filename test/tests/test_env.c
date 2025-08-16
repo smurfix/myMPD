@@ -17,45 +17,62 @@
 
 UTEST(env, test_getenv_int) {
     setenv("TESTVAR", "10", 1);
-    int testvar = getenv_int("TESTVAR", 5, 0, 20);
+    bool rc;
+    int testvar = getenv_int("TESTVAR", 5, 0, 20, &rc);
     ASSERT_EQ(testvar, 10);
+    ASSERT_TRUE(rc);
     
     setenv("TESTVAR", "30", 1);
-    testvar = getenv_int("TESTVAR", 5, 0, 20);
+    testvar = getenv_int("TESTVAR", 5, 0, 20, &rc);
     ASSERT_EQ(testvar, 5);
+    ASSERT_FALSE(rc);
     unsetenv("TESTVAR");
 }
 
 UTEST(env, test_getenv_uint) {
     setenv("TESTVAR", "10", 1);
-    unsigned testvar = getenv_uint("TESTVAR", 5, 0, 20);
+    bool rc;
+    unsigned testvar = getenv_uint("TESTVAR", 5, 0, 20, &rc);
     ASSERT_EQ(testvar, (unsigned)10);
+    ASSERT_TRUE(rc);
 
     setenv("TESTVAR", "30", 1);
-    testvar = getenv_uint("TESTVAR", 5, 0, 20);
+    testvar = getenv_uint("TESTVAR", 5, 0, 20, &rc);
     ASSERT_EQ(testvar, (unsigned)5);
+    ASSERT_FALSE(rc);
     unsetenv("TESTVAR");
 }
 
 UTEST(env, test_getenv_bool) {
     setenv("TESTVAR", "true", 1);
-    bool testvar = getenv_bool("TESTVAR", true);
-    ASSERT_TRUE(testvar == true);
+    bool rc;
+    bool testvar = getenv_bool("TESTVAR", true, &rc);
+    ASSERT_TRUE(testvar);
+    ASSERT_TRUE(rc);
+
+    setenv("TESTVAR", "false", 1);
+    testvar = getenv_bool("TESTVAR", true, &rc);
+    ASSERT_FALSE(testvar);
+    ASSERT_TRUE(rc);
 
     setenv("TESTVAR", "30", 1);
-    testvar = getenv_bool("TESTVAR", false);
-    ASSERT_TRUE(testvar == false);
+    testvar = getenv_bool("TESTVAR", false, &rc);
+    ASSERT_FALSE(testvar);
+    ASSERT_FALSE(rc);
     unsetenv("TESTVAR");
 }
 
 UTEST(env, test_getenv_string) {
     setenv("TESTVAR", "testvalue", 1);
-    sds testvar = getenv_string("TESTVAR", "default", vcb_isname);
+    bool rc;
+    sds testvar = getenv_string("TESTVAR", "default", vcb_isname, &rc);
     ASSERT_STREQ(testvar, "testvalue");
+    ASSERT_TRUE(rc);
     FREE_SDS(testvar);
 
     unsetenv("TESTVAR");
-    testvar = getenv_string("TESTVAR", "default", vcb_isname);
+    testvar = getenv_string("TESTVAR", "default", vcb_isname, &rc);
     ASSERT_STREQ(testvar, "default");
+    ASSERT_FALSE(rc);
     FREE_SDS(testvar);
 }

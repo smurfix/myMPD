@@ -15,7 +15,8 @@
 <!--debug-->  <link href="css/mympd.css" rel="stylesheet"/>
 <!--debug-->  <link href="css/theme-light.css" rel="stylesheet"/>
 <!--debug-->  <link href="css/theme-dark.css" rel="stylesheet"/>
-<!--release   <link href="css/combined.css" rel="stylesheet">-->
+<!--release   <link href="css/combined.css" rel="stylesheet"/>-->
+  <link href="custom.css" rel="stylesheet"/>
   <link href="mympd.webmanifest" rel="manifest" crossorigin="use-credentials"/>
   <link href="assets/appicon-192.png" rel="apple-touch-icon"/>
   <link href="assets/appicon-192.png" rel="icon"/>
@@ -110,7 +111,8 @@
             <h2 class="dropdown-header" data-phrase="Add to homescreen"></h2>
             <button data-phrase="External link" data-href='{"cmd": "addExternalLinkToHome", "options": []}' class="btn btn-secondary w-100 btn-sm mb-2"></button>
             <button data-phrase="Modal shortcut" data-href='{"cmd": "addOpenModalToHome", "options": []}' class="btn btn-secondary w-100 btn-sm mb-2"></button>
-            <button data-phrase="Widget" data-href='{"cmd": "addHomeWidget", "options": []}' class="btn btn-secondary w-100 btn-sm"></button>
+            <button data-phrase="Script widget" data-href='{"cmd": "addHomeWidget", "options": ["widget_script"]}' class="btn btn-secondary w-100 btn-sm mb-2"></button>
+            <button data-phrase="iFrame widget" data-href='{"cmd": "addHomeWidget", "options": ["widget_iframe"]}' class="btn btn-secondary w-100 btn-sm"></button>
           </div>
         </div>
         <div id="HomeContainer" class="container-fluid cardsContainer scrollContainer">
@@ -1091,11 +1093,14 @@
             <audio id="localPlayer" preload="none"></audio>
             <form class="d-grid mx-3 mb-3">
               <div class="mb-3"><span data-phrase="Duration"></span>: <span id="localPlayerProgress"></span></div>
-              <button class="btn btn-success mi mb-3" id="localPlaybackBtn" data-href='{"cmd": "createLocalPlaybackEl", "options": ["event"]}'>play_arrow</button>
-              <div class="mb-3">
+              <button id="localPlaybackBtn" class="btn btn-success mi mb-3" data-href='{"cmd": "createLocalPlaybackEl", "options": ["event"]}'>play_arrow</button>
+              <select id="localPlayerDeviceSelect" class="form-select mb-3 featLocalPlaybackOutput">
+                <option value="" data-phrase="Default output device"></option>
+              </select>
+              <div class="mb-3 featLocalPlaybackVolume">
                 <span data-phrase="Volume"></span>: <span id="localPlaybackVolume"></span>
               </div>
-              <div class="btn-group">
+              <div class="btn-group featLocalPlaybackVolume">
                 <button data-href='{"cmd": "localPlaybackVolumeStep", "options": ["down"]}' class="btn btn-secondary">&minus;</button>
                 <div class="bg-secondary volumeRangeDiv">
                   <input type="range" min="0" max="1" step="0.01" class="form-range" id="localPlaybackVolumeBar"/>
@@ -2262,7 +2267,7 @@
 <!-- Modal variables end -->
 <!-- Modal scripts start -->
   <div class="modal fade" id="modalScripts" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-xl">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title"><span class="mi title-icon">code</span> <span data-phrase="Scripts"></span></h5>
@@ -2310,75 +2315,83 @@
               </div>
             </div>
             <div id="modalScriptsEditTab" class="tab-pane">
-              <div class="mb-3 row">
-                <label class="col-sm-4 col-form-label" for="modalScriptsScriptInput" data-phrase="Script name"></label>
-                <div class="col-sm-8">
-                  <input id="modalScriptsScriptInput" class="form-control"/>
-                  <div class="invalid-feedback" data-phrase="Invalid script name"></div>
-                </div>
-              </div>
-              <div id="modalScriptsEditDescRow" class="mb-3 row">
-                <label class="col-sm-4 col-form-label"></label>
-                <div class="col-sm-8">
-                  <a id="modalScriptsEditLink" href="#" target="_blank" class="external text-success" data-phrase="Documentation"></a>
-                </div>
-              </div>
-              <div class="mb-3 row">
-                <label class="col-sm-4 col-form-label" for="modalScriptsOrderInput" data-phrase="Order"></label>
-                <div class="col-sm-8">
-                  <input id="modalScriptsOrderInput" class="form-control"/>
-                  <div class="invalid-feedback" data-phrase="Invalid script order"></div>
-                  <small class="help" data-phrase="helpScriptOrder"></small>
-                </div>
-              </div>
-              <div class="mb-3 row">
-                <label class="col-sm-4 col-form-label" for="modalScriptsAddArgumentInput" data-phrase="Arguments"></label>
-                <div class="col-sm-8">
-                  <div class="input-group">
-                    <input id="modalScriptsAddArgumentInput" class="form-control"/>
-                    <button class="btn btn-secondary rounded-end" id="addScriptArgument" data-href='{"cmd": "addScriptArgument", "options": []}'>+</button>
-                    <div class="invalid-feedback" data-phrase="Invalid script argument"></div>
+              <div class="row">
+                <div class="col-lg-5">
+                  <div class="mb-3 row">
+                    <label class="col-sm-4 col-form-label" for="modalScriptsScriptInput" data-phrase="Script name"></label>
+                    <div class="col-sm-8">
+                      <input id="modalScriptsScriptInput" class="form-control"/>
+                      <div class="invalid-feedback" data-phrase="Invalid script name"></div>
+                    </div>
                   </div>
-                  <select class="mt-2 form-select" id="modalScriptsArgumentsInput" size="3"></select>
-                  <small class="help" data-phrase="helpScriptArguments"></small>
-                </div>
-              </div>
-              <div class="mb-3">
-                <label for="modalScriptsContentInput" data-phrase="Script"></label>
-                <textarea class="form-control font-monospace border-secondary" id="modalScriptsContentInput" rows="10"></textarea>
-                <div class="btn-group mt-2 me-2">
-                  <button id="modalScriptsAddAPIcallBtn" data-title-phrase="Insert API call" class="btn btn-secondary dropdown-toggle mi" type="button" data-bs-toggle="dropdown">api</button>
-                  <div class="dropdown-menu px-2" id="modalScriptsAddAPIcallDropdown">
-                    <form>
-                      <div class="input-group">
-                        <select class="form-select" id="modalScriptsAPIcallSelect"></select>
-                        <button class="btn btn-success mi" data-href='{"cmd":"addScriptAPIcall","options":["event"]}' data-title-phrase="Add">add</button>
-                      </div>
-                      <div id="modalScriptsAPIdesc" class="mt-2 ps-1"></div>
-                    </form>
-                    <div class="mt-2 ps-1">
-                      <a target="_blank" rel="noreferrer" href="https://jcorporation.github.io/myMPD/060-references/api/methods/" class="text-success external" data-phrase="Open documentation"></a>
+                  <div id="modalScriptsEditDescRow" class="mb-3 row">
+                    <label class="col-sm-4 col-form-label"></label>
+                    <div class="col-sm-8">
+                      <a id="modalScriptsEditLink" href="#" target="_blank" class="external text-success" data-phrase="Documentation"></a>
+                    </div>
+                  </div>
+                  <div class="mb-3 row">
+                    <label class="col-sm-4 col-form-label" for="modalScriptsOrderInput" data-phrase="Order"></label>
+                    <div class="col-sm-8">
+                      <input id="modalScriptsOrderInput" class="form-control"/>
+                      <div class="invalid-feedback" data-phrase="Invalid script order"></div>
+                      <small class="help" data-phrase="helpScriptOrder"></small>
                     </div>
                   </div>
                 </div>
-                <div class="btn-group mt-2 me-2">
-                  <button id="modalScriptsAddFunctionBtn" data-title-phrase="Insert function" class="btn btn-secondary dropdown-toggle mi" type="button" data-bs-toggle="dropdown">functions</button>
-                  <div class="dropdown-menu px-2" id="modalScriptsAddFunctionDropdown">
-                    <form>
+                <div class="col-lg-1"></div>
+                <div class="col-lg-6">
+                  <div class="mb-3 row">
+                    <label class="col-sm-4 col-form-label" for="modalScriptsAddArgumentInput" data-phrase="Arguments"></label>
+                    <div class="col-sm-8">
                       <div class="input-group">
-                        <select class="form-select" id="modalScriptsFunctionSelect"></select>
-                        <button class="btn btn-success mi" data-href='{"cmd":"addScriptFunction","options":["event"]}' data-title-phrase="Add">add</button>
+                        <input id="modalScriptsAddArgumentInput" class="form-control"/>
+                        <button class="btn btn-secondary rounded-end" id="addScriptArgument" data-href='{"cmd": "addScriptArgument", "options": []}'>+</button>
+                        <div class="invalid-feedback" data-phrase="Invalid script argument"></div>
                       </div>
-                      <div id="modalScriptsFunctionDesc" class="mt-2 ps-1"></div>
-                    </form>
+                      <select class="mt-2 form-select" id="modalScriptsArgumentsInput" size="3"></select>
+                      <small class="help" data-phrase="helpScriptArguments"></small>
+                    </div>
                   </div>
                 </div>
-                <div class="btn-group mt-2 me-2">
-                  <button data-title-phrase="Validate" data-href='{"cmd":"validateScript","options":["target"]}' type="button" class="btn btn-secondary mi">check</button>
+              </div>
+              <div>
+                <div class="toolbar mb-1 border-top pt-2">
+                  <div class="btn-group me-2">
+                    <button id="modalScriptsAddAPIcallBtn" data-title-phrase="Insert API call" class="btn btn-sm btn-secondary dropdown-toggle mi" type="button" data-bs-toggle="dropdown">api</button>
+                    <div class="dropdown-menu px-2" id="modalScriptsAddAPIcallDropdown">
+                      <form>
+                        <div class="input-group">
+                          <select class="form-select" id="modalScriptsAPIcallSelect"></select>
+                          <button class="btn btn-success mi" data-href='{"cmd":"addScriptAPIcall","options":["event"]}' data-title-phrase="Add">add</button>
+                        </div>
+                        <div id="modalScriptsAPIdesc" class="mt-2 ps-1"></div>
+                      </form>
+                      <div class="mt-2 ps-1">
+                        <a target="_blank" rel="noreferrer" href="https://jcorporation.github.io/myMPD/060-references/api/methods/" class="text-success external" data-phrase="Open documentation"></a>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="btn-group me-2">
+                    <button id="modalScriptsAddFunctionBtn" data-title-phrase="Insert function" class="btn btn-sm btn-secondary dropdown-toggle mi" type="button" data-bs-toggle="dropdown">functions</button>
+                    <div class="dropdown-menu px-2" id="modalScriptsAddFunctionDropdown">
+                      <form>
+                        <div class="input-group">
+                          <select class="form-select" id="modalScriptsFunctionSelect"></select>
+                          <button class="btn btn-success mi" data-href='{"cmd":"addScriptFunction","options":["event"]}' data-title-phrase="Add">add</button>
+                        </div>
+                        <div id="modalScriptsFunctionDesc" class="mt-2 ps-1"></div>
+                      </form>
+                    </div>
+                  </div>
+                  <div class="btn-group me-2">
+                    <button data-title-phrase="Validate" data-href='{"cmd":"validateScript","options":["target"]}' type="button" class="btn btn-sm btn-secondary mi">check</button>
+                  </div>
+                  <div class="btn-group me-2">
+                    <button id="modalScriptsUpdateBtn" data-title-phrase="Update" data-href='{"cmd":"updateScript","options":["target"]}' type="button" class="btn btn-sm btn-secondary mi">refresh</button>
+                  </div>
                 </div>
-                <div class="btn-group mt-2 me-2">
-                  <button id="modalScriptsUpdateBtn" data-title-phrase="Update" data-href='{"cmd":"updateScript","options":["target"]}' type="button" class="btn btn-secondary mi">refresh</button>
-                </div>
+                <textarea class="form-control font-monospace border-secondary" id="modalScriptsContentInput" rows="10" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
               </div>
             </div>
             <div class="tab-pane active" id="modalScriptsListTab">
@@ -2404,7 +2417,7 @@
           </div>
         </div>
         <div id="modalScriptAPIfooter" class="modal-footer justify-content-between">
-          <button data-href='{"cmd":"showListScripts","options":[]}' type="button" class="btn btn-secondary" data-phrase="Cancel"></button>
+          <button data-href='{"cmd":"hideModalScriptAPItab","options":[]}' type="button" class="btn btn-secondary" data-phrase="Cancel"></button>
         </div>
         <div id="modalScriptsListFooter" class="modal-footer justify-content-between">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-phrase="Close"></button>
@@ -2765,15 +2778,25 @@
             <div class="invalid-feedback" data-phrase="Invalid refresh interval"></div>
           </div>
         </div>
-        <div class="mb-3 row">
-          <label class="col-sm-4 col-form-label" for="modalHomeWidgetScriptInput" data-phrase="Script"></label>
-          <div class="col-sm-8">
-            <select id="modalHomeWidgetScriptInput" class="form-select"></select>
+        <div id="modalHomeWidgetIframe">
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label" for="modalHomeWidgetUriInput" data-phrase="URI"></label>
+            <div class="col-sm-8">
+              <input id="modalHomeWidgetUriInput" class="form-control"/>
+            </div>
           </div>
         </div>
-        <div class="mb-3 row">
-          <label class="col-sm-4 col-form-label" data-phrase="Arguments"></label>
-          <div class="col-sm-8" id="modalHomeWidgetArgumentsInput"></div>
+        <div id="modalHomeWidgetScript">
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label" for="modalHomeWidgetScriptInput" data-phrase="Script"></label>
+            <div class="col-sm-8">
+              <select id="modalHomeWidgetScriptInput" class="form-select"></select>
+            </div>
+          </div>
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label" data-phrase="Arguments"></label>
+            <div class="col-sm-8" id="modalHomeWidgetArgumentsInput"></div>
+          </div>
         </div>
       </div>
       <div class="modal-footer justify-content-between">
@@ -3379,6 +3402,7 @@
 <!--debug-->  <script src="js/viewQueueLastPlayed.js"></script>
 <!--debug-->  <script src="js/viewSearch.js"></script>
 <!--debug-->  <script src="js/websocket.js"></script>
+<script src="custom.js"></script>
 <!-- This must be the last javascript include -->
 <!--debug-->  <script src="js/init.js"></script>
 <!--release   <script src="js/combined.js"></script>-->

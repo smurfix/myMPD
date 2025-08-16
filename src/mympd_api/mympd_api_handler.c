@@ -20,15 +20,17 @@
 #include "src/lib/mympd_state.h"
 #include "src/lib/sds_extras.h"
 #include "src/lib/smartpls.h"
+#include "src/lib/thread.h"
 #include "src/lib/timer.h"
 #include "src/lib/utility.h"
 #include "src/lib/validate.h"
 #include "src/lib/webradio.h"
 #include "src/mympd_api/albumart.h"
-#include "src/mympd_api/browse.h"
+#include "src/mympd_api/albums.h"
 #include "src/mympd_api/channel.h"
 #include "src/mympd_api/database.h"
 #include "src/mympd_api/filesystem.h"
+#include "src/mympd_api/folderart.h"
 #include "src/mympd_api/home.h"
 #include "src/mympd_api/jukebox.h"
 #include "src/mympd_api/last_played.h"
@@ -37,6 +39,7 @@
 #include "src/mympd_api/outputs.h"
 #include "src/mympd_api/partitions.h"
 #include "src/mympd_api/pictures.h"
+#include "src/mympd_api/playlistart.h"
 #include "src/mympd_api/playlists.h"
 #include "src/mympd_api/queue.h"
 #include "src/mympd_api/requests.h"
@@ -48,6 +51,7 @@
 #include "src/mympd_api/status.h"
 #include "src/mympd_api/sticker.h"
 #include "src/mympd_api/tagart.h"
+#include "src/mympd_api/tags.h"
 #include "src/mympd_api/timer.h"
 #include "src/mympd_api/timer_handlers.h"
 #include "src/mympd_api/trigger.h"
@@ -70,6 +74,7 @@
     #include "src/mympd_api/lua_mympd_state.h"
 #endif
 
+#include <assert.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -244,12 +249,11 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
         case MYMPD_API_STATS:
             response->data = mympd_api_stats_get(partition_state, response->data, request->id);
             break;
-    // Tagart
-        case INTERNAL_API_TAGART:
-            if (json_get_string(request->data, "$.params.tag", 1, NAME_LEN_MAX, &sds_buf1, vcb_ismpdtag, &parse_error) == true &&
-                json_get_string(request->data, "$.params.value", 1, NAME_LEN_MAX, &sds_buf2, vcb_isname, &parse_error) == true)
+    // Folderart
+        case INTERNAL_API_FOLDERART:
+            if (json_get_string(request->data, "$.params.path", 1, NAME_LEN_MAX, &sds_buf1, vcb_isfilepath, &parse_error) == true)
             {
-                response->data = mympd_api_tagart(mympd_state, partition_state, response->data, request->id, request->conn_id, sds_buf1, sds_buf2);
+                response->data = mympd_api_folderart(mympd_state, partition_state, response->data, request->id, request->conn_id, sds_buf1);
                 if (sdslen(response->data) == 0) {
                     // response must be send by triggered script
                     async = true;
@@ -258,6 +262,34 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 }
             }
             break;
+    // Playlistart
+    case INTERNAL_API_PLAYLISTART:
+    if (json_get_string(request->data, "$.params.name", 1, NAME_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true &&
+        json_get_string(request->data, "$.params.type", 1, NAME_LEN_MAX, &sds_buf2, vcb_isname, &parse_error) == true)
+    {
+        response->data = mympd_api_playlistart(mympd_state, partition_state, response->data, request->id, request->conn_id, sds_buf1, sds_buf2);
+        if (sdslen(response->data) == 0) {
+            // response must be send by triggered script
+            async = true;
+            // we do not pass the request to the script thread
+            free_request(request);
+        }
+    }
+    break;
+    // Tagart
+    case INTERNAL_API_TAGART:
+    if (json_get_string(request->data, "$.params.tag", 1, NAME_LEN_MAX, &sds_buf1, vcb_ismpdtag, &parse_error) == true &&
+        json_get_string(request->data, "$.params.value", 1, NAME_LEN_MAX, &sds_buf2, vcb_isname, &parse_error) == true)
+    {
+        response->data = mympd_api_tagart(mympd_state, partition_state, response->data, request->id, request->conn_id, sds_buf1, sds_buf2);
+        if (sdslen(response->data) == 0) {
+            // response must be send by triggered script
+            async = true;
+            // we do not pass the request to the script thread
+            free_request(request);
+        }
+    }
+    break;
     // Albumart
         case INTERNAL_API_ALBUMART_BY_URI:
             if (json_get_string(request->data, "$.params.uri", 1, FILEPATH_LEN_MAX, &sds_buf1, vcb_isfilepath, &parse_error) == true) {
@@ -279,7 +311,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
             }
             break;
     // Home screen
-        case MYMPD_API_HOME_WIDGET_SAVE: {
+        case MYMPD_API_HOME_WIDGET_SCRIPT_SAVE: {
             if (mympd_state->home_list.length > LIST_HOME_ICONS_MAX) {
                 response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
                         JSONRPC_FACILITY_HOME, JSONRPC_SEVERITY_ERROR, "Too many home icons");
@@ -295,7 +327,8 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 json_get_object_string(request->data, "$.params.arguments", &options, vcb_isname, vcb_isname, 10, &parse_error) == true &&
                 json_get_uint(request->data, "$.params.refresh", 0, HOME_WIDGET_REFRESH_MAX, &uint_buf2, &parse_error) == true)
             {
-                rc = mympd_api_home_widget_save(&mympd_state->home_list, bool_buf1, uint_buf1, sds_buf1, uint_buf2, sds_buf3, sds_buf2, &options);
+                rc = mympd_api_home_widget_save(&mympd_state->home_list, bool_buf1, uint_buf1, HOME_WIDGET_SCRIPT,
+                        sds_buf1, uint_buf2, sds_buf3, sds_buf2, &options);
                 response->data = jsonrpc_respond_with_ok_or_error(response->data, request->cmd_id, request->id, rc,
                         JSONRPC_FACILITY_HOME, "Can not save widget");
                 if (rc == true) {
@@ -303,6 +336,29 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 }
             }
             list_clear(&options);
+            break;
+        }
+        case MYMPD_API_HOME_WIDGET_IFRAME_SAVE: {
+            if (mympd_state->home_list.length > LIST_HOME_ICONS_MAX) {
+                response->data = jsonrpc_respond_message(response->data, request->cmd_id, request->id,
+                        JSONRPC_FACILITY_HOME, JSONRPC_SEVERITY_ERROR, "Too many home icons");
+                break;
+            }
+            if (json_get_bool(request->data, "$.params.replace", &bool_buf1, &parse_error) == true &&
+                json_get_uint(request->data, "$.params.oldpos", 0, LIST_HOME_ICONS_MAX, &uint_buf1, &parse_error) == true &&
+                json_get_string(request->data, "$.params.name", 1, NAME_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true &&
+                json_get_string(request->data, "$.params.uri", 1, NAME_LEN_MAX, &sds_buf2, vcb_isname, &parse_error) == true &&
+                json_get_string(request->data, "$.params.size", 1, NAME_LEN_MAX, &sds_buf3, vcb_isalnum, &parse_error) == true &&
+                json_get_uint(request->data, "$.params.refresh", 0, HOME_WIDGET_REFRESH_MAX, &uint_buf2, &parse_error) == true)
+            {
+                rc = mympd_api_home_widget_save(&mympd_state->home_list, bool_buf1, uint_buf1, HOME_WIDGET_IFRAME,
+                        sds_buf1, uint_buf2, sds_buf3, sds_buf2, NULL);
+                response->data = jsonrpc_respond_with_ok_or_error(response->data, request->cmd_id, request->id, rc,
+                        JSONRPC_FACILITY_HOME, "Can not save widget");
+                if (rc == true) {
+                    send_jsonrpc_event(JSONRPC_EVENT_UPDATE_HOME, MPD_PARTITION_ALL);
+                }
+            }
             break;
         }
         case MYMPD_API_HOME_ICON_SAVE: {
@@ -854,7 +910,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
         case MYMPD_API_STICKER_DELETE:
             if (json_get_string(request->data, "$.params.uri", 1, FILEPATH_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true &&
                 json_get_string(request->data, "$.params.type", 1, NAME_LEN_MAX, &sds_buf2, vcb_ismpdstickertype, &parse_error) == true &&
-                json_get_string(request->data, "$.params.name", 0, NAME_LEN_MAX, &sds_buf3, vcb_isname, &parse_error) == true)
+                json_get_string(request->data, "$.params.name", 0, NAME_LEN_MAX, &sds_buf3, vcb_isstickername, &parse_error) == true)
             {
                 enum mympd_sticker_type type = mympd_sticker_type_name_parse(sds_buf2);
                 sds_buf1 = mympd_api_get_sticker_uri(mympd_state, sds_buf1, &type);
@@ -866,7 +922,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
         case MYMPD_API_STICKER_GET:
             if (json_get_string(request->data, "$.params.uri", 1, FILEPATH_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true &&
                 json_get_string(request->data, "$.params.type", 1, NAME_LEN_MAX, &sds_buf2, vcb_ismpdstickertype, &parse_error) == true &&
-                json_get_string(request->data, "$.params.name", 0, NAME_LEN_MAX, &sds_buf3, vcb_isname, &parse_error) == true)
+                json_get_string(request->data, "$.params.name", 0, NAME_LEN_MAX, &sds_buf3, vcb_isstickername, &parse_error) == true)
             {
                 enum mympd_sticker_type type = mympd_sticker_type_name_parse(sds_buf2);
                 sds_buf1 = mympd_api_get_sticker_uri(mympd_state, sds_buf1, &type);
@@ -877,7 +933,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
         case MYMPD_API_STICKER_FIND:
             if (json_get_string(request->data, "$.params.uri", 0, FILEPATH_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true &&
                 json_get_string(request->data, "$.params.type", 1, NAME_LEN_MAX, &sds_buf2, vcb_ismpdstickertype, &parse_error) == true &&
-                json_get_string(request->data, "$.params.name", 1, NAME_LEN_MAX, &sds_buf3, vcb_isname, &parse_error) == true &&
+                json_get_string(request->data, "$.params.name", 1, NAME_LEN_MAX, &sds_buf3, vcb_isstickername, &parse_error) == true &&
                 json_get_string(request->data, "$.params.op", 1, NAME_LEN_MAX, &sds_buf4, vcb_isstickerop, &parse_error) == true &&
                 json_get_string(request->data, "$.params.value", 0, NAME_LEN_MAX, &sds_buf5, vcb_isname, &parse_error) == true &&
                 json_get_string(request->data, "$.params.sort", 1, NAME_LEN_MAX, &sds_buf6, vcb_isstickersort, &parse_error) == true &&
@@ -909,7 +965,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
         case MYMPD_API_STICKER_SET:
             if (json_get_string(request->data, "$.params.uri", 1, FILEPATH_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true &&
                 json_get_string(request->data, "$.params.type", 1, NAME_LEN_MAX, &sds_buf2, vcb_ismpdstickertype, &parse_error) == true &&
-                json_get_string(request->data, "$.params.name", 0, NAME_LEN_MAX, &sds_buf3, vcb_isname, &parse_error) == true &&
+                json_get_string(request->data, "$.params.name", 0, NAME_LEN_MAX, &sds_buf3, vcb_isstickername, &parse_error) == true &&
                 json_get_string(request->data, "$.params.value", 0, NAME_LEN_MAX, &sds_buf4, vcb_isname, &parse_error) == true)
             {
                 enum mympd_sticker_type type = mympd_sticker_type_name_parse(sds_buf2);
@@ -922,7 +978,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
         case MYMPD_API_STICKER_DEC:
             if (json_get_string(request->data, "$.params.uri", 1, FILEPATH_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true &&
                 json_get_string(request->data, "$.params.type", 1, NAME_LEN_MAX, &sds_buf2, vcb_ismpdstickertype, &parse_error) == true &&
-                json_get_string(request->data, "$.params.name", 0, NAME_LEN_MAX, &sds_buf3, vcb_isname, &parse_error) == true &&
+                json_get_string(request->data, "$.params.name", 0, NAME_LEN_MAX, &sds_buf3, vcb_isstickername, &parse_error) == true &&
                 json_get_uint_max(request->data, "$.params.value", &uint_buf1, &parse_error) == true)
             {
                 enum mympd_sticker_type type = mympd_sticker_type_name_parse(sds_buf2);
@@ -935,7 +991,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
         case MYMPD_API_STICKER_INC:
             if (json_get_string(request->data, "$.params.uri", 1, FILEPATH_LEN_MAX, &sds_buf1, vcb_isname, &parse_error) == true &&
                 json_get_string(request->data, "$.params.type", 1, NAME_LEN_MAX, &sds_buf2, vcb_ismpdstickertype, &parse_error) == true &&
-                json_get_string(request->data, "$.params.name", 0, NAME_LEN_MAX, &sds_buf3, vcb_isname, &parse_error) == true &&
+                json_get_string(request->data, "$.params.name", 0, NAME_LEN_MAX, &sds_buf3, vcb_isstickername, &parse_error) == true &&
                 json_get_uint_max(request->data, "$.params.value", &uint_buf1, &parse_error) == true)
             {
                 enum mympd_sticker_type type = mympd_sticker_type_name_parse(sds_buf2);
@@ -963,7 +1019,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 break;
             }
             if (json_get_string(request->data, "$.params.type", 1, NAME_LEN_MAX, &sds_buf1, vcb_ismpdstickertype, &parse_error) == true &&
-                json_get_string(request->data, "$.params.searchstr", 0, NAME_LEN_MAX, &sds_buf2, vcb_isname, &parse_error) == true)
+                json_get_string(request->data, "$.params.searchstr", 0, NAME_LEN_MAX, &sds_buf2, vcb_issearchexpression_song, &parse_error) == true)
             {
                 enum mympd_sticker_type type = mympd_sticker_type_name_parse(sds_buf1);
                 type = mympd_api_get_mpd_sticker_type(type);
@@ -1060,7 +1116,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
             struct t_list tags;
             list_init(&tags);
             if (json_get_string(request->data, "$.params.uri", 1, URI_LENGTH_MAX, &sds_buf1, vcb_isstreamuri, &parse_error) &&
-                json_get_object_string(request->data, "$.params.tags", &tags, vcb_ismpdtag, vcb_isname, 20, &parse_error) == true &&
+                json_get_object_string(request->data, "$.params.tags", &tags, vcb_ismpdtag, vcb_isname, FIELDS_MAX, &parse_error) == true &&
                 json_get_bool(request->data, "$.params.play", &bool_buf1, &parse_error) == true)
             {
                 rc = (request->cmd_id == MYMPD_API_QUEUE_APPEND_URI_TAGS
@@ -1078,7 +1134,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
             struct t_list tags;
             list_init(&tags);
             if (json_get_string(request->data, "$.params.uri", 1, URI_LENGTH_MAX, &sds_buf1, vcb_isstreamuri, &parse_error) &&
-                json_get_object_string(request->data, "$.params.tags", &tags, vcb_ismpdtag, vcb_isname, 20, &parse_error) == true &&
+                json_get_object_string(request->data, "$.params.tags", &tags, vcb_ismpdtag, vcb_isname, FIELDS_MAX, &parse_error) == true &&
                 json_get_uint(request->data, "$.params.to", 0, MPD_PLAYLIST_LENGTH_MAX, &uint_buf1, &parse_error) == true &&
                 json_get_uint(request->data, "$.params.whence", 0, 2, &uint_buf2, &parse_error) == true &&
                 json_get_bool(request->data, "$.params.play", &bool_buf1, &parse_error) == true)
@@ -1141,7 +1197,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 json_get_bool(request->data, "$.params.play", &bool_buf1, &parse_error) == true)
             {
                 rc = mympd_api_queue_insert(partition_state, &uris, uint_buf1, uint_buf2, &error) &&
-                    mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
+                     mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
                 response->data = jsonrpc_respond_with_message_or_error(response->data, request->cmd_id, request->id, rc,
                             JSONRPC_FACILITY_QUEUE, "Queue updated", error);
             }
@@ -1173,7 +1229,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 json_get_int(request->data, "$.params.end", -1, MPD_PLAYLIST_LENGTH_MAX, &int_buf1, &parse_error) == true)
             {
                 rc = mympd_api_queue_insert_plist_range(partition_state, sds_buf1, uint_buf1, uint_buf2, uint_buf3, int_buf1, &error) &&
-                    mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
+                     mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
                 response->data = jsonrpc_respond_with_message_or_error(response->data, request->cmd_id, request->id, rc,
                         JSONRPC_FACILITY_QUEUE, "Queue updated", error);
             }
@@ -1205,7 +1261,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 json_get_bool(request->data, "$.params.play", &bool_buf1, &parse_error) == true)
             {
                 rc = mympd_api_queue_insert_plists(partition_state, &plists, uint_buf1, uint_buf2, &error) &&
-                    mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
+                     mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
                 response->data = jsonrpc_respond_with_message_or_error(response->data, request->cmd_id, request->id, rc,
                         JSONRPC_FACILITY_QUEUE, "Queue updated", error);
             }
@@ -1221,7 +1277,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 json_get_bool(request->data, "$.params.play", &bool_buf2, &parse_error) == true)
             {
                 rc = mympd_api_queue_insert_search(partition_state, sds_buf1, uint_buf1, uint_buf2, sds_buf2, bool_buf1, &error) &&
-                        mympd_client_queue_check_start_play(partition_state, bool_buf2, &error);
+                     mympd_client_queue_check_start_play(partition_state, bool_buf2, &error);
                 response->data = jsonrpc_respond_with_message_or_error(response->data, request->cmd_id, request->id, rc,
                         JSONRPC_FACILITY_QUEUE, "Queue updated", error);
             }
@@ -1267,7 +1323,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 json_get_bool(request->data, "$.params.play", &bool_buf1, &parse_error) == true)
             {
                 rc = mympd_api_queue_insert_albums(partition_state, &mympd_state->album_cache, &albumids, uint_buf1, uint_buf2, &error) &&
-                    mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
+                     mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
                 response->data = jsonrpc_respond_with_message_or_error(response->data, request->cmd_id, request->id, rc,
                         JSONRPC_FACILITY_QUEUE, "Queue updated", error);
             }
@@ -1301,7 +1357,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
             {
                 enum mpd_tag_type tag = mpd_tag_name_iparse(sds_buf2);
                 rc = mympd_api_queue_insert_album_tag(partition_state, &mympd_state->album_cache, sds_buf1, tag, sds_buf3, uint_buf1, uint_buf2, &error) &&
-                    mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
+                     mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
                 response->data = jsonrpc_respond_with_message_or_error(response->data, request->cmd_id, request->id, rc,
                         JSONRPC_FACILITY_QUEUE, "Queue updated", error);
             }
@@ -1332,7 +1388,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 json_get_bool(request->data, "$.params.play", &bool_buf1, &parse_error) == true)
             {
                 rc = mympd_api_queue_insert_album_range(partition_state, &mympd_state->album_cache, sds_buf1, uint_buf3, int_buf1, uint_buf1, uint_buf2, &error) &&
-                    mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
+                     mympd_client_queue_check_start_play(partition_state, bool_buf1, &error);
                 response->data = jsonrpc_respond_with_message_or_error(response->data, request->cmd_id, request->id, rc,
                         JSONRPC_FACILITY_QUEUE, "Queue updated", error);
             }
@@ -1774,7 +1830,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 json_get_string(request->data, "$.params.tag", 1, NAME_LEN_MAX, &sds_buf2, vcb_ismpdtag_or_any, &parse_error) == true &&
                 json_get_bool(request->data, "$.params.sortdesc", &bool_buf1, &parse_error) == true)
             {
-                response->data = mympd_api_browse_tag_list(partition_state, response->data, request->id,
+                response->data = mympd_api_tag_list(partition_state, response->data, request->id,
                         sds_buf1, sds_buf2, uint_buf1, uint_buf2, bool_buf1);
             }
             break;
@@ -1788,7 +1844,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
                 json_get_bool(request->data, "$.params.sortdesc", &bool_buf1, &parse_error) == true &&
                 json_get_fields(request->data, "$.params.fields", &tagcols, FIELDS_MAX, &parse_error) == true)
             {
-                response->data = mympd_api_browse_album_list(mympd_state, partition_state, response->data, request->id,
+                response->data = mympd_api_album_list(mympd_state, partition_state, response->data, request->id,
                         sds_buf1, sds_buf2, bool_buf1, uint_buf1, uint_buf2, &tagcols);
             }
             break;
@@ -1799,7 +1855,7 @@ void mympd_api_handler(struct t_mympd_state *mympd_state, struct t_partition_sta
             if (json_get_string(request->data, "$.params.albumid", 1, NAME_LEN_MAX, &sds_buf1, vcb_isalnum, &parse_error) == true &&
                 json_get_fields(request->data, "$.params.fields", &tagcols, FIELDS_MAX, &parse_error) == true)
             {
-                response->data = mympd_api_browse_album_detail(mympd_state, partition_state, response->data, request->id, sds_buf1, &tagcols);
+                response->data = mympd_api_album_detail(mympd_state, partition_state, response->data, request->id, sds_buf1, &tagcols);
             }
             break;
         }

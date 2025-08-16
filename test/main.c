@@ -13,12 +13,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-//message queues
-struct t_mympd_queue *webserver_queue;
-struct t_mympd_queue *mympd_api_queue;
-struct t_mympd_queue *script_queue;
-struct t_mympd_queue *script_worker_queue;
-
 UTEST_STATE();
 
 sds workdir;
@@ -26,6 +20,7 @@ sds workdir;
 int main(int argc, const char *const argv[]) {
     thread_logname = sdsempty();
     set_loglevel(7);
+    log_type = LOG_TO_STDOUT;
     workdir = sdsnew("/tmp/mympd-test");
 
     //utest main

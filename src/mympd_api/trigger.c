@@ -94,6 +94,8 @@ static const char *const mympd_event_names[] = {
     "mympd_jukebox",
     "mympd_smartpls",
     "mympd_bgimage",
+    "mympd_playlistart",
+    "mympd_folderart",
     NULL
 };
 
@@ -270,6 +272,7 @@ bool mympd_api_trigger_save(struct t_list *trigger_list, sds name, int trigger_i
     if (rc == false) {
         *error = sdscat(*error, "Could not save trigger");
     }
+    list_sort_by_key(trigger_list, LIST_SORT_ASC);
     return rc;
 }
 
@@ -444,8 +447,9 @@ bool mympd_api_trigger_file_read(struct t_list *trigger_list, sds workdir) {
     }
     FREE_SDS(line);
     (void) fclose(fp);
-    MYMPD_LOG_INFO(NULL, "Read %u triggers(s) from disc", trigger_list->length);
     FREE_SDS(trigger_file);
+    MYMPD_LOG_INFO(NULL, "Read %u triggers(s) from disc", trigger_list->length);
+    list_sort_by_key(trigger_list, LIST_SORT_ASC);
     return true;
 }
 

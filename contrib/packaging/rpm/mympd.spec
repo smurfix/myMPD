@@ -4,7 +4,7 @@
 # (c) 2018-2025 Juergen Mang <mail@jcgames.de>
 
 Name:           mympd
-Version:        21.0.0
+Version:        22.0.4
 Release:        0
 License:        GPL-3.0-or-later
 Group:          Productivity/Multimedia/Sound/Players
@@ -15,6 +15,8 @@ Source:         mympd-%{version}.tar.gz
 BuildRequires:  cmake
 BuildRequires:	flac-devel
 BuildRequires:  gcc
+BuildRequires:  gzip
+BuildRequires:  jq
 BuildRequires:  libid3tag-devel
 BuildRequires:  lua-devel
 BuildRequires:  openssl-devel
@@ -22,8 +24,6 @@ BuildRequires:  pcre2-devel
 BuildRequires:  perl
 BuildRequires:  pkgconfig
 BuildRequires:  unzip
-BuildRequires:  gzip
-BuildRequires:  jq
 Requires: newt
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
@@ -65,5 +65,5 @@ fi
 %license LICENSE.md
 
 %changelog
-* Fri Apr 25 2025 Juergen Mang <mail@jcgames.de> 21.0.0-0
+* Sat Aug 09 2025 Juergen Mang <mail@jcgames.de> 22.0.4-0
 - Version from master

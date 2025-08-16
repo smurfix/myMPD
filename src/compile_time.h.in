@@ -15,7 +15,6 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <openssl/opensslv.h>
-#include <signal.h>
 
 //build options
 #cmakedefine MYMPD_EMBEDDED_ASSETS
@@ -69,21 +68,6 @@
 #define MYMPD_CACHE_DIR "${MYMPD_CACHE_DIR}"
 #define MYMPD_LUALIBS_PATH "${MYMPD_LUALIBS_PATH}"
 
-//global variables
-extern _Atomic int mympd_worker_threads;
-#ifdef MYMPD_ENABLE_LUA
-    extern _Atomic int script_worker_threads;
-#endif
-//signal handler
-extern sig_atomic_t s_signal_received;
-//message queues
-extern struct t_mympd_queue *webserver_queue;
-extern struct t_mympd_queue *mympd_api_queue;
-#ifdef MYMPD_ENABLE_LUA
-    extern struct t_mympd_queue *script_queue;
-    extern struct t_mympd_queue *script_worker_queue;
-#endif
-
 //standard file names and folders
 #define FILENAME_ALBUMCACHE "album_cache.mpack"
 #define FILENAME_HOME "home_list"
@@ -94,6 +78,9 @@ extern struct t_mympd_queue *mympd_api_queue;
 #define FILENAME_WEBRADIODB "webradiodb.mpack"
 #define FILENAME_WEBRADIO_FAVORITES "webradio_favorites.mpack"
 #define FILENAME_SCRIPTVARS "scriptvars_list"
+
+#define FILENAME_CUSTOM_CSS "custom.css"
+#define FILENAME_CUSTOM_JS "custom.js"
 
 #define DIR_CACHE_COVER "cover"
 #define DIR_CACHE_HTTP "http"
@@ -119,32 +106,10 @@ extern struct t_mympd_queue *mympd_api_queue;
 #define MPD_PARTITION_ALL "!all!"
 
 //default configuration
-#define CFG_MYMPD_USER "mympd"
-#define CFG_MYMPD_HTTP true
 #define CFG_MYMPD_HTTP_HOST_IPV4 "0.0.0.0"
 #define CFG_MYMPD_HTTP_HOST_IPV6 "[::]"
-#define CFG_MYMPD_HTTP_PORT 80
-#define CFG_MYMPD_SSL true
-#define CFG_MYMPD_SSL_PORT 443
-#define CFG_MYMPD_SSL_SAN ""
-#define CFG_MYMPD_CUSTOM_CERT false
-#define CFG_MYMPD_ACL ""
-#define CFG_MYMPD_SCRIPTACL "+127.0.0.0/8"
-#define CFG_MYMPD_LOGLEVEL 5 //notice
-#define CFG_MYMPD_PIN_HASH ""
-#define CFG_MYMPD_URI "auto"
-#define CFG_MYMPD_SAVE_CACHES true
 #define CFG_MYMPD_LOG_TO_SYSLOG false
-#define CFG_MYMPD_CACHE_COVER_KEEP_DAYS 31
-#define CFG_MYMPD_CACHE_HTTP_KEEP_DAYS 31
-#define CFG_MYMPD_CACHE_LYRICS_KEEP_DAYS 31
-#define CFG_MYMPD_CACHE_THUMBS_KEEP_DAYS 31
-#define CFG_MYMPD_CACHE_MISC_KEEP_DAYS 1
-#define CFG_MYMPD_ALBUM_MODE "adv"
-#define CFG_MYMPD_ALBUM_GROUP_TAG "Date"
-#define CFG_MYMPD_STICKERS true
-#define CFG_MYMPD_STICKERS_PAD_INT false
-#define CFG_MYMPD_WEBRADIODB true
+#define CFG_MYMPD_LOGLEVEL 5
 
 //default partition state settings
 #define PARTITION_HIGHLIGHT_COLOR "#28a745"
@@ -225,7 +190,7 @@ extern struct t_mympd_queue *mympd_api_queue;
 #define EXTRA_HEADERS_MISC "X-Content-Type-Options: nosniff\r\n"\
     "Access-Control-Allow-Origin: *\r\n"
 
-#define EXTRA_HEADERS_PERMISSIONS_POLICY "Permissions-Policy: autoplay=(self), fullscreen=(self)\r\n"
+#define EXTRA_HEADERS_PERMISSIONS_POLICY "Permissions-Policy: autoplay=(self), fullscreen=(self), microphone=(self)\r\n"
 
 #define EXTRA_HEADERS_UNSAFE "Content-Security-Policy: default-src 'none'; "\
     "style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self' 'unsafe-inline'; img-src * data:; "\
@@ -238,7 +203,7 @@ extern struct t_mympd_queue *mympd_api_queue;
 #define EXTRA_HEADERS_SAFE "Content-Security-Policy: default-src 'none'; "\
     "style-src 'self'; font-src 'self'; script-src 'self'; img-src 'self' data:; "\
     "connect-src 'self' ws: wss:; manifest-src 'self'; "\
-    "media-src *; frame-ancestors *; base-uri 'none'; "\
+    "media-src *; frame-src *; frame-ancestors *; base-uri 'none'; "\
     "require-trusted-types-for 'script'\r\n"\
     EXTRA_HEADERS_PERMISSIONS_POLICY\
     EXTRA_HEADERS_MISC
@@ -248,6 +213,14 @@ extern struct t_mympd_queue *mympd_api_queue;
 
 #define EXTRA_HEADERS_IMAGE EXTRA_HEADERS_MISC\
     EXTRA_HEADERS_CACHE
+
+#define EXTRA_HEADERS_CSS EXTRA_HEADERS_MISC\
+    EXTRA_HEADERS_CACHE\
+    "Content-Type: text/css; charset=utf-8\r\n"
+
+#define EXTRA_HEADERS_JS EXTRA_HEADERS_MISC\
+    EXTRA_HEADERS_CACHE\
+    "Content-Type: text/javascript; charset=utf-8\r\n"
 
 #define EXTRA_HEADERS_PLACEHOLDER EXTRA_HEADERS_IMAGE "X-myMPD-Placeholder: 1\r\n"
 
@@ -300,10 +273,15 @@ extern struct t_mympd_queue *mympd_api_queue;
     #define CERT_KEY_LENGTH CERT_KEY_LENGTH_RSA
 #endif
 
+#define CFG_MYMPD_CERT_CHECK true
+
+#define CACERT_STORE_SIZE_MAX 1048576
+#define CUSTOM_CSS_JS_SIZE_MAX 1048576
+
 //http limits
 #define HTTP_CONNECTIONS_MAX 100
 #define URI_LENGTH_MAX 2048
-#define BODY_SIZE_MAX 8192 //bytes
+#define BODY_SIZE_MAX 16384 //bytes
 #define WS_PING_TIMEOUT 300 // seconds
 
 //session limits
@@ -314,7 +292,7 @@ extern struct t_mympd_queue *mympd_api_queue;
 #define NAME_LEN_MAX 200
 #define CONTENT_LEN_MAX 102400
 #define EXPRESSION_LEN_MAX 1000
-#define FIELDS_MAX 20
+#define FIELDS_MAX 64
 
 //mpd limits
 #define MPD_OUTPUT_ID_MAX 40
@@ -340,7 +318,7 @@ extern struct t_mympd_queue *mympd_api_queue;
 #define JSONRPC_INT64_MAX INT64_MAX
 #define JSONRPC_UINT_MIN 0
 #define JSONRPC_UINT_MAX UINT_MAX
-#define JSONRPC_STR_MAX 3000
+#define JSONRPC_STR_MAX 3002  // 3000 bytes for the value + 2 bytes for escapes
 #define JSONRPC_KEY_MAX 500
 #define JSONRPC_ARRAY_MAX 1000
 #define JSONRPC_TIME_MIN 0 // Do 1. Jan 01:00:00 CET 1970
@@ -424,5 +402,14 @@ extern struct t_mympd_queue *mympd_api_queue;
 //WebradioDB
 #define WEBRADIODB_URI "https://jcorporation.github.io/webradiodb/db/index/webradios.min.json"
 #define WEBRADIODB_URI_PICS "https://jcorporation.github.io/webradiodb/db/pics/"
+
+// Script import
+#define SCRIPTS_URI_RELEASE "https://github.com/jcorporation/mympd-scripts/tree/main/"
+#define SCRIPTS_IMPORT_URI_RELEASE "https://raw.githubusercontent.com/jcorporation/mympd-scripts/main/"
+
+#define SCRIPTS_URI_DEBUG "https://github.com/jcorporation/mympd-scripts/tree/devel/"
+#define SCRIPTS_IMPORT_URI_DEBUG "https://raw.githubusercontent.com/jcorporation/mympd-scripts/devel/"
+
+#define SCRIPTS_SIGN_KEY_PUB "-----BEGIN PUBLIC KEY-----\nMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA2iMis8RxMQCR49BFqH/i\nvoc+XBjYySAvG55PDKnp7RlDShSYIe/M27UZNYaOJDUAw7SWvJwDvu+TtK+p+Caq\nwuhIKiWfRib7H3/Sk07pV1h2Q5bVzH2501s8umnpMrhZfsUhV46/QjnT6fA8/ui4\nsxQm57hDnO360OVybz7NM/8FNoclfZvJWzaxmICOcpToUDPD+e4FpuG8Dtw/F7uH\nUomQdW6kDCTAnxXMfIfTuy149x/6b5khheZW7pE3hTSBgR9VXQoRA7WUu8Vr6+0k\ntdEgX49rhteCgX2NssI1ddclI+lFrKGO3qn+90YHdWOCE3urMZ0uuLJMAtK3pQqH\na7JXCt9HRuwqWEJBedXNyJDYm2rBPaax67ItwTCaNShpcM9V75PQcWvurN6+PRSq\nR9/Maapm4Ub+GJCzLCKk1lwvxKYZBP9Zj/jYJMQ/krV0F8OoC42VyEjlheLKu3ij\nuSVcrnW0+9uVj/6naQAUHbXsINjgsk4ZFwBSp6ohPsF7L7CFH3gvi6XCxCchTCWg\nEbdYerCIxlkIqZRmQ8X8fE+YzSo/jyMvK9ptIKdd6GMj0owSpIk71iWQhw6p76tF\n1COeLBNOF+pLlJLghpONtUr/zaLMUoY21EUx1JftTMTLHupsvxDVY8t23jTfAILS\nIIxZ6n/xG1lfUI0ywKWenoMCAwEAAQ==\n-----END PUBLIC KEY-----\n"
 
 #endif

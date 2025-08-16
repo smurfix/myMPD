@@ -4,7 +4,107 @@ https://github.com/jcorporation/myMPD/
 
 ***
 
-## myMPD v21.0.0 (not yet released)
+## myMPD v22.0.4 (2025-08-09)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Upd: Restrict sticker names (forbid equal sign)
+- Fix: Really shuffle the playlist #1455
+- Fix: Relax search expression validation #1455
+- Fix: Alpine packaging
+- Fix: Detection of local playback features #1452
+
+***
+
+## myMPD v22.0.3 (2025-08-01)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Upd: Create cache und workdir in init script
+- Upd: Feature detection for local playback output selection #1452
+
+***
+
+## myMPD v22.0.2 (2025-07-17)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: MYMPD_API_JUKEBOX_RESTART requires MPD connection #1448
+
+***
+
+## myMPD v22.0.1 (2025-07-09)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Respect backgroundImage setting #1446
+- Fix: Alpine packaging
+
+***
+
+## myMPD v22.0.0 (2025-06-29)
+
+This release improves security by enabling certificate checking and verifying the signature of scripts that are imported from the mympd-scripts repository.
+
+Two new triggers enables scripting for playlist and folder art.
+
+### Notes
+
+- This release enables certificate checking for outgoing https connections. The system CA cert store should be autodetected, open an issue if it fails.
+- The startup process of myMPD was reworked. myMPD no longer drops privileges, the included startup scripts are using now the init system to do this.
+- The default listening ports are now 8080 for HTTP and 8443 for HTTPS.
+
+### API changes
+
+- MYMPD_API_SCRIPT_VERIFY_SIG: new
+- MYMPD_API_HOME_WIDGET_IFRAME_SAVE: new
+- MYMPD_API_HOME_WIDGET_SCRIPT_SAVE: new
+- MYMPD_API_HOME_WIDGET_SAVE: removed
+
+### Scripting changes
+
+- Feat: `mympd.tblvalue_in_list()` - Checks a Lua table of tags against a comma separated list.
+- Upd: Executing external scripts is now disabled by default.
+
+### Changelog
+
+- Feat: iFrames for home screen #1429
+- Feat: Feat: Add custom css and js #1428
+- Feat: Use system provided ca store for ssl certificate checking #1427
+- Feat: Sign and verify scripts from mympd-scripts repository #1426
+- Feat: Add trigger `mympd_playlistart`, `mympd_folderart`
+- Feat: Sort list of timers and triggers #1425
+- Feat: Allow changing output device with local playback #1434
+- Upd: Improve "Edit Script"-Layout
+- Upd: Bootstrap v5.3.7
+- Upd: Mongoose 7.18
+- Upd: libmympdclient 1.0.34 (libmpdclient 2.24.0)
+- Upd: Incbin
+- Upd: Replaced mjson with mongoose implementation
+- Fix: Improve MPD search expression validation #1435
+
+***
+
+## myMPD v21.0.1 (2025-05-27)
+
+This is a small bug fix release.
+
+### Changelog
+
+- Fix: Memory Leak - Free request struct on mympd_worker failure
+- Fix: Timer name can not be empty
+
+***
+
+## myMPD v21.0.0 (2025-05-11)
 
 This release supports the first new MPD 0.25 feature and improves the scripting feature.
 
@@ -27,6 +127,7 @@ Thanks to @cbrenberg that ironed out a severe bug in the `mympd.tmp_file()` func
 - Feat: `mympd.isnilorempty()` - Checks for nil and empty string
 - Feat: `mympd.remove_file()` - Wrapper for `os.remove` that logs errors
 - Fix: `mympd.tmp_file()` - Function does not return always uniq names #1422
+- Feat: Add functions `mympd.jsonrpc_notification()`, `mympd.jsonrpc_error()` and `mympd.jsonrpc_warn()` to return a jsonrpc response from scripts
 
 ### Changelog
 
@@ -39,6 +140,7 @@ Thanks to @cbrenberg that ironed out a severe bug in the `mympd.tmp_file()` func
 - Upd: Improve websocket reconnection
 - Upd: Improve API explorer - show request
 - Upd: Bootstrap v5.3.4 #1418
+- Upd: Jsonrpc severities are now the same as the syslog severities
 
 ***
 

@@ -18,9 +18,9 @@
 #include "src/lib/json/json_rpc.h"
 #include "src/lib/log.h"
 #include "src/lib/mem.h"
-#include "src/lib/mg_str_utils.h"
 #include "src/lib/msg_queue.h"
 #include "src/lib/sds_extras.h"
+#include "src/lib/signal.h"
 #include "src/lib/thread.h"
 #include "src/webserver/albumart.h"
 #include "src/webserver/folderart.h"
@@ -41,6 +41,7 @@
  * Private definitions
  */
 
+static bool read_certs(struct t_mg_user_data *mg_user_data, struct t_config *config);
 static void read_queue(struct mg_mgr *mgr);
 static bool parse_internal_message(struct t_work_response *response, struct t_mg_user_data *mg_user_data);
 static void ev_handler(struct mg_connection *nc, int ev, void *ev_data);
@@ -91,12 +92,18 @@ bool webserver_init(struct mg_mgr *mgr, struct t_config *config, struct t_mg_use
     list_init(&mg_user_data->stream_uris);
     list_init(&mg_user_data->session_list);
     mg_user_data->mympd_api_started = false;
+    mg_user_data->webradiodb = NULL;
+    mg_user_data->webradio_favorites = NULL;
+
     mg_user_data->cert_content = sdsempty();
     mg_user_data->cert = mg_str("");
     mg_user_data->key_content = sdsempty();
     mg_user_data->key = mg_str("");
-    mg_user_data->webradiodb = NULL;
-    mg_user_data->webradio_favorites = NULL;
+    if (config->ssl == true &&
+        read_certs(mg_user_data, config) == false)
+    {
+        return false;
+    }
 
     //init monogoose mgr
     mg_mgr_init(mgr);
@@ -144,48 +151,14 @@ bool webserver_init(struct mg_mgr *mgr, struct t_config *config, struct t_mg_use
 }
 
 /**
- * Reads the ssl key and certificate from disc
- * @param mg_user_data pointer to mongoose user data
- * @param config pointer to myMPD config
- * @return true on success, else false
- */
-bool webserver_read_certs(struct t_mg_user_data *mg_user_data, struct t_config *config) {
-    if (config->ssl == false) {
-        return true;
-    }
-    int nread = 0;
-    mg_user_data->cert_content = sds_getfile(mg_user_data->cert_content, config->ssl_cert, SSL_FILE_MAX, false, true, &nread);
-    if (nread <= 0) {
-        MYMPD_LOG_ERROR(NULL, "Failure reading ssl certificate from disc");
-        return false;
-    }
-    nread = 0;
-    mg_user_data->key_content = sds_getfile(mg_user_data->key_content, config->ssl_key, SSL_FILE_MAX, false, true, &nread);
-    if (nread <= 0) {
-        MYMPD_LOG_ERROR(NULL, "Failure reading ssl key from disc");
-        return false;
-    }
-    sds cert_details = certificate_get_detail(mg_user_data->cert_content);
-    if (sdslen(cert_details) > 0) {
-        MYMPD_LOG_INFO(NULL, "Certificate: %s", cert_details);
-    }
-    FREE_SDS(cert_details);
-    mg_user_data->cert = mg_str(mg_user_data->cert_content);
-    mg_user_data->key = mg_str(mg_user_data->key_content);
-    return true;
-}
-
-/**
  * Frees the mongoose mgr
  * @param mgr mongoose mgr to free
- * @return NULL
  */
-void *webserver_free(struct mg_mgr *mgr) {
+void webserver_free(struct mg_mgr *mgr) {
     sds dns4_url = (sds)mgr->dns4.url;
     FREE_SDS(dns4_url);
     mg_mgr_free(mgr);
     FREE_PTR(mgr);
-    return NULL;
 }
 
 /**
@@ -222,6 +195,35 @@ void *webserver_loop(void *arg_mgr) {
 /**
  * Private functions
  */
+
+/**
+ * Reads the ssl key and certificate from disc
+ * @param mg_user_data pointer to mongoose user data
+ * @param config pointer to myMPD config
+ * @return true on success, else false
+ */
+static bool read_certs(struct t_mg_user_data *mg_user_data, struct t_config *config) {
+    int nread = 0;
+    mg_user_data->cert_content = sds_getfile(mg_user_data->cert_content, config->ssl_cert, SSL_FILE_MAX, false, true, &nread);
+    if (nread <= 0) {
+        MYMPD_LOG_ERROR(NULL, "Failure reading ssl certificate from disc");
+        return false;
+    }
+    nread = 0;
+    mg_user_data->key_content = sds_getfile(mg_user_data->key_content, config->ssl_key, SSL_FILE_MAX, false, true, &nread);
+    if (nread <= 0) {
+        MYMPD_LOG_ERROR(NULL, "Failure reading ssl key from disc");
+        return false;
+    }
+    sds cert_details = certificate_get_detail(mg_user_data->cert_content);
+    if (sdslen(cert_details) > 0) {
+        MYMPD_LOG_INFO(NULL, "Certificate: %s", cert_details);
+    }
+    FREE_SDS(cert_details);
+    mg_user_data->cert = mg_str(mg_user_data->cert_content);
+    mg_user_data->key = mg_str(mg_user_data->key_content);
+    return true;
+}
 
 /**
  * Reads and processes all messages from the queue
@@ -489,8 +491,19 @@ static void send_api_response(struct mg_mgr *mgr, struct t_work_response *respon
             case INTERNAL_API_ALBUMART_BY_ALBUMID:
                 webserver_send_albumart_redirect(nc, response->data);
                 break;
+            case INTERNAL_API_FOLDERART:
+                webserver_redirect_placeholder_image(nc, PLACEHOLDER_FOLDER);
+                break;
             case INTERNAL_API_TAGART:
                 webserver_redirect_placeholder_image(nc, PLACEHOLDER_NA);
+                break;
+            case INTERNAL_API_PLAYLISTART:
+                if (strcmp(response->data, "smartpls") == 0) {
+                    webserver_redirect_placeholder_image(nc, PLACEHOLDER_SMARTPLS);
+                }
+                else {
+                    webserver_redirect_placeholder_image(nc, PLACEHOLDER_PLAYLIST);
+                }
                 break;
             default:
                 MYMPD_LOG_DEBUG(response->partition, "Sending response to conn_id \"%lu\" (length: %lu): %s", nc->id, (unsigned long)sdslen(response->data), response->data);
@@ -647,9 +660,13 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
                 sent = mg_ws_send(nc, "pong", 4, WEBSOCKET_OP_TEXT);
             }
             else if (mg_match(wm->data, mg_str("id:*"), matches)) {
-                frontend_nc_data->id = mg_str_to_uint(&matches[0]);
-                MYMPD_LOG_INFO(frontend_nc_data->partition, "Setting websocket (%lu) id to \"%u\"", nc->id, frontend_nc_data->id);
-                sent = mg_ws_send(nc, "ok", 2, WEBSOCKET_OP_TEXT);
+                if (mg_str_to_num(matches[0], 10, &frontend_nc_data->id, sizeof(frontend_nc_data->id)) == true) {
+                    MYMPD_LOG_INFO(frontend_nc_data->partition, "Setting websocket (%lu) id to \"%u\"", nc->id, frontend_nc_data->id);
+                    sent = mg_ws_send(nc, "ok", 2, WEBSOCKET_OP_TEXT);
+                }
+                else {
+                    MYMPD_LOG_ERROR(frontend_nc_data->partition, "Websocket (%lu): Invalid message, closing connection", nc->id);
+                }
             }
             else {
                 MYMPD_LOG_DEBUG(frontend_nc_data->partition, "Websocket (%lu) message: %.*s", nc->id, (int)wm->data.len, wm->data.buf);
@@ -727,10 +744,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
                 if (mg_user_data->mympd_api_started == false) {
                     //mympd_api thread not yet ready
                     MYMPD_LOG_WARN(frontend_nc_data->partition, "mympd_api thread not yet ready");
-                    sds response = jsonrpc_respond_message(sdsempty(), GENERAL_API_NOT_READY, 0,
-                        JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "myMPD not yet ready");
-                    webserver_send_data(nc, response, sdslen(response), EXTRA_HEADERS_JSON_CONTENT);
-                    FREE_SDS(response);
+                    webserver_send_jsonrpc_response(nc, GENERAL_API_NOT_READY, 0, JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "myMPD not yet ready");
                 }
                 //check partition
                 if (get_partition_from_uri(nc, hm, frontend_nc_data) == false) {
@@ -747,10 +761,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
                 FREE_SDS(body);
                 if (rc == false) {
                     MYMPD_LOG_ERROR(frontend_nc_data->partition, "Invalid API request");
-                    sds response = jsonrpc_respond_message(sdsempty(), GENERAL_API_UNKNOWN, 0,
-                        JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Invalid API request");
-                    webserver_send_data(nc, response, sdslen(response), EXTRA_HEADERS_JSON_CONTENT);
-                    FREE_SDS(response);
+                    webserver_send_jsonrpc_response(nc, GENERAL_API_UNKNOWN, 0, JSONRPC_FACILITY_GENERAL, JSONRPC_SEVERITY_ERROR, "Invalid API request");
                 }
             }
             else if (mg_match(hm->uri, mg_str("/albumart-thumb/*"), NULL)) {
@@ -817,6 +828,10 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
             }
         #ifdef MYMPD_ENABLE_LUA
             else if (mg_match(hm->uri, mg_str("/script-api/*"), NULL)) {
+                if (config->scripts_external == false) {
+                    MYMPD_LOG_ERROR(frontend_nc_data->partition, "External scripts are disabled");
+                    webserver_send_jsonrpc_response(nc, GENERAL_API_UNKNOWN, 0, JSONRPC_FACILITY_SCRIPT, JSONRPC_SEVERITY_ERROR, "External scripts are disabled");
+                }
                 //enforce script acl
                 if (enforce_acl(nc, config->scriptacl) == false) {
                     break;
@@ -830,10 +845,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
                 FREE_SDS(body);
                 if (rc == false) {
                     MYMPD_LOG_ERROR(frontend_nc_data->partition, "Invalid script API request");
-                    sds response = jsonrpc_respond_message(sdsempty(), GENERAL_API_UNKNOWN, 0,
-                        JSONRPC_FACILITY_SCRIPT, JSONRPC_SEVERITY_ERROR, "Invalid script API request");
-                    webserver_send_data(nc, response, sdslen(response), EXTRA_HEADERS_JSON_CONTENT);
-                    FREE_SDS(response);
+                    webserver_send_jsonrpc_response(nc, GENERAL_API_UNKNOWN, 0, JSONRPC_FACILITY_SCRIPT, JSONRPC_SEVERITY_ERROR, "Invalid script API request");
                 }
             }
             else if (mg_match(hm->uri, mg_str("/script/*/*"), NULL)) {
@@ -866,6 +878,12 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
             }
             else if (mg_match(hm->uri, mg_str("/assets/coverimage-transparent"), NULL)) {
                 webserver_serve_placeholder_image(nc, hm, mg_user_data->placeholder_transparent);
+            }
+            else if (mg_match(hm->uri, mg_str("/custom.css"), NULL)) {
+                webserver_send_data(nc, config->custom_css, sdslen(config->custom_css), EXTRA_HEADERS_CSS);
+            }
+            else if (mg_match(hm->uri, mg_str("/custom.js"), NULL)) {
+                webserver_send_data(nc, config->custom_js, sdslen(config->custom_js), EXTRA_HEADERS_JS);
             }
             else if (mg_match(hm->uri, mg_str("/index.html"), NULL)) {
                 webserver_send_header_redirect(nc, "/", "");

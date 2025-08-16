@@ -11,7 +11,10 @@
 #include "compile_time.h"
 #include "src/lib/thread.h"
 
-#include "src/lib/log.h"
+_Atomic int mympd_worker_threads;  //!< Count of running worker threads
+#ifdef MYMPD_ENABLE_LUA
+    _Atomic int script_worker_threads;  //!< Count of running runscript threads
+#endif
 
 #ifdef __linux__
 
@@ -26,6 +29,8 @@ void set_threadname(const char *threadname) {
 }
 
 #else
+
+#include "src/lib/log.h"
 
 #include <string.h>
 

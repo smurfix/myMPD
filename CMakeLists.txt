@@ -9,7 +9,7 @@ cmake_policy(SET CMP0003 NEW)
 # myMPD is written in C
 # supported compilers: gcc, clang
 project(mympd
-  VERSION 21.0.0
+  VERSION 22.0.4
   LANGUAGES C
 )
 
@@ -446,7 +446,6 @@ add_subdirectory("cli_tools")
 # link all together
 target_link_libraries(mympd
   mympdclient
-  mjson
   mpack
   mongoose
   rax
